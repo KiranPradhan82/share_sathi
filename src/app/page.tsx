@@ -229,6 +229,8 @@ export default function HomePage() {
 
   // Settings state
   const [settings, setSettings] = useState<Record<string, string>>({
+    facebook_app_id: '',
+    facebook_app_secret: '',
     facebook_page_id: '',
     facebook_page_access_token: '',
     auto_post_enabled: 'false',
@@ -458,6 +460,8 @@ export default function HomePage() {
         body: JSON.stringify({
           pageId: settings.facebook_page_id,
           pageAccessToken: settings.facebook_page_access_token,
+          appId: settings.facebook_app_id,
+          appSecret: settings.facebook_app_secret,
         }),
       });
 
@@ -996,6 +1000,26 @@ export default function HomePage() {
             <CardDescription>Connect your Facebook page for posting</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="appId">App ID</Label>
+              <Input
+                id="appId"
+                placeholder="e.g. 2098986594389901"
+                value={settings.facebook_app_id}
+                onChange={(e) => setSettings((s) => ({ ...s, facebook_app_id: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="appSecret">App Secret</Label>
+              <Input
+                id="appSecret"
+                type="password"
+                placeholder="From App Dashboard → Settings → Basic"
+                value={settings.facebook_app_secret}
+                onChange={(e) => setSettings((s) => ({ ...s, facebook_app_secret: e.target.value }))}
+              />
+            </div>
+            <Separator />
             <div className="space-y-2">
               <Label htmlFor="pageId">Page ID</Label>
               <Input

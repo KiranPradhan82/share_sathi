@@ -9,6 +9,8 @@ export async function GET() {
 
     // Return as key-value map with defaults
     const defaults: Record<string, string> = {
+      facebook_app_id: '',
+      facebook_app_secret: '',
       facebook_page_id: '',
       facebook_page_access_token: '',
       auto_post_enabled: 'false',
@@ -45,6 +47,8 @@ export async function PUT(request: NextRequest) {
     }
 
     const allowedKeys = [
+      'facebook_app_id',
+      'facebook_app_secret',
       'facebook_page_id',
       'facebook_page_access_token',
       'auto_post_enabled',
