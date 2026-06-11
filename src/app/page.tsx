@@ -423,6 +423,34 @@ export default function HomePage() {
     }
   };
 
+  const [savingSection, setSavingSection] = useState<string | null>(null);
+
+  const handleSaveSection = async (keys: string[], sectionName: string) => {
+    setSavingSection(sectionName);
+    try {
+      const sectionSettings: Record<string, string> = {};
+      for (const key of keys) {
+        sectionSettings[key] = settings[key];
+      }
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: sectionSettings }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        toast.success(`${sectionName} saved!`);
+        fetchSystemStatus();
+      } else {
+        toast.error(json.error || 'Failed to save');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
   const handleSaveSettings = async () => {
     setIsSavingSettings(true);
     try {
@@ -433,7 +461,7 @@ export default function HomePage() {
       });
       const json = await res.json();
       if (res.ok) {
-        toast.success('Settings saved!');
+        toast.success('All settings saved!');
         fetchSystemStatus();
       } else {
         toast.error(json.error || 'Failed to save');
@@ -1058,6 +1086,23 @@ export default function HomePage() {
                 {connectionTest.result}
               </p>
             )}
+            <Separator />
+            <Button
+              onClick={() => handleSaveSection(
+                ['facebook_app_id', 'facebook_app_secret', 'facebook_page_id', 'facebook_page_access_token'],
+                'Facebook Integration'
+              )}
+              disabled={savingSection === 'Facebook Integration'}
+              size="sm"
+              className="w-full gap-1"
+            >
+              {savingSection === 'Facebook Integration' ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              {savingSection === 'Facebook Integration' ? 'Saving...' : 'Save Facebook Settings'}
+            </Button>
           </CardContent>
         </Card>
 
@@ -1100,6 +1145,23 @@ export default function HomePage() {
                 onChange={(e) => setSettings((s) => ({ ...s, notification_email: e.target.value }))}
               />
             </div>
+            <Separator />
+            <Button
+              onClick={() => handleSaveSection(
+                ['auto_post_enabled', 'post_time', 'notification_email'],
+                'Automation'
+              )}
+              disabled={savingSection === 'Automation'}
+              size="sm"
+              className="w-full gap-1"
+            >
+              {savingSection === 'Automation' ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              {savingSection === 'Automation' ? 'Saving...' : 'Save Automation Settings'}
+            </Button>
           </CardContent>
         </Card>
 
@@ -1133,6 +1195,20 @@ export default function HomePage() {
                 className="min-h-[140px] text-xs font-mono"
               />
             </div>
+            <Separator />
+            <Button
+              onClick={() => handleSaveSection(['language'], 'Content')}
+              disabled={savingSection === 'Content'}
+              size="sm"
+              className="w-full gap-1"
+            >
+              {savingSection === 'Content' ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              {savingSection === 'Content' ? 'Saving...' : 'Save Content Settings'}
+            </Button>
           </CardContent>
         </Card>
 
@@ -1149,7 +1225,7 @@ export default function HomePage() {
               ) : (
                 <CheckCircle2 className="h-4 w-4" />
               )}
-              {isSavingSettings ? 'Saving...' : 'Save Settings'}
+              {isSavingSettings ? 'Saving All...' : 'Save All Settings'}
             </Button>
             <Separator />
             <Button onClick={handleSeed} disabled={isSeeding} variant="outline" className="w-full gap-1">
