@@ -444,26 +444,36 @@ export default function HomePage() {
   };
 
   const handleTestConnection = async () => {
+    if (!settings.facebook_page_id || !settings.facebook_page_access_token) {
+      setConnectionTest({ testing: false, result: 'Please enter Page ID and Access Token first' });
+      toast.error('Please enter Page ID and Access Token first');
+      return;
+    }
+
     setConnectionTest({ testing: true, result: null });
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PUT',
+      const res = await fetch('/api/facebook/test-connection', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings }),
+        body: JSON.stringify({
+          pageId: settings.facebook_page_id,
+          pageAccessToken: settings.facebook_page_access_token,
+        }),
       });
-      if (!res.ok) throw new Error('Failed to save settings first');
 
-      // Test is simulated on backend since we can't easily call the facebook service from here
-      await new Promise((r) => setTimeout(r, 800));
-      if (!settings.facebook_page_id || !settings.facebook_page_access_token) {
-        setConnectionTest({ testing: false, result: 'Please enter Page ID and Access Token first' });
-        return;
+      const data = await res.json();
+
+      if (data.success) {
+        const pageName = data.pageName ? ` (${data.pageName})` : '';
+        setConnectionTest({ testing: false, result: `Connection successful!${pageName}` });
+        toast.success(`Connected to Facebook Page${pageName}`);
+      } else {
+        setConnectionTest({ testing: false, result: `Failed: ${data.error || 'Unknown error'}` });
+        toast.error(data.error || 'Connection test failed');
       }
-      setConnectionTest({ testing: false, result: 'Connection successful! (Demo Mode)' });
-      toast.success('Facebook connection test passed!');
     } catch {
-      setConnectionTest({ testing: false, result: 'Connection test failed' });
-      toast.error('Connection test failed');
+      setConnectionTest({ testing: false, result: 'Connection test failed — network error' });
+      toast.error('Connection test failed — check your network');
     }
   };
 

@@ -32,7 +32,7 @@ export async function postToFacebook(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v18.0/${pageId}/feed`,
+        `https://graph.facebook.com/v21.0/${pageId}/feed`,
         {
           method: 'POST',
           headers: {
@@ -92,7 +92,7 @@ export async function testConnection(
 
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v18.0/${pageId}?fields=name&access_token=${pageAccessToken}`,
+      `https://graph.facebook.com/v21.0/${pageId}?fields=name&access_token=${pageAccessToken}`,
       {
         signal: AbortSignal.timeout(10000),
       },
