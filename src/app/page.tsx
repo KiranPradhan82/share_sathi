@@ -1,3 +1,4 @@
+// Share Sathi - NEPSE Market Automation Dashboard
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
