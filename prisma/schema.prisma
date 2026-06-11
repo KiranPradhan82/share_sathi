@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model MarketData {
+  id               String   @id @default(cuid())
+  tradingDate      String   @unique
+  nepseIndex       Float
+  change           Float
+  changePercentage Float
+  turnover         Float
+  volume           Float
+  trades           Int
+  gainers          Int
+  losers           Int
+  unchanged        Int
+  rawData          String   @default("{}")
+  status           String   @default("pending")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  posts            FacebookPost[]
+  events           SystemEvent[]
+}
+
+model FacebookPost {
+  id             String       @id @default(cuid())
+  marketDataId   String
+  marketData     MarketData   @relation(fields: [marketDataId], references: [id])
+  facebookPostId String?
+  message        String
+  status         String       @default("pending")
+  scheduledTime  DateTime     @default(now())
+  postedTime     DateTime?
+  attemptCount   Int          @default(0)
+  errorMessage   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  events         SystemEvent[]
+}
+
+model SystemEvent {
+  id              String       @id @default(cuid())
+  eventType       String
+  entityType      String?
+  entityId        String?
+  description     String
+  metadata        String       @default("{}")
+  severity        String       @default("info")
+  createdAt       DateTime     @default(now())
+  marketDataId    String?
+  marketData      MarketData?  @relation(fields: [marketDataId], references: [id])
+  facebookPostId  String?
+  facebookPost    FacebookPost? @relation(fields: [facebookPostId], references: [id])
+}
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
