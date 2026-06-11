@@ -15,13 +15,10 @@ function createPrismaClient(): PrismaClient {
 
   // Check if it's a Turso/libsql URL
   if (dbUrl.startsWith('libsql://') || dbUrl.startsWith('http://') || dbUrl.startsWith('https://')) {
-    // Dynamic imports to avoid bundling Turso client for local dev
+    // Dynamic import to avoid bundling Turso client for local dev
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { PrismaLibSql } = require('@prisma/adapter-libsql')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createClient } = require('@libsql/client')
-    const libsql = createClient({ url: dbUrl })
-    const adapter = new PrismaLibSql(libsql)
+    const { PrismaLibSQL } = require('@prisma/adapter-libsql')
+    const adapter = new PrismaLibSQL({ url: dbUrl })
     return new PrismaClient({ adapter })
   }
 
