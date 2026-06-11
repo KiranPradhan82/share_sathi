@@ -16,9 +16,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Share Sathi — NEPSE Market Automation",
-  description: "Fetch NEPSE daily updates and post them to Facebook. Built for Kiran Pradhan.",
+  description: "Automated daily NEPSE market updates posted to Facebook. Real-time index, turnover, gainers & losers.",
   icons: {
-    icon: "/logo.svg",
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
+  openGraph: {
+    title: "Share Sathi — NEPSE Market Automation",
+    description: "Automated daily NEPSE market updates posted to Facebook. Real-time index, turnover, gainers & losers.",
+    images: ["/logo.png"],
   },
 };
 

@@ -1246,9 +1246,11 @@ export default function HomePage() {
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary text-primary-foreground">
-              <TrendingUp className="h-4 w-4" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Share Sathi"
+              className="h-8 w-8 rounded-lg object-cover"
+            />
             <div>
               <h1 className="text-base font-bold leading-none">Share Sathi</h1>
               <p className="text-[10px] text-muted-foreground leading-none">NEPSE Market Automation</p>
