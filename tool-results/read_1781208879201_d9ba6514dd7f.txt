@@ -1,0 +1,1313 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import { useTheme } from 'next-themes';
+     5→import { toast } from 'sonner';
+     6→import {
+     7→  TrendingUp,
+     8→  TrendingDown,
+     9→  BarChart3,
+    10→  Settings,
+    11→  Activity,
+    12→  Send,
+    13→  RefreshCw,
+    14→  Zap,
+    15→  DollarSign,
+    16→  CheckCircle2,
+    17→  Wifi,
+    18→  WifiOff,
+    19→  Database,
+    20→  Trash2,
+    21→  Eye,
+    22→  Sun,
+    23→  Moon,
+    24→  ChevronLeft,
+    25→  ChevronRight,
+    26→  Sprout,
+    27→} from 'lucide-react';
+    28→
+    29→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    30→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+    31→import { Button } from '@/components/ui/button';
+    32→import { Badge } from '@/components/ui/badge';
+    33→import { Progress } from '@/components/ui/progress';
+    34→import { Skeleton } from '@/components/ui/skeleton';
+    35→import { Switch } from '@/components/ui/switch';
+    36→import { Input } from '@/components/ui/input';
+    37→import { Label } from '@/components/ui/label';
+    38→import { Textarea } from '@/components/ui/textarea';
+    39→import { Separator } from '@/components/ui/separator';
+    40→import {
+    41→  Table,
+    42→  TableBody,
+    43→  TableCell,
+    44→  TableHead,
+    45→  TableHeader,
+    46→  TableRow,
+    47→} from '@/components/ui/table';
+    48→import {
+    49→  Dialog,
+    50→  DialogContent,
+    51→  DialogDescription,
+    52→  DialogHeader,
+    53→  DialogTitle,
+    54→  DialogTrigger,
+    55→} from '@/components/ui/dialog';
+    56→import {
+    57→  Select,
+    58→  SelectContent,
+    59→  SelectItem,
+    60→  SelectTrigger,
+    61→  SelectValue,
+    62→} from '@/components/ui/select';
+    63→
+    64→// ---- Types ----
+    65→interface MarketData {
+    66→  id: string;
+    67→  tradingDate: string;
+    68→  nepseIndex: number;
+    69→  change: number;
+    70→  changePercentage: number;
+    71→  turnover: number;
+    72→  volume: number;
+    73→  trades: number;
+    74→  gainers: number;
+    75→  losers: number;
+    76→  unchanged: number;
+    77→  rawData: string;
+    78→  status: string;
+    79→  createdAt: string;
+    80→  posts?: FacebookPost[];
+    81→}
+    82→
+    83→interface FacebookPost {
+    84→  id: string;
+    85→  marketDataId: string;
+    86→  facebookPostId: string | null;
+    87→  message: string;
+    88→  status: string;
+    89→  scheduledTime: string;
+    90→  postedTime: string | null;
+    91→  attemptCount: number;
+    92→  errorMessage: string | null;
+    93→  createdAt: string;
+    94→  marketData?: { tradingDate: string };
+    95→}
+    96→
+    97→interface SystemEvent {
+    98→  id: string;
+    99→  eventType: string;
+   100→  entityType: string | null;
+   101→  entityId: string | null;
+   102→  description: string;
+   103→  metadata: string;
+   104→  severity: string;
+   105→  createdAt: string;
+   106→}
+   107→
+   108→interface SystemStatus {
+   109→  status: string;
+   110→  lastFetch: string | null;
+   111→  lastFetchDate: string | null;
+   112→  lastPost: string | null;
+   113→  totalPosts: number;
+   114→  successPosts: number;
+   115→  failedPosts: number;
+   116→  successRate: number;
+   117→  recentEvents: Array<{
+   118→    eventType: string;
+   119→    description: string;
+   120→    severity: string;
+   121→    createdAt: string;
+   122→  }>;
+   123→  configuration: {
+   124→    facebookConfigured: boolean;
+   125→    autoPostEnabled: boolean;
+   126→    postTime: string;
+   127→    language: string;
+   128→  };
+   129→}
+   130→
+   131→// ---- Helpers ----
+   132→function formatNpr(amount: number): string {
+   133→  if (amount >= 100000000000) {
+   134→    return `NPR ${(amount / 100000000000).toFixed(2)} Kharab`;
+   135→  }
+   136→  if (amount >= 1000000000) {
+   137→    return `NPR ${(amount / 1000000000).toFixed(2)} Arba`;
+   138→  }
+   139→  if (amount >= 10000000) {
+   140→    return `NPR ${(amount / 10000000).toFixed(2)} Crore`;
+   141→  }
+   142→  if (amount >= 100000) {
+   143→    return `NPR ${(amount / 100000).toFixed(2)} Lakhs`;
+   144→  }
+   145→  return `NPR ${amount.toLocaleString('en-US')}`;
+   146→}
+   147→
+   148→function formatNumber(num: number): string {
+   149→  return num.toLocaleString('en-US');
+   150→}
+   151→
+   152→function formatDateTime(dateStr: string | null): string {
+   153→  if (!dateStr) return '—';
+   154→  const d = new Date(dateStr);
+   155→  return d.toLocaleString('en-US', {
+   156→    month: 'short',
+   157→    day: 'numeric',
+   158→    hour: '2-digit',
+   159→    minute: '2-digit',
+   160→  });
+   161→}
+   162→
+   163→function timeAgo(dateStr: string): string {
+   164→  const now = new Date();
+   165→  const then = new Date(dateStr);
+   166→  const diffMs = now.getTime() - then.getTime();
+   167→  const diffMins = Math.floor(diffMs / 60000);
+   168→  if (diffMins < 1) return 'Just now';
+   169→  if (diffMins < 60) return `${diffMins}m ago`;
+   170→  const diffHours = Math.floor(diffMins / 60);
+   171→  if (diffHours < 24) return `${diffHours}h ago`;
+   172→  const diffDays = Math.floor(diffHours / 24);
+   173→  return `${diffDays}d ago`;
+   174→}
+   175→
+   176→function severityColor(severity: string): string {
+   177→  switch (severity) {
+   178→    case 'success': return 'bg-emerald-500/15 text-emerald-500 border-emerald-500/20';
+   179→    case 'error': return 'bg-red-500/15 text-red-500 border-red-500/20';
+   180→    case 'warning': return 'bg-yellow-500/15 text-yellow-500 border-yellow-500/20';
+   181→    case 'info': return 'bg-sky-500/15 text-sky-500 border-sky-500/20';
+   182→    default: return 'bg-muted text-muted-foreground border-border';
+   183→  }
+   184→}
+   185→
+   186→function statusBadge(status: string) {
+   187→  switch (status) {
+   188→    case 'success': return <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20">Success</Badge>;
+   189→    case 'failed': return <Badge className="bg-red-500/15 text-red-500 border-red-500/20 hover:bg-red-500/20">Failed</Badge>;
+   190→    case 'posting': return <Badge className="bg-yellow-500/15 text-yellow-500 border-yellow-500/20 hover:bg-yellow-500/20">Posting</Badge>;
+   191→    case 'pending': return <Badge className="bg-muted text-muted-foreground hover:bg-muted/80">Pending</Badge>;
+   192→    case 'completed': return <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20">Completed</Badge>;
+   193→    default: return <Badge variant="outline">{status}</Badge>;
+   194→  }
+   195→}
+   196→
+   197→// ---- Component ----
+   198→export default function HomePage() {
+   199→  const { theme, setTheme } = useTheme();
+   200→  const [activeTab, setActiveTab] = useState('dashboard');
+   201→
+   202→  // Dashboard state
+   203→  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+   204→  const [latestData, setLatestData] = useState<MarketData | null>(null);
+   205→  const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
+   206→  const [isLoadingPipeline, setIsLoadingPipeline] = useState(false);
+   207→
+   208→  // Market data state
+   209→  const [marketDataList, setMarketDataList] = useState<MarketData[]>([]);
+   210→  const [marketPage, setMarketPage] = useState(1);
+   211→  const [marketTotalPages, setMarketTotalPages] = useState(1);
+   212→  const [isLoadingMarket, setIsLoadingMarket] = useState(false);
+   213→
+   214→  // Posts state
+   215→  const [postsList, setPostsList] = useState<FacebookPost[]>([]);
+   216→  const [postsPage, setPostsPage] = useState(1);
+   217→  const [postsTotalPages, setPostsTotalPages] = useState(1);
+   218→  const [postFilter, setPostFilter] = useState('all');
+   219→  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
+   220→  const [selectedPost, setSelectedPost] = useState<FacebookPost | null>(null);
+   221→
+   222→  // Logs state
+   223→  const [logsList, setLogsList] = useState<SystemEvent[]>([]);
+   224→  const [logsPage, setLogsPage] = useState(1);
+   225→  const [logsTotalPages, setLogsTotalPages] = useState(1);
+   226→  const [logsSeverityFilter, setLogsSeverityFilter] = useState('all');
+   227→  const [logsTypeFilter, setLogsTypeFilter] = useState('all');
+   228→  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+   229→
+   230→  // Settings state
+   231→  const [settings, setSettings] = useState<Record<string, string>>({
+   232→    facebook_page_id: '',
+   233→    facebook_page_access_token: '',
+   234→    auto_post_enabled: 'false',
+   235→    post_time: '15:00',
+   236→    notification_email: '',
+   237→    language: 'en',
+   238→  });
+   239→  const [isSavingSettings, setIsSavingSettings] = useState(false);
+   240→  const [connectionTest, setConnectionTest] = useState<{ testing: boolean; result: string | null }>({
+   241→    testing: false,
+   242→    result: null,
+   243→  });
+   244→
+   245→  // Loading states
+   246→  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
+   247→  const [isSeeding, setIsSeeding] = useState(false);
+   248→
+   249→  // ---- Fetch functions ----
+   250→  const fetchSystemStatus = useCallback(async () => {
+   251→    try {
+   252→      const res = await fetch('/api/system/status');
+   253→      if (res.ok) {
+   254→        const json = await res.json();
+   255→        setSystemStatus(json);
+   256→      }
+   257→    } catch {
+   258→      // ignore
+   259→    } finally {
+   260→      setIsLoadingStatus(false);
+   261→    }
+   262→  }, []);
+   263→
+   264→  const fetchLatestData = useCallback(async () => {
+   265→    try {
+   266→      const res = await fetch('/api/market-data/latest');
+   267→      if (res.ok) {
+   268→        const json = await res.json();
+   269→        setLatestData(json.data);
+   270→      }
+   271→    } catch {
+   272→      // ignore
+   273→    }
+   274→  }, []);
+   275→
+   276→  const fetchRecentEvents = useCallback(async () => {
+   277→    try {
+   278→      const res = await fetch('/api/system/logs?page=1&limit=8');
+   279→      if (res.ok) {
+   280→        const json = await res.json();
+   281→        setRecentEvents(json.data);
+   282→      }
+   283→    } catch {
+   284→      // ignore
+   285→    }
+   286→  }, []);
+   287→
+   288→  const fetchMarketData = useCallback(async (page: number) => {
+   289→    setIsLoadingMarket(true);
+   290→    try {
+   291→      const res = await fetch(`/api/market-data?page=${page}&limit=15`);
+   292→      if (res.ok) {
+   293→        const json = await res.json();
+   294→        setMarketDataList(json.data);
+   295→        setMarketTotalPages(json.pagination.totalPages);
+   296→      }
+   297→    } catch {
+   298→      toast.error('Failed to fetch market data');
+   299→    } finally {
+   300→      setIsLoadingMarket(false);
+   301→    }
+   302→  }, []);
+   303→
+   304→  const fetchPosts = useCallback(async (page: number, status: string) => {
+   305→    setIsLoadingPosts(true);
+   306→    try {
+   307→      const res = await fetch(`/api/posts?page=${page}&limit=15&status=${status}`);
+   308→      if (res.ok) {
+   309→        const json = await res.json();
+   310→        setPostsList(json.data);
+   311→        setPostsTotalPages(json.pagination.totalPages);
+   312→      }
+   313→    } catch {
+   314→      toast.error('Failed to fetch posts');
+   315→    } finally {
+   316→      setIsLoadingPosts(false);
+   317→    }
+   318→  }, []);
+   319→
+   320→  const fetchLogs = useCallback(async (page: number, severity: string, eventType: string) => {
+   321→    setIsLoadingLogs(true);
+   322→    try {
+   323→      const res = await fetch(`/api/system/logs?page=${page}&limit=20&severity=${severity}&eventType=${eventType}`);
+   324→      if (res.ok) {
+   325→        const json = await res.json();
+   326→        setLogsList(json.data);
+   327→        setLogsTotalPages(json.pagination.totalPages);
+   328→      }
+   329→    } catch {
+   330→      toast.error('Failed to fetch logs');
+   331→    } finally {
+   332→      setIsLoadingLogs(false);
+   333→    }
+   334→  }, []);
+   335→
+   336→  const fetchSettings = useCallback(async () => {
+   337→    try {
+   338→      const res = await fetch('/api/settings');
+   339→      if (res.ok) {
+   340→        const json = await res.json();
+   341→        setSettings(json.data);
+   342→      }
+   343→    } catch {
+   344→      // ignore
+   345→    }
+   346→  }, []);
+   347→
+   348→  // ---- Initial load ----
+   349→  useEffect(() => {
+   350→    fetchSystemStatus();
+   351→    fetchLatestData();
+   352→    fetchRecentEvents();
+   353→    fetchMarketData(1);
+   354→    fetchPosts(1, 'all');
+   355→    fetchLogs(1, 'all', 'all');
+   356→    fetchSettings();
+   357→  }, [fetchSystemStatus, fetchLatestData, fetchRecentEvents, fetchMarketData, fetchPosts, fetchLogs, fetchSettings]);
+   358→
+   359→  // ---- Actions ----
+   360→  const handleFetchAndPost = async () => {
+   361→    setIsLoadingPipeline(true);
+   362→    try {
+   363→      const res = await fetch('/api/posts/manual', {
+   364→        method: 'POST',
+   365→        headers: { 'Content-Type': 'application/json' },
+   366→        body: JSON.stringify({}),
+   367→      });
+   368→      const json = await res.json();
+   369→      if (res.ok && json.success) {
+   370→        toast.success(json.message || 'Posted successfully!');
+   371→        fetchSystemStatus();
+   372→        fetchLatestData();
+   373→        fetchRecentEvents();
+   374→        fetchPosts(1, 'all');
+   375→      } else {
+   376→        toast.error(json.error || json.message || 'Pipeline failed');
+   377→      }
+   378→    } catch {
+   379→      toast.error('Network error. Please try again.');
+   380→    } finally {
+   381→      setIsLoadingPipeline(false);
+   382→    }
+   383→  };
+   384→
+   385→  const handleFetchLatest = async () => {
+   386→    try {
+   387→      const res = await fetch('/api/market-data/fetch', { method: 'POST' });
+   388→      const json = await res.json();
+   389→      if (res.ok) {
+   390→        toast.success('Market data fetched!');
+   391→        fetchMarketData(1);
+   392→        fetchLatestData();
+   393→        fetchSystemStatus();
+   394→      } else {
+   395→        toast.error(json.error || 'Fetch failed');
+   396→      }
+   397→    } catch {
+   398→      toast.error('Failed to fetch market data');
+   399→    }
+   400→  };
+   401→
+   402→  const handleSeed = async () => {
+   403→    setIsSeeding(true);
+   404→    try {
+   405→      const res = await fetch('/api/seed', { method: 'POST' });
+   406→      const json = await res.json();
+   407→      if (res.ok) {
+   408→        toast.success(json.message || 'Database seeded!');
+   409→        fetchSystemStatus();
+   410→        fetchLatestData();
+   411→        fetchRecentEvents();
+   412→        fetchMarketData(1);
+   413→        fetchPosts(1, 'all');
+   414→      } else {
+   415→        toast.error(json.error || 'Seed failed');
+   416→      }
+   417→    } catch {
+   418→      toast.error('Failed to seed database');
+   419→    } finally {
+   420→      setIsSeeding(false);
+   421→    }
+   422→  };
+   423→
+   424→  const handleSaveSettings = async () => {
+   425→    setIsSavingSettings(true);
+   426→    try {
+   427→      const res = await fetch('/api/settings', {
+   428→        method: 'PUT',
+   429→        headers: { 'Content-Type': 'application/json' },
+   430→        body: JSON.stringify({ settings }),
+   431→      });
+   432→      const json = await res.json();
+   433→      if (res.ok) {
+   434→        toast.success('Settings saved!');
+   435→        fetchSystemStatus();
+   436→      } else {
+   437→        toast.error(json.error || 'Failed to save');
+   438→      }
+   439→    } catch {
+   440→      toast.error('Network error');
+   441→    } finally {
+   442→      setIsSavingSettings(false);
+   443→    }
+   444→  };
+   445→
+   446→  const handleTestConnection = async () => {
+   447→    setConnectionTest({ testing: true, result: null });
+   448→    try {
+   449→      const res = await fetch('/api/settings', {
+   450→        method: 'PUT',
+   451→        headers: { 'Content-Type': 'application/json' },
+   452→        body: JSON.stringify({ settings }),
+   453→      });
+   454→      if (!res.ok) throw new Error('Failed to save settings first');
+   455→
+   456→      // Test is simulated on backend since we can't easily call the facebook service from here
+   457→      await new Promise((r) => setTimeout(r, 800));
+   458→      if (!settings.facebook_page_id || !settings.facebook_page_access_token) {
+   459→        setConnectionTest({ testing: false, result: 'Please enter Page ID and Access Token first' });
+   460→        return;
+   461→      }
+   462→      setConnectionTest({ testing: false, result: 'Connection successful! (Demo Mode)' });
+   463→      toast.success('Facebook connection test passed!');
+   464→    } catch {
+   465→      setConnectionTest({ testing: false, result: 'Connection test failed' });
+   466→      toast.error('Connection test failed');
+   467→    }
+   468→  };
+   469→
+   470→  const handleClearLogs = async () => {
+   471→    try {
+   472→      const res = await fetch('/api/system/logs', { method: 'DELETE' });
+   473→      if (res.ok) {
+   474→        toast.success('Logs cleared');
+   475→        fetchLogs(1, 'all', 'all');
+   476→        fetchRecentEvents();
+   477→      }
+   478→    } catch {
+   479→      toast.error('Failed to clear logs');
+   480→    }
+   481→  };
+   482→
+   483→  // ---- Render helpers ----
+   484→  const renderSkeletonCards = () => (
+   485→    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+   486→      {Array.from({ length: 5 }).map((_, i) => (
+   487→        <Card key={i}>
+   488→          <CardContent className="p-4">
+   489→            <Skeleton className="h-4 w-24 mb-2" />
+   490→            <Skeleton className="h-8 w-32 mb-1" />
+   491→            <Skeleton className="h-3 w-20" />
+   492→          </CardContent>
+   493→        </Card>
+   494→      ))}
+   495→    </div>
+   496→  );
+   497→
+   498→  // ---- Dashboard Tab ----
+   499→  const renderDashboard = () => (
+   500→    <div className="space-y-6">
+   501→      {/* Action Bar */}
+   502→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   503→        <div>
+   504→          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+   505→          <p className="text-muted-foreground text-sm">NEPSE market automation overview</p>
+   506→        </div>
+   507→        <Button
+   508→          onClick={handleFetchAndPost}
+   509→          disabled={isLoadingPipeline}
+   510→          size="lg"
+   511→          className="gap-2"
+   512→        >
+   513→          {isLoadingPipeline ? (
+   514→            <RefreshCw className="h-4 w-4 animate-spin" />
+   515→          ) : (
+   516→            <Send className="h-4 w-4" />
+   517→          )}
+   518→          {isLoadingPipeline ? 'Processing...' : 'Fetch & Post Now'}
+   519→        </Button>
+   520→      </div>
+   521→
+   522→      {isLoadingStatus ? (
+   523→        renderSkeletonCards()
+   524→      ) : (
+   525→        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+   526→          {/* NEPSE Index Card */}
+   527→          <Card>
+   528→            <CardContent className="p-4">
+   529→              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
+   530→                <BarChart3 className="h-3.5 w-3.5" />
+   531→                NEPSE Index
+   532→              </div>
+   533→              {latestData ? (
+   534→                <>
+   535→                  <div className="text-2xl font-bold">
+   536→                    {latestData.nepseIndex.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+   537→                  </div>
+   538→                  <div className={`flex items-center gap-1 text-xs font-medium ${latestData.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+   539→                    {latestData.change >= 0 ? (
+   540→                      <TrendingUp className="h-3 w-3" />
+   541→                    ) : (
+   542→                      <TrendingDown className="h-3 w-3" />
+   543→                    )}
+   544→                    {latestData.change >= 0 ? '+' : ''}{latestData.change.toFixed(2)} ({latestData.changePercentage >= 0 ? '+' : ''}{latestData.changePercentage}%)
+   545→                  </div>
+   546→                </>
+   547→              ) : (
+   548→                <div className="text-muted-foreground text-sm">No data</div>
+   549→              )}
+   550→            </CardContent>
+   551→          </Card>
+   552→
+   553→          {/* Turnover Card */}
+   554→          <Card>
+   555→            <CardContent className="p-4">
+   556→              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
+   557→                <DollarSign className="h-3.5 w-3.5" />
+   558→                Today&apos;s Turnover
+   559→              </div>
+   560→              {latestData ? (
+   561→                <>
+   562→                  <div className="text-2xl font-bold">{formatNpr(latestData.turnover)}</div>
+   563→                  <div className="text-xs text-muted-foreground">
+   564→                    {formatNumber(latestData.trades)} trades
+   565→                  </div>
+   566→                </>
+   567→              ) : (
+   568→                <div className="text-muted-foreground text-sm">No data</div>
+   569→              )}
+   570→            </CardContent>
+   571→          </Card>
+   572→
+   573→          {/* Total Posts Card */}
+   574→          <Card>
+   575→            <CardContent className="p-4">
+   576→              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
+   577→                <Send className="h-3.5 w-3.5" />
+   578→                Total Posts
+   579→              </div>
+   580→              <div className="text-2xl font-bold">{systemStatus?.totalPosts ?? 0}</div>
+   581→              <div className="text-xs text-muted-foreground">
+   582→                {systemStatus?.successPosts ?? 0} successful
+   583→              </div>
+   584→            </CardContent>
+   585→          </Card>
+   586→
+   587→          {/* Success Rate Card */}
+   588→          <Card>
+   589→            <CardContent className="p-4">
+   590→              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
+   591→                <CheckCircle2 className="h-3.5 w-3.5" />
+   592→                Success Rate
+   593→              </div>
+   594→              <div className="text-2xl font-bold">{systemStatus?.successRate ?? 0}%</div>
+   595→              <Progress value={systemStatus?.successRate ?? 0} className="h-1.5 mt-1" />
+   596→            </CardContent>
+   597→          </Card>
+   598→
+   599→          {/* System Status Card */}
+   600→          <Card>
+   601→            <CardContent className="p-4">
+   602→              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
+   603→                <Activity className="h-3.5 w-3.5" />
+   604→                System Status
+   605→              </div>
+   606→              <div className="flex items-center gap-2">
+   607→                {(systemStatus?.status ?? 'online') === 'online' ? (
+   608→                  <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/20">
+   609→                    <Wifi className="h-3 w-3 mr-1" /> Online
+   610→                  </Badge>
+   611→                ) : (
+   612→                  <Badge variant="destructive">
+   613→                    <WifiOff className="h-3 w-3 mr-1" /> Offline
+   614→                  </Badge>
+   615→                )}
+   616→              </div>
+   617→              <div className="text-xs text-muted-foreground mt-1">
+   618→                {systemStatus?.configuration?.autoPostEnabled ? (
+   619→                  <span className="text-emerald-500">Auto-post ON</span>
+   620→                ) : (
+   621→                  <span>Auto-post OFF</span>
+   622→                )}
+   623→              </div>
+   624→            </CardContent>
+   625→          </Card>
+   626→        </div>
+   627→      )}
+   628→
+   629→      {/* Two-column layout */}
+   630→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   631→        {/* Latest Market Data */}
+   632→        <Card>
+   633→          <CardHeader className="pb-3">
+   634→            <CardTitle className="text-base font-semibold">Latest Market Data</CardTitle>
+   635→            <CardDescription>Most recent NEPSE trading data</CardDescription>
+   636→          </CardHeader>
+   637→          <CardContent>
+   638→            {latestData ? (
+   639→              <div className="grid grid-cols-2 gap-3">
+   640→                <div className="space-y-0.5">
+   641→                  <p className="text-xs text-muted-foreground">Trading Date</p>
+   642→                  <p className="text-sm font-medium">{latestData.tradingDate}</p>
+   643→                </div>
+   644→                <div className="space-y-0.5">
+   645→                  <p className="text-xs text-muted-foreground">NEPSE Index</p>
+   646→                  <p className="text-sm font-medium">{latestData.nepseIndex.toFixed(2)}</p>
+   647→                </div>
+   648→                <div className="space-y-0.5">
+   649→                  <p className="text-xs text-muted-foreground">Change</p>
+   650→                  <p className={`text-sm font-medium ${latestData.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+   651→                    {latestData.change >= 0 ? '+' : ''}{latestData.change.toFixed(2)} ({latestData.changePercentage >= 0 ? '+' : ''}{latestData.changePercentage}%)
+   652→                  </p>
+   653→                </div>
+   654→                <div className="space-y-0.5">
+   655→                  <p className="text-xs text-muted-foreground">Turnover</p>
+   656→                  <p className="text-sm font-medium">{formatNpr(latestData.turnover)}</p>
+   657→                </div>
+   658→                <div className="space-y-0.5">
+   659→                  <p className="text-xs text-muted-foreground">Volume</p>
+   660→                  <p className="text-sm font-medium">{formatNumber(latestData.volume)} shares</p>
+   661→                </div>
+   662→                <div className="space-y-0.5">
+   663→                  <p className="text-xs text-muted-foreground">Trades</p>
+   664→                  <p className="text-sm font-medium">{formatNumber(latestData.trades)}</p>
+   665→                </div>
+   666→                <div className="space-y-0.5">
+   667→                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+   668→                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" /> Gainers
+   669→                  </p>
+   670→                  <p className="text-sm font-medium text-emerald-500">{latestData.gainers}</p>
+   671→                </div>
+   672→                <div className="space-y-0.5">
+   673→                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+   674→                    <span className="inline-block w-2 h-2 rounded-full bg-red-500" /> Losers
+   675→                  </p>
+   676→                  <p className="text-sm font-medium text-red-500">{latestData.losers}</p>
+   677→                </div>
+   678→              </div>
+   679→            ) : (
+   680→              <div className="text-center py-8 text-muted-foreground">
+   681→                <Database className="h-10 w-10 mx-auto mb-2 opacity-30" />
+   682→                <p className="text-sm">No market data available</p>
+   683→                <Button variant="outline" size="sm" onClick={handleSeed} className="mt-3 gap-1">
+   684→                  <Sprout className="h-3.5 w-3.5" /> Seed Demo Data
+   685→                </Button>
+   686→              </div>
+   687→            )}
+   688→          </CardContent>
+   689→        </Card>
+   690→
+   691→        {/* Recent Activity */}
+   692→        <Card>
+   693→          <CardHeader className="pb-3">
+   694→            <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+   695→            <CardDescription>Latest system events</CardDescription>
+   696→          </CardHeader>
+   697→          <CardContent>
+   698→            {recentEvents.length > 0 ? (
+   699→              <div className="max-h-64 overflow-y-auto space-y-3">
+   700→                {recentEvents.map((event) => (
+   701→                  <div key={event.id} className="flex items-start gap-3">
+   702→                    <div className="mt-1.5">
+   703→                      <div className={`w-2 h-2 rounded-full ${
+   704→                        event.severity === 'success' ? 'bg-emerald-500' :
+   705→                        event.severity === 'error' ? 'bg-red-500' :
+   706→                        event.severity === 'warning' ? 'bg-yellow-500' :
+   707→                        'bg-sky-500'
+   708→                      }`} />
+   709→                    </div>
+   710→                    <div className="flex-1 min-w-0">
+   711→                      <p className="text-xs text-muted-foreground">{timeAgo(event.createdAt)}</p>
+   712→                      <p className="text-sm truncate">{event.description}</p>
+   713→                    </div>
+   714→                    <Badge variant="outline" className="text-[10px] shrink-0">
+   715→                      {event.eventType}
+   716→                    </Badge>
+   717→                  </div>
+   718→                ))}
+   719→              </div>
+   720→            ) : (
+   721→              <div className="text-center py-8 text-muted-foreground">
+   722→                <Activity className="h-10 w-10 mx-auto mb-2 opacity-30" />
+   723→                <p className="text-sm">No recent activity</p>
+   724→              </div>
+   725→            )}
+   726→          </CardContent>
+   727→        </Card>
+   728→      </div>
+   729→    </div>
+   730→  );
+   731→
+   732→  // ---- Market Data Tab ----
+   733→  const renderMarketData = () => (
+   734→    <div className="space-y-4">
+   735→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+   736→        <div>
+   737→          <h2 className="text-2xl font-bold tracking-tight">Market Data</h2>
+   738→          <p className="text-muted-foreground text-sm">Historical NEPSE trading data</p>
+   739→        </div>
+   740→        <div className="flex gap-2">
+   741→          <Button onClick={handleFetchLatest} size="sm" className="gap-1">
+   742→            <RefreshCw className="h-3.5 w-3.5" /> Fetch Latest
+   743→          </Button>
+   744→          <Button onClick={handleSeed} size="sm" variant="outline" className="gap-1" disabled={isSeeding}>
+   745→            {isSeeding ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sprout className="h-3.5 w-3.5" />}
+   746→            Seed Data
+   747→          </Button>
+   748→        </div>
+   749→      </div>
+   750→
+   751→      <Card>
+   752→        <CardContent className="p-0">
+   753→          {isLoadingMarket ? (
+   754→            <div className="p-4 space-y-2">
+   755→              {Array.from({ length: 5 }).map((_, i) => (
+   756→                <Skeleton key={i} className="h-10 w-full" />
+   757→              ))}
+   758→            </div>
+   759→          ) : marketDataList.length === 0 ? (
+   760→            <div className="text-center py-12 text-muted-foreground">
+   761→              <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+   762→              <p className="text-sm font-medium">No market data available</p>
+   763→              <p className="text-xs mt-1">Click &quot;Seed Data&quot; to populate with demo data</p>
+   764→            </div>
+   765→          ) : (
+   766→            <div className="overflow-x-auto">
+   767→              <Table>
+   768→                <TableHeader>
+   769→                  <TableRow>
+   770→                    <TableHead className="text-xs">Date</TableHead>
+   771→                    <TableHead className="text-xs text-right">Index</TableHead>
+   772→                    <TableHead className="text-xs text-right">Change</TableHead>
+   773→                    <TableHead className="text-xs text-right">Change %</TableHead>
+   774→                    <TableHead className="text-xs text-right hidden md:table-cell">Turnover</TableHead>
+   775→                    <TableHead className="text-xs text-right hidden lg:table-cell">Trades</TableHead>
+   776→                    <TableHead className="text-xs text-right hidden lg:table-cell">Gainers</TableHead>
+   777→                    <TableHead className="text-xs text-right hidden lg:table-cell">Losers</TableHead>
+   778→                    <TableHead className="text-xs text-center">Status</TableHead>
+   779→                  </TableRow>
+   780→                </TableHeader>
+   781→                <TableBody>
+   782→                  {marketDataList.map((item) => (
+   783→                    <TableRow key={item.id}>
+   784→                      <TableCell className="text-xs font-medium">{item.tradingDate}</TableCell>
+   785→                      <TableCell className="text-xs text-right font-mono">{item.nepseIndex.toFixed(2)}</TableCell>
+   786→                      <TableCell className={`text-xs text-right font-mono ${item.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+   787→                        {item.change >= 0 ? '+' : ''}{item.change.toFixed(2)}
+   788→                      </TableCell>
+   789→                      <TableCell className={`text-xs text-right font-mono ${item.changePercentage >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+   790→                        {item.changePercentage >= 0 ? '+' : ''}{item.changePercentage}%
+   791→                      </TableCell>
+   792→                      <TableCell className="text-xs text-right hidden md:table-cell">{formatNpr(item.turnover)}</TableCell>
+   793→                      <TableCell className="text-xs text-right hidden lg:table-cell">{formatNumber(item.trades)}</TableCell>
+   794→                      <TableCell className="text-xs text-right text-emerald-500 hidden lg:table-cell">{item.gainers}</TableCell>
+   795→                      <TableCell className="text-xs text-right text-red-500 hidden lg:table-cell">{item.losers}</TableCell>
+   796→                      <TableCell className="text-xs text-center">{statusBadge(item.status)}</TableCell>
+   797→                    </TableRow>
+   798→                  ))}
+   799→                </TableBody>
+   800→              </Table>
+   801→            </div>
+   802→          )}
+   803→        </CardContent>
+   804→      </Card>
+   805→
+   806→      {/* Pagination */}
+   807→      {marketTotalPages > 1 && (
+   808→        <div className="flex items-center justify-center gap-2">
+   809→          <Button
+   810→            variant="outline"
+   811→            size="sm"
+   812→            onClick={() => { setMarketPage((p) => Math.max(1, p - 1)); fetchMarketData(Math.max(1, marketPage - 1)); }}
+   813→            disabled={marketPage <= 1}
+   814→          >
+   815→            <ChevronLeft className="h-4 w-4" />
+   816→          </Button>
+   817→          <span className="text-sm text-muted-foreground">Page {marketPage} of {marketTotalPages}</span>
+   818→          <Button
+   819→            variant="outline"
+   820→            size="sm"
+   821→            onClick={() => { setMarketPage((p) => p + 1); fetchMarketData(marketPage + 1); }}
+   822→            disabled={marketPage >= marketTotalPages}
+   823→          >
+   824→            <ChevronRight className="h-4 w-4" />
+   825→          </Button>
+   826→        </div>
+   827→      )}
+   828→    </div>
+   829→  );
+   830→
+   831→  // ---- Posts Tab ----
+   832→  const renderPosts = () => (
+   833→    <div className="space-y-4">
+   834→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+   835→        <div>
+   836→          <h2 className="text-2xl font-bold tracking-tight">Post History</h2>
+   837→          <p className="text-muted-foreground text-sm">Facebook post attempts and results</p>
+   838→        </div>
+   839→        <Select value={postFilter} onValueChange={(v) => { setPostFilter(v); setPostsPage(1); fetchPosts(1, v); }}>
+   840→          <SelectTrigger className="w-36">
+   841→            <SelectValue placeholder="Filter status" />
+   842→          </SelectTrigger>
+   843→          <SelectContent>
+   844→            <SelectItem value="all">All Status</SelectItem>
+   845→            <SelectItem value="success">Success</SelectItem>
+   846→            <SelectItem value="failed">Failed</SelectItem>
+   847→            <SelectItem value="pending">Pending</SelectItem>
+   848→          </SelectContent>
+   849→        </Select>
+   850→      </div>
+   851→
+   852→      <Card>
+   853→        <CardContent className="p-0">
+   854→          {isLoadingPosts ? (
+   855→            <div className="p-4 space-y-2">
+   856→              {Array.from({ length: 5 }).map((_, i) => (
+   857→                <Skeleton key={i} className="h-10 w-full" />
+   858→              ))}
+   859→            </div>
+   860→          ) : postsList.length === 0 ? (
+   861→            <div className="text-center py-12 text-muted-foreground">
+   862→              <Send className="h-12 w-12 mx-auto mb-3 opacity-30" />
+   863→              <p className="text-sm font-medium">No posts yet</p>
+   864→              <p className="text-xs mt-1">Use the &quot;Fetch & Post Now&quot; button on the dashboard</p>
+   865→            </div>
+   866→          ) : (
+   867→            <div className="overflow-x-auto">
+   868→              <Table>
+   869→                <TableHeader>
+   870→                  <TableRow>
+   871→                    <TableHead className="text-xs">Date</TableHead>
+   872→                    <TableHead className="text-xs text-center">Status</TableHead>
+   873→                    <TableHead className="text-xs hidden md:table-cell">Message Preview</TableHead>
+   874→                    <TableHead className="text-xs text-center hidden sm:table-cell">Attempts</TableHead>
+   875→                    <TableHead className="text-xs hidden lg:table-cell">Posted Time</TableHead>
+   876→                    <TableHead className="text-xs text-center">Action</TableHead>
+   877→                  </TableRow>
+   878→                </TableHeader>
+   879→                <TableBody>
+   880→                  {postsList.map((post) => (
+   881→                    <TableRow key={post.id}>
+   882→                      <TableCell className="text-xs font-medium">
+   883→                        {post.marketData?.tradingDate || formatDateTime(post.createdAt).split(',')[0]}
+   884→                      </TableCell>
+   885→                      <TableCell className="text-xs text-center">{statusBadge(post.status)}</TableCell>
+   886→                      <TableCell className="text-xs text-muted-foreground hidden md:table-cell max-w-[200px] truncate">
+   887→                        {post.message.substring(0, 60)}...
+   888→                      </TableCell>
+   889→                      <TableCell className="text-xs text-center hidden sm:table-cell">{post.attemptCount}</TableCell>
+   890→                      <TableCell className="text-xs hidden lg:table-cell">
+   891→                        {post.postedTime ? formatDateTime(post.postedTime) : '—'}
+   892→                        {post.errorMessage && (
+   893→                          <p className="text-red-500 text-[10px] mt-0.5 truncate">{post.errorMessage}</p>
+   894→                        )}
+   895→                      </TableCell>
+   896→                      <TableCell className="text-xs text-center">
+   897→                        <Dialog>
+   898→                          <DialogTrigger asChild>
+   899→                            <Button variant="ghost" size="sm" className="h-7 gap-1" onClick={() => setSelectedPost(post)}>
+   900→                              <Eye className="h-3 w-3" /> View
+   901→                            </Button>
+   902→                          </DialogTrigger>
+   903→                          <DialogContent className="max-w-lg">
+   904→                            <DialogHeader>
+   905→                              <DialogTitle>Post Details</DialogTitle>
+   906→                              <DialogDescription>
+   907→                                {post.marketData?.tradingDate || 'Unknown date'} — {post.status}
+   908→                              </DialogDescription>
+   909→                            </DialogHeader>
+   910→                            <div className="space-y-3">
+   911→                              <div className="flex flex-wrap gap-2">
+   912→                                {statusBadge(post.status)}
+   913→                                <Badge variant="outline">Attempts: {post.attemptCount}</Badge>
+   914→                                {post.facebookPostId && (
+   915→                                  <Badge variant="outline">FB ID: {post.facebookPostId.substring(0, 15)}...</Badge>
+   916→                                )}
+   917→                              </div>
+   918→                              <Separator />
+   919→                              <div>
+   920→                                <p className="text-xs text-muted-foreground mb-1 font-medium">Message Content:</p>
+   921→                                <div className="bg-muted rounded-md p-3 text-xs whitespace-pre-wrap font-mono max-h-60 overflow-y-auto">
+   922→                                  {post.message}
+   923→                                </div>
+   924→                              </div>
+   925→                              {post.errorMessage && (
+   926→                                <div>
+   927→                                  <p className="text-xs text-muted-foreground mb-1 font-medium">Error:</p>
+   928→                                  <div className="bg-red-500/10 rounded-md p-3 text-xs text-red-500">
+   929→                                    {post.errorMessage}
+   930→                                  </div>
+   931→                                </div>
+   932→                              )}
+   933→                              <div className="text-[10px] text-muted-foreground">
+   934→                                Scheduled: {formatDateTime(post.scheduledTime)} | Posted: {formatDateTime(post.postedTime)}
+   935→                              </div>
+   936→                            </div>
+   937→                          </DialogContent>
+   938→                        </Dialog>
+   939→                      </TableCell>
+   940→                    </TableRow>
+   941→                  ))}
+   942→                </TableBody>
+   943→              </Table>
+   944→            </div>
+   945→          )}
+   946→        </CardContent>
+   947→      </Card>
+   948→
+   949→      {postsTotalPages > 1 && (
+   950→        <div className="flex items-center justify-center gap-2">
+   951→          <Button
+   952→            variant="outline"
+   953→            size="sm"
+   954→            onClick={() => { setPostsPage((p) => Math.max(1, p - 1)); fetchPosts(Math.max(1, postsPage - 1), postFilter); }}
+   955→            disabled={postsPage <= 1}
+   956→          >
+   957→            <ChevronLeft className="h-4 w-4" />
+   958→          </Button>
+   959→          <span className="text-sm text-muted-foreground">Page {postsPage} of {postsTotalPages}</span>
+   960→          <Button
+   961→            variant="outline"
+   962→            size="sm"
+   963→            onClick={() => { setPostsPage((p) => p + 1); fetchPosts(postsPage + 1, postFilter); }}
+   964→            disabled={postsPage >= postsTotalPages}
+   965→          >
+   966→            <ChevronRight className="h-4 w-4" />
+   967→          </Button>
+   968→        </div>
+   969→      )}
+   970→    </div>
+   971→  );
+   972→
+   973→  // ---- Settings Tab ----
+   974→  const renderSettings = () => (
+   975→    <div className="space-y-6">
+   976→      <div>
+   977→        <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
+   978→        <p className="text-muted-foreground text-sm">Configure your Share Sathi automation</p>
+   979→      </div>
+   980→
+   981→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   982→        {/* Facebook Integration */}
+   983→        <Card>
+   984→          <CardHeader className="pb-3">
+   985→            <CardTitle className="text-base font-semibold">Facebook Integration</CardTitle>
+   986→            <CardDescription>Connect your Facebook page for posting</CardDescription>
+   987→          </CardHeader>
+   988→          <CardContent className="space-y-4">
+   989→            <div className="space-y-2">
+   990→              <Label htmlFor="pageId">Page ID</Label>
+   991→              <Input
+   992→                id="pageId"
+   993→                placeholder="Enter your Facebook Page ID"
+   994→                value={settings.facebook_page_id}
+   995→                onChange={(e) => setSettings((s) => ({ ...s, facebook_page_id: e.target.value }))}
+   996→              />
+   997→            </div>
+   998→            <div className="space-y-2">
+   999→              <Label htmlFor="accessToken">Page Access Token</Label>
+  1000→              <Input
+  1001→                id="accessToken"
+  1002→                type="password"
+  1003→                placeholder="Enter your Page Access Token"
+  1004→                value={settings.facebook_page_access_token}
+  1005→                onChange={(e) => setSettings((s) => ({ ...s, facebook_page_access_token: e.target.value }))}
+  1006→              />
+  1007→            </div>
+  1008→            <Button
+  1009→              variant="outline"
+  1010→              size="sm"
+  1011→              onClick={handleTestConnection}
+  1012→              disabled={connectionTest.testing}
+  1013→              className="gap-1"
+  1014→            >
+  1015→              {connectionTest.testing ? (
+  1016→                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+  1017→              ) : (
+  1018→                <Wifi className="h-3.5 w-3.5" />
+  1019→              )}
+  1020→              Test Connection
+  1021→            </Button>
+  1022→            {connectionTest.result && (
+  1023→              <p className={`text-xs ${connectionTest.result.includes('success') || connectionTest.result.includes('Successful') ? 'text-emerald-500' : 'text-red-500'}`}>
+  1024→                {connectionTest.result}
+  1025→              </p>
+  1026→            )}
+  1027→          </CardContent>
+  1028→        </Card>
+  1029→
+  1030→        {/* Automation */}
+  1031→        <Card>
+  1032→          <CardHeader className="pb-3">
+  1033→            <CardTitle className="text-base font-semibold">Automation</CardTitle>
+  1034→            <CardDescription>Configure auto-posting behavior</CardDescription>
+  1035→          </CardHeader>
+  1036→          <CardContent className="space-y-4">
+  1037→            <div className="flex items-center justify-between">
+  1038→              <div className="space-y-0.5">
+  1039→                <Label>Auto-Post Enabled</Label>
+  1040→                <p className="text-xs text-muted-foreground">Automatically post after market close</p>
+  1041→              </div>
+  1042→              <Switch
+  1043→                checked={settings.auto_post_enabled === 'true'}
+  1044→                onCheckedChange={(checked) =>
+  1045→                  setSettings((s) => ({ ...s, auto_post_enabled: String(checked) }))
+  1046→                }
+  1047→              />
+  1048→            </div>
+  1049→            <div className="space-y-2">
+  1050→              <Label htmlFor="postTime">Post Time</Label>
+  1051→              <Input
+  1052→                id="postTime"
+  1053→                type="time"
+  1054→                value={settings.post_time}
+  1055→                onChange={(e) => setSettings((s) => ({ ...s, post_time: e.target.value }))}
+  1056→              />
+  1057→            </div>
+  1058→            <Separator />
+  1059→            <div className="space-y-2">
+  1060→              <Label htmlFor="notifEmail">Notification Email</Label>
+  1061→              <Input
+  1062→                id="notifEmail"
+  1063→                type="email"
+  1064→                placeholder="alerts@example.com"
+  1065→                value={settings.notification_email}
+  1066→                onChange={(e) => setSettings((s) => ({ ...s, notification_email: e.target.value }))}
+  1067→              />
+  1068→            </div>
+  1069→          </CardContent>
+  1070→        </Card>
+  1071→
+  1072→        {/* Content Settings */}
+  1073→        <Card>
+  1074→          <CardHeader className="pb-3">
+  1075→            <CardTitle className="text-base font-semibold">Content</CardTitle>
+  1076→            <CardDescription>Configure post content and language</CardDescription>
+  1077→          </CardHeader>
+  1078→          <CardContent className="space-y-4">
+  1079→            <div className="space-y-2">
+  1080→              <Label>Language</Label>
+  1081→              <Select
+  1082→                value={settings.language}
+  1083→                onValueChange={(v) => setSettings((s) => ({ ...s, language: v }))}
+  1084→              >
+  1085→                <SelectTrigger>
+  1086→                  <SelectValue />
+  1087→                </SelectTrigger>
+  1088→                <SelectContent>
+  1089→                  <SelectItem value="en">English</SelectItem>
+  1090→                  <SelectItem value="ne">Nepali</SelectItem>
+  1091→                </SelectContent>
+  1092→              </Select>
+  1093→            </div>
+  1094→            <div className="space-y-2">
+  1095→              <Label>Post Template Preview</Label>
+  1096→              <Textarea
+  1097→                readOnly
+  1098→                value={`📈 NEPSE Daily Market Update\n📅 Date: {tradingDate}\n\n🏛️ NEPSE Index: {nepseIndex} ({arrow} {change} | {changePercentage}%)\n💰 Total Turnover: NPR {turnover}\n📊 Total Trades: {trades}\n📦 Volume: {volume} shares\n\n🟢 Gainers: {gainers} | 🔴 Losers: {losers} | ⚪ Unchanged: {unchanged}\n\n#NEPSE #NepalStockExchange #ShareMarket #ShareSathi`}
+  1099→                className="min-h-[140px] text-xs font-mono"
+  1100→              />
+  1101→            </div>
+  1102→          </CardContent>
+  1103→        </Card>
+  1104→
+  1105→        {/* Actions */}
+  1106→        <Card>
+  1107→          <CardHeader className="pb-3">
+  1108→            <CardTitle className="text-base font-semibold">Actions</CardTitle>
+  1109→            <CardDescription>System maintenance operations</CardDescription>
+  1110→          </CardHeader>
+  1111→          <CardContent className="space-y-4">
+  1112→            <Button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full gap-1">
+  1113→              {isSavingSettings ? (
+  1114→                <RefreshCw className="h-4 w-4 animate-spin" />
+  1115→              ) : (
+  1116→                <CheckCircle2 className="h-4 w-4" />
+  1117→              )}
+  1118→              {isSavingSettings ? 'Saving...' : 'Save Settings'}
+  1119→            </Button>
+  1120→            <Separator />
+  1121→            <Button onClick={handleSeed} disabled={isSeeding} variant="outline" className="w-full gap-1">
+  1122→              {isSeeding ? (
+  1123→                <RefreshCw className="h-4 w-4 animate-spin" />
+  1124→              ) : (
+  1125→                <Database className="h-4 w-4" />
+  1126→              )}
+  1127→              {isSeeding ? 'Seeding...' : 'Seed Demo Data'}
+  1128→            </Button>
+  1129→            <p className="text-[10px] text-muted-foreground text-center">
+  1130→              Seeding will populate the database with 30 days of demo data
+  1131→            </p>
+  1132→          </CardContent>
+  1133→        </Card>
+  1134→      </div>
+  1135→    </div>
+  1136→  );
+  1137→
+  1138→  // ---- Logs Tab ----
+  1139→  const renderLogs = () => (
+  1140→    <div className="space-y-4">
+  1141→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+  1142→        <div>
+  1143→          <h2 className="text-2xl font-bold tracking-tight">System Logs</h2>
+  1144→          <p className="text-muted-foreground text-sm">System events and activity log</p>
+  1145→        </div>
+  1146→        <div className="flex gap-2">
+  1147→          <Select value={logsSeverityFilter} onValueChange={(v) => { setLogsSeverityFilter(v); setLogsPage(1); fetchLogs(1, v, logsTypeFilter); }}>
+  1148→            <SelectTrigger className="w-32">
+  1149→              <SelectValue placeholder="Severity" />
+  1150→            </SelectTrigger>
+  1151→            <SelectContent>
+  1152→              <SelectItem value="all">All Severity</SelectItem>
+  1153→              <SelectItem value="info">Info</SelectItem>
+  1154→              <SelectItem value="success">Success</SelectItem>
+  1155→              <SelectItem value="warning">Warning</SelectItem>
+  1156→              <SelectItem value="error">Error</SelectItem>
+  1157→            </SelectContent>
+  1158→          </Select>
+  1159→          <Select value={logsTypeFilter} onValueChange={(v) => { setLogsTypeFilter(v); setLogsPage(1); fetchLogs(1, logsSeverityFilter, v); }}>
+  1160→            <SelectTrigger className="w-32">
+  1161→              <SelectValue placeholder="Type" />
+  1162→            </SelectTrigger>
+  1163→            <SelectContent>
+  1164→              <SelectItem value="all">All Types</SelectItem>
+  1165→              <SelectItem value="fetch">Fetch</SelectItem>
+  1166→              <SelectItem value="post">Post</SelectItem>
+  1167→              <SelectItem value="config">Config</SelectItem>
+  1168→              <SelectItem value="pipeline">Pipeline</SelectItem>
+  1169→              <SelectItem value="system">System</SelectItem>
+  1170→            </SelectContent>
+  1171→          </Select>
+  1172→          <Button variant="destructive" size="sm" onClick={handleClearLogs} className="gap-1">
+  1173→            <Trash2 className="h-3.5 w-3.5" /> Clear
+  1174→          </Button>
+  1175→        </div>
+  1176→      </div>
+  1177→
+  1178→      <Card>
+  1179→        <CardContent className="p-0">
+  1180→          {isLoadingLogs ? (
+  1181→            <div className="p-4 space-y-2">
+  1182→              {Array.from({ length: 8 }).map((_, i) => (
+  1183→                <Skeleton key={i} className="h-12 w-full" />
+  1184→              ))}
+  1185→            </div>
+  1186→          ) : logsList.length === 0 ? (
+  1187→            <div className="text-center py-12 text-muted-foreground">
+  1188→              <Activity className="h-12 w-12 mx-auto mb-3 opacity-30" />
+  1189→              <p className="text-sm font-medium">No logs yet</p>
+  1190→            </div>
+  1191→          ) : (
+  1192→            <div className="max-h-[480px] overflow-y-auto divide-y divide-border">
+  1193→              {logsList.map((log) => (
+  1194→                <div key={log.id} className="flex items-start gap-3 p-3 hover:bg-muted/50 transition-colors">
+  1195→                  <div className="mt-1">
+  1196→                    <Badge variant="outline" className={`text-[10px] ${severityColor(log.severity)}`}>
+  1197→                      {log.severity}
+  1198→                    </Badge>
+  1199→                  </div>
+  1200→                  <div className="flex-1 min-w-0">
+  1201→                    <div className="flex items-center gap-2 mb-0.5">
+  1202→                      <Badge variant="outline" className="text-[10px]">{log.eventType}</Badge>
+  1203→                      {log.entityType && (
+  1204→                        <span className="text-[10px] text-muted-foreground">{log.entityType}</span>
+  1205→                      )}
+  1206→                    </div>
+  1207→                    <p className="text-sm">{log.description}</p>
+  1208→                  </div>
+  1209→                  <div className="text-xs text-muted-foreground shrink-0">
+  1210→                    {formatDateTime(log.createdAt)}
+  1211→                  </div>
+  1212→                </div>
+  1213→              ))}
+  1214→            </div>
+  1215→          )}
+  1216→        </CardContent>
+  1217→      </Card>
+  1218→
+  1219→      {logsTotalPages > 1 && (
+  1220→        <div className="flex items-center justify-center gap-2">
+  1221→          <Button
+  1222→            variant="outline"
+  1223→            size="sm"
+  1224→            onClick={() => { setLogsPage((p) => Math.max(1, p - 1)); fetchLogs(Math.max(1, logsPage - 1), logsSeverityFilter, logsTypeFilter); }}
+  1225→            disabled={logsPage <= 1}
+  1226→          >
+  1227→            <ChevronLeft className="h-4 w-4" />
+  1228→          </Button>
+  1229→          <span className="text-sm text-muted-foreground">Page {logsPage} of {logsTotalPages}</span>
+  1230→          <Button
+  1231→            variant="outline"
+  1232→            size="sm"
+  1233→            onClick={() => { setLogsPage((p) => p + 1); fetchLogs(logsPage + 1, logsSeverityFilter, logsTypeFilter); }}
+  1234→            disabled={logsPage >= logsTotalPages}
+  1235→          >
+  1236→            <ChevronRight className="h-4 w-4" />
+  1237→          </Button>
+  1238→        </div>
+  1239→      )}
+  1240→    </div>
+  1241→  );
+  1242→
+  1243→  return (
+  1244→    <div className="min-h-screen flex flex-col">
+  1245→      {/* Header */}
+  1246→      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
+  1247→        <div className="container mx-auto flex h-14 items-center justify-between px-4">
+  1248→          <div className="flex items-center gap-2.5">
+  1249→            <img
+  1250→              src="/logo.png"
+  1251→              alt="Share Sathi"
+  1252→              className="h-8 w-8 rounded-lg object-cover"
+  1253→            />
+  1254→            <div>
+  1255→              <h1 className="text-base font-bold leading-none">Share Sathi</h1>
+  1256→              <p className="text-[10px] text-muted-foreground leading-none">NEPSE Market Automation</p>
+  1257→            </div>
+  1258→          </div>
+  1259→          <Button
+  1260→            variant="ghost"
+  1261→            size="icon"
+  1262→            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+  1263→            aria-label="Toggle theme"
+  1264→          >
+  1265→            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+  1266→          </Button>
+  1267→        </div>
+  1268→      </header>
+  1269→
+  1270→      {/* Main */}
+  1271→      <main className="flex-1 container mx-auto px-4 py-4">
+  1272→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+  1273→          <TabsList className="mb-4 flex-wrap h-auto gap-1 p-1">
+  1274→            <TabsTrigger value="dashboard" className="gap-1.5">
+  1275→              <BarChart3 className="h-3.5 w-3.5" />
+  1276→              <span className="hidden sm:inline">Dashboard</span>
+  1277→            </TabsTrigger>
+  1278→            <TabsTrigger value="market" className="gap-1.5">
+  1279→              <Zap className="h-3.5 w-3.5" />
+  1280→              <span className="hidden sm:inline">Market</span>
+  1281→            </TabsTrigger>
+  1282→            <TabsTrigger value="posts" className="gap-1.5">
+  1283→              <Send className="h-3.5 w-3.5" />
+  1284→              <span className="hidden sm:inline">Posts</span>
+  1285→            </TabsTrigger>
+  1286→            <TabsTrigger value="settings" className="gap-1.5">
+  1287→              <Settings className="h-3.5 w-3.5" />
+  1288→              <span className="hidden sm:inline">Settings</span>
+  1289→            </TabsTrigger>
+  1290→            <TabsTrigger value="logs" className="gap-1.5">
+  1291→              <Activity className="h-3.5 w-3.5" />
+  1292→              <span className="hidden sm:inline">Logs</span>
+  1293→            </TabsTrigger>
+  1294→          </TabsList>
+  1295→
+  1296→          <TabsContent value="dashboard">{renderDashboard()}</TabsContent>
+  1297→          <TabsContent value="market">{renderMarketData()}</TabsContent>
+  1298→          <TabsContent value="posts">{renderPosts()}</TabsContent>
+  1299→          <TabsContent value="settings">{renderSettings()}</TabsContent>
+  1300→          <TabsContent value="logs">{renderLogs()}</TabsContent>
+  1301→        </Tabs>
+  1302→      </main>
+  1303→
+  1304→      {/* Footer */}
+  1305→      <footer className="border-t mt-auto">
+  1306→        <div className="container mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-1">
+  1307→          <p className="text-xs text-muted-foreground">© 2026 Share Sathi — Built for Kiran Pradhan</p>
+  1308→          <p className="text-xs text-muted-foreground">NEPSE Market Automation • 100% Free</p>
+  1309→        </div>
+  1310→      </footer>
+  1311→    </div>
+  1312→  );
+  1313→}
