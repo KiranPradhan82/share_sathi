@@ -53,7 +53,8 @@ export async function POST() {
     let source = 'NEPSE Data';
     try {
       const raw = JSON.parse(existing.rawData);
-      source = raw.source === 'mock' ? 'MOCK DATA (API/Website failed)' :
+      source = raw.source === 'mock' ? 'MOCK DATA (all sources failed)' :
+               raw.source === 'yonepse' ? 'YONEPSE API (real data)' :
                raw.source === 'nepse-website' ? 'NEPSE Website (scraped)' :
                raw.source === 'nepse-api' ? 'NEPSE API' : 'NEPSE Data';
     } catch {

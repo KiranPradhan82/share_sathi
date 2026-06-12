@@ -1,4 +1,4 @@
-import ZAI from 'z-ai-web-dev-sdk';
+const YONEPSE_BASE = 'https://shubhamnpk.github.io/yonepse';
 
 export interface NepseData {
   tradingDate: string;
@@ -12,13 +12,15 @@ export interface NepseData {
   losers: number;
   unchanged: number;
   rawData: string;
-  // Extended fields from scraped data
   sensitiveIndex?: number;
   sensitiveIndexChange?: number;
+  sensitiveIndexChangePercent?: number;
   floatIndex?: number;
   floatIndexChange?: number;
+  floatIndexChangePercent?: number;
   sensitiveFloatIndex?: number;
   sensitiveFloatIndexChange?: number;
+  sensitiveFloatIndexChangePercent?: number;
   marketCap?: number;
   floatMarketCap?: number;
   scripsTraded?: number;
@@ -64,233 +66,160 @@ function generateMockData(date: string): NepseData {
   };
 }
 
-function parseNumber(text: string): number {
-  if (!text) return 0;
-  // Remove commas, spaces, Rs: prefix, NPR prefix
-  const cleaned = text.replace(/[,Rs:\sNPR]/g, '').trim();
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : num;
-}
-
-function parseNepseHtml(html: string): NepseData | null {
-  // Convert HTML to plain text for easier regex matching
-  const text = html
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/\s+/g, ' ')
-    .trim();
-
+/**
+ * Fetch from YONEPSE static JSON API (GitHub Pages).
+ * Free, no auth, no WAF, works from any server.
+ * Updates every 30 min during market hours (11 AM - 3 PM NPT, Mon-Fri).
+ */
+async function fetchFromYonepse(date: string): Promise<NepseData | null> {
   try {
-    // === Extract NEPSE Index ===
-    // Pattern: "NEPSE Index Jun 12 | 3:00 PM Market Closed Jun 12 | 3:00 PM 2,724.03 -4.00 -0.14%"
-    // Or: "NEPSE Index 2,724.03 -4.00 -0.14"
-    let nepseIndex = 0;
-    let change = 0;
-    let changePercentage = 0;
+    const [summaryRes, indicesRes, topStocksRes] = await Promise.all([
+      fetch(`${YONEPSE_BASE}/data/market/summary.json`, { signal: AbortSignal.timeout(15000) }),
+      fetch(`${YONEPSE_BASE}/data/market/indices.json`, { signal: AbortSignal.timeout(15000) }),
+      fetch(`${YONEPSE_BASE}/data/market/top_stocks.json`, { signal: AbortSignal.timeout(15000) }),
+    ]);
 
-    const indexPatterns = [
-      // Pattern: "NEPSE Index Jun 12 | 3:00 PM Market Closed Jun 12 | 3:00 PM 2,724.03 -4.00 -0.14%"
-      /NEPSE\s*Index.*?(\d{1,3}(?:,\d{3})+\.\d{2})\s+(-?\d+\.\d{2})\s+(-?\d+\.\d+)%/i,
-      // Fallback simpler pattern
-      /NEPSE\s*Index[:\s]*(\d[\d,.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)%/i,
-    ];
-
-    for (const pattern of indexPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        nepseIndex = parseNumber(match[1]);
-        change = parseNumber(match[2]);
-        changePercentage = parseNumber(match[3].replace('%', ''));
-        break;
-      }
+    if (!summaryRes.ok || !indicesRes.ok) {
+      console.error('YONEPSE API returned non-OK status');
+      return null;
     }
 
-    if (nepseIndex === 0) return null; // Can't find index, data is invalid
-
-    // === Extract Turnover ===
-    // Pattern: "Total Turnover Rs: | 4,341,094,764.19"
-    let turnover = 0;
-    const turnoverPatterns = [
-      /Total\s*Turnover\s*Rs[:\s|]*(\d[\d,.]+)/i,
-      /Total\s*Turnover[:\s]*Rs[:\s]*(\d[\d,.]+)/i,
-    ];
-    for (const pattern of turnoverPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        turnover = parseNumber(match[1]);
-        break;
-      }
+    const summary: Array<{ detail: string; value: number }> = await summaryRes.json();
+    const indices: Array<Record<string, unknown>> = await indicesRes.json();
+    let topStocks: Record<string, Array<Record<string, unknown>>> = {};
+    if (topStocksRes.ok) {
+      topStocks = await topStocksRes.json();
     }
 
-    // === Extract Total Traded Shares ===
-    // Pattern: "Total Traded Shares | 9,856,525"
-    let volume = 0;
-    const volumePatterns = [
-      /Total\s*Traded\s*Shares\s*[|:]*\s*(\d[\d,.]+)/i,
-    ];
-    for (const pattern of volumePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        volume = parseNumber(match[1]);
-        break;
-      }
+    // Parse summary
+    const getSummaryValue = (label: string): number => {
+      const item = summary.find(s => s.detail.includes(label));
+      return item ? item.value : 0;
+    };
+
+    const turnover = getSummaryValue('Total Turnover');
+    const volume = getSummaryValue('Total Traded Shares');
+    const transactions = getSummaryValue('Total Transactions');
+    const scripsTraded = getSummaryValue('Total Scrips Traded');
+    const marketCap = getSummaryValue('Total Market Capitalization');
+    const floatMarketCap = getSummaryValue('Total Float Market Capitalization');
+
+    if (turnover === 0 && volume === 0) {
+      console.error('YONEPSE: summary data is empty (market likely closed or weekend)');
+      return null;
     }
 
-    // === Extract Transactions ===
-    // Pattern: "Total Transactions 54,177"
-    let transactions = 0;
-    const transMatch = text.match(/Total\s*Transactions?\s*(\d[\d,.]*)/i);
-    if (transMatch) {
-      transactions = parseNumber(transMatch[1]);
+    // Parse indices - find NEPSE Index
+    const nepseIdx = indices.find(i => i.index === 'NEPSE Index');
+    const sensIdx = indices.find(i => i.index === 'Sensitive Index');
+    const floatIdx = indices.find(i => i.index === 'Float Index');
+    const sfIdx = indices.find(i => i.index === 'Sensitive Float Index');
+
+    if (!nepseIdx) {
+      console.error('YONEPSE: NEPSE Index not found in indices data');
+      return null;
     }
 
-    // === Extract Advanced/Declined/Unchanged ===
-    let gainers = 0;
-    let losers = 0;
-    let unchanged = 0;
+    const nepseIndex = Number(nepseIdx.currentValue || nepseIdx.close || 0);
+    const change = Number(nepseIdx.change || 0);
+    const changePercent = Number(nepseIdx.perChange || 0);
 
-    const advMatch = text.match(/Advanced[:\s]*(\d+)/i);
-    if (advMatch) gainers = parseInt(advMatch[1], 10);
-
-    const decMatch = text.match(/Declined[:\s]*(\d+)/i);
-    if (decMatch) losers = parseInt(decMatch[1], 10);
-
-    const unchMatch = text.match(/Unchanged[:\s]*(\d+)/i);
-    if (unchMatch) unchanged = parseInt(unchMatch[1], 10);
-
-    // === Extract Trading Date ===
-    // Pattern: "NEPSE Index Jun 12 | 3:00 PM" -> today's date
-    const today = new Date().toISOString().split('T')[0];
-
-    // === Extract Sub-indices ===
-    let sensitiveIndex = 0;
-    let sensitiveIndexChange = 0;
-    let floatIndex = 0;
-    let floatIndexChange = 0;
-    let sensitiveFloatIndex = 0;
-    let sensitiveFloatIndexChange = 0;
-
-    const sensMatch = text.match(/Sensitive\s*Index\s+(\d[\d,.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)/i);
-    if (sensMatch) {
-      sensitiveIndex = parseNumber(sensMatch[1]);
-      sensitiveIndexChange = parseNumber(sensMatch[2]);
+    if (nepseIndex === 0) {
+      console.error('YONEPSE: NEPSE Index value is 0');
+      return null;
     }
 
-    const floatMatch = text.match(/Float\s*Index\s+(\d[\d,.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)/i);
-    if (floatMatch) {
-      floatIndex = parseNumber(floatMatch[1]);
-      floatIndexChange = parseNumber(floatMatch[2]);
+    // Parse top stocks for gainers/losers counts
+    const topGainers = (topStocks.top_gainer || []) as Array<Record<string, unknown>>;
+    const topLosers = (topStocks.top_loser || []) as Array<Record<string, unknown>>;
+    
+    // Count gainers/losers/unchanged from top stocks data
+    // top_gainer contains ALL stocks with positive change, top_loser has ALL with negative
+    const gainers = topGainers.length;
+    const losers = topLosers.length;
+    const totalTraded = topGainers.length + topLosers.length;
+    
+    // We need to find unchanged too - approximate from scrips traded
+    // YONEPSE doesn't directly provide unchanged count, so we compute:
+    // unchanged = scrips_traded - gainers - losers (if we have scrips data)
+    const unchanged = Math.max(0, Math.round(scripsTraded) - gainers - losers);
+
+    // Extract top 5 gainers/losers for image posts
+    const top5Gainers = topGainers.slice(0, 5).map(g => ({
+      symbol: String(g.symbol || ''),
+      name: String(g.securityName || ''),
+      change: Number(g.pointChange || 0),
+      changePercent: Number(g.percentageChange || 0),
+    }));
+
+    const top5Losers = topLosers.slice(0, 5).map(l => ({
+      symbol: String(l.symbol || ''),
+      name: String(l.securityName || ''),
+      change: Number(l.pointChange || 0),
+      changePercent: Number(l.percentageChange || 0),
+    }));
+
+    // Get trading date from indices generatedTime or use provided date
+    const generatedTime = String(nepseIdx.generatedTime || '');
+    let tradingDate = date;
+    if (generatedTime) {
+      try {
+        tradingDate = generatedTime.split('T')[0];
+      } catch { /* use provided date */ }
     }
 
-    const sfMatch = text.match(/Sensitive\s*Float\s*Index\s+(\d[\d,.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)/i);
-    if (sfMatch) {
-      sensitiveFloatIndex = parseNumber(sfMatch[1]);
-      sensitiveFloatIndexChange = parseNumber(sfMatch[2]);
-    }
-
-    // === Extract Market Cap ===
-    let marketCap = 0;
-    let floatMarketCap = 0;
-
-    const mcapMatch = text.match(/Total\s*Market\s*Capitalization\s*Rs[:\s]*(\d[\d,.]+)/i);
-    if (mcapMatch) {
-      marketCap = parseNumber(mcapMatch[1]);
-    }
-
-    const fmcapMatch = text.match(/Total\s*Float\s*Market\s*Capitalization\s*Rs[:\s]*(\d[\d,.]+)/i);
-    if (fmcapMatch) {
-      floatMarketCap = parseNumber(fmcapMatch[1]);
-    }
-
-    // === Extract Scrips Traded ===
-    let scripsTraded = 0;
-    const scripsMatch = text.match(/Total\s*Scrips\s*Traded\s*(\d[\d,.]*)/i);
-    if (scripsMatch) {
-      scripsTraded = parseNumber(scripsMatch[1]);
-    }
-
-    // Build rawData
     const rawData = JSON.stringify({
-      source: 'nepse-website',
-      scrapedAt: new Date().toISOString(),
+      source: 'yonepse',
+      fetchedAt: new Date().toISOString(),
+      generatedTime,
       nepseIndex,
       change,
-      changePercentage,
+      changePercent,
       turnover,
       volume,
       transactions,
       scripsTraded,
+      marketCap,
+      floatMarketCap,
       gainers,
       losers,
       unchanged,
-      sensitiveIndex,
-      sensitiveIndexChange,
-      floatIndex,
-      floatIndexChange,
-      sensitiveFloatIndex,
-      sensitiveFloatIndexChange,
-      marketCap,
-      floatMarketCap,
+      top5Gainers,
+      top5Losers,
+      sensitiveIndex: sensIdx ? Number(sensIdx.currentValue || sensIdx.close) : undefined,
+      floatIndex: floatIdx ? Number(floatIdx.currentValue || floatIdx.close) : undefined,
+      sensitiveFloatIndex: sfIdx ? Number(sfIdx.currentValue || sfIdx.close) : undefined,
     });
 
     return {
-      tradingDate: today,
+      tradingDate,
       nepseIndex,
       change,
-      changePercentage,
+      changePercentage: changePercent,
       turnover,
       volume,
-      trades: transactions || 0,
+      trades: Math.round(transactions),
       gainers,
       losers,
       unchanged,
       rawData,
-      sensitiveIndex: sensitiveIndex || undefined,
-      sensitiveIndexChange: sensitiveIndexChange || undefined,
-      floatIndex: floatIndex || undefined,
-      floatIndexChange: floatIndexChange || undefined,
-      sensitiveFloatIndex: sensitiveFloatIndex || undefined,
-      sensitiveFloatIndexChange: sensitiveFloatIndexChange || undefined,
+      sensitiveIndex: sensIdx ? Number(sensIdx.currentValue || sensIdx.close) : undefined,
+      sensitiveIndexChange: sensIdx ? Number(sensIdx.change) : undefined,
+      sensitiveIndexChangePercent: sensIdx ? Number(sensIdx.perChange) : undefined,
+      floatIndex: floatIdx ? Number(floatIdx.currentValue || floatIdx.close) : undefined,
+      floatIndexChange: floatIdx ? Number(floatIdx.change) : undefined,
+      floatIndexChangePercent: floatIdx ? Number(floatIdx.perChange) : undefined,
+      sensitiveFloatIndex: sfIdx ? Number(sfIdx.currentValue || sfIdx.close) : undefined,
+      sensitiveFloatIndexChange: sfIdx ? Number(sfIdx.change) : undefined,
+      sensitiveFloatIndexChangePercent: sfIdx ? Number(sfIdx.perChange) : undefined,
       marketCap: marketCap || undefined,
       floatMarketCap: floatMarketCap || undefined,
-      scripsTraded: scripsTraded || undefined,
-      transactions: transactions || undefined,
-      source: 'nepse-website',
+      scripsTraded: Math.round(scripsTraded) || undefined,
+      transactions: Math.round(transactions) || undefined,
+      source: 'yonepse',
     };
   } catch (e) {
-    console.error('Error parsing NEPSE HTML:', e);
-    return null;
-  }
-}
-
-/**
- * Scrape NEPSE data from the official website using web-reader SDK.
- * This is the primary data source since the NEPSE API is blocked from server-side.
- */
-async function fetchFromNepseWebsite(): Promise<NepseData | null> {
-  try {
-    const zai = await ZAI.create();
-    const result = await zai.functions.invoke('page_reader', {
-      url: 'https://www.nepalstock.com/main/todays-price',
-    });
-
-    const html = result?.data?.html || '';
-    if (!html || html.length < 1000) {
-      console.error('NEPSE website returned too little data');
-      return null;
-    }
-
-    const parsed = parseNepseHtml(html);
-    if (parsed && parsed.nepseIndex > 0) {
-      console.log(`Successfully scraped NEPSE data from website. Index: ${parsed.nepseIndex}`);
-      return parsed;
-    }
-
-    console.error('Failed to parse NEPSE data from scraped HTML');
-    return null;
-  } catch (e) {
-    console.error('Error fetching NEPSE website:', e);
+    console.error('YONEPSE fetch error:', e);
     return null;
   }
 }
@@ -340,21 +269,41 @@ async function fetchFromNepseApi(date: string): Promise<NepseData | null> {
 export async function fetchNepseData(date?: string): Promise<NepseData> {
   const targetDate = date || new Date().toISOString().split('T')[0];
 
-  // Method 1: Try the direct API first (fastest if it works)
+  // Method 1: YONEPSE static JSON API (most reliable, free, no WAF)
+  const yonepseResult = await fetchFromYonepse(targetDate);
+  if (yonepseResult) {
+    console.log(`NEPSE data fetched via YONEPSE. Index: ${yonepseResult.nepseIndex}`);
+    return yonepseResult;
+  }
+
+  // Method 2: Try the direct NEPSE API
   const apiResult = await fetchFromNepseApi(targetDate);
   if (apiResult) {
-    console.log('NEPSE data fetched via API');
+    console.log('NEPSE data fetched via direct API');
     return apiResult;
   }
 
-  // Method 2: Scrape from NEPSE website using web-reader SDK
-  const webResult = await fetchFromNepseWebsite();
-  if (webResult) {
-    console.log('NEPSE data fetched via website scraping');
-    return webResult;
-  }
-
   // Method 3: Fallback to mock data (last resort)
-  console.warn('WARNING: Both NEPSE API and website scraping failed. Using MOCK data!');
+  console.warn('WARNING: All data sources failed. Using MOCK data!');
   return generateMockData(targetDate);
+}
+
+// Re-export for use in image generation / gainers-losers formatting
+export interface TopStock {
+  symbol: string;
+  name: string;
+  change: number;
+  changePercent: number;
+}
+
+export function parseTopStocksFromRawData(rawData: string): { gainers: TopStock[]; losers: TopStock[] } {
+  try {
+    const parsed = JSON.parse(rawData);
+    return {
+      gainers: parsed.top5Gainers || [],
+      losers: parsed.top5Losers || [],
+    };
+  } catch {
+    return { gainers: [], losers: [] };
+  }
 }
