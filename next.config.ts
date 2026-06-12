@@ -5,8 +5,6 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  // Native addon - cannot be bundled by Turbopack
-  serverExternalPackages: ['@resvg/resvg-js'],
   turbopack: {},
 };
 

@@ -4,7 +4,6 @@ import { fetchNepseData } from '@/lib/nepse';
 import { formatMarketUpdate, formatImageCaption, formatGainersCaption, formatLosersCaption } from '@/lib/content-formatter';
 import { postToFacebook } from '@/lib/facebook';
 import { postPhotoToFacebook } from '@/lib/facebook-photo';
-import { generateAllImages } from '@/lib/image-generator';
 import { generateGainersLosers } from '@/lib/nepse-stocks';
 
 async function delay(ms: number): Promise<void> {
@@ -16,20 +15,28 @@ async function getConfigValue(key: string): Promise<string> {
   return config?.value || '';
 }
 
+// Convert a base64 data URI to a Buffer
+function dataUriToBuffer(dataUri: string): Buffer {
+  const base64 = dataUri.replace(/^data:image\/\w+;base64,/, '');
+  return Buffer.from(base64, 'base64');
+}
+
 export async function POST(request: NextRequest) {
   try {
     let date: string | undefined;
-    let mode = 'image'; // default to image mode
+    let mode = 'image';
+    let clientImages: Record<string, string> | null = null;
 
     try {
       const body = await request.json();
       date = body.date || undefined;
       mode = body.mode || 'image';
+      clientImages = body.images || null;
     } catch {
       date = undefined;
     }
 
-    // Step 1: Fetch NEPSE data
+    // Step 1: Get market data
     let marketData = date
       ? await db.marketData.findUnique({ where: { tradingDate: date } })
       : await db.marketData.findFirst({ orderBy: { tradingDate: 'desc' } });
@@ -70,7 +77,7 @@ export async function POST(request: NextRequest) {
     const pageAccessToken = await getConfigValue('facebook_page_access_token');
     const pageId = await getConfigValue('facebook_page_id');
 
-    // Convert to NepseData format
+    // Convert to NepseData format for captions
     const nepseDataForFormat = {
       tradingDate: marketData.tradingDate,
       nepseIndex: marketData.nepseIndex,
@@ -87,62 +94,43 @@ export async function POST(request: NextRequest) {
 
     // ---- IMAGE MODE ----
     if (mode === 'image') {
-      // Generate stock data for gainers/losers
-      const { gainers, losers } = generateGainersLosers();
+      // Use client-sent images if available (new flow)
+      // Otherwise return error — server-side image generation removed
+      if (!clientImages || !clientImages.marketSummary || !clientImages.topGainers || !clientImages.topLosers) {
+        return NextResponse.json(
+          { error: 'No images provided. Generate images in the browser first.' },
+          { status: 400 },
+        );
+      }
 
-      // Generate all 3 images
+      // Convert data URIs to buffers
+      const imageBuffers = {
+        marketSummary: dataUriToBuffer(clientImages.marketSummary),
+        topGainers: dataUriToBuffer(clientImages.topGainers),
+        topLosers: dataUriToBuffer(clientImages.topLosers),
+      };
+
+      // Validate buffers
+      for (const [key, buf] of Object.entries(imageBuffers)) {
+        if (buf.length < 100) {
+          return NextResponse.json(
+            { error: `Invalid ${key} image (size: ${buf.length} bytes)` },
+            { status: 400 },
+          );
+        }
+      }
+
       await db.systemEvent.create({
         data: {
           eventType: 'generate',
           entityType: 'image',
-          description: `Generating 3 Facebook post images for ${marketData.tradingDate}`,
+          description: `Received 3 client-generated images for ${marketData.tradingDate} (${Math.round(imageBuffers.marketSummary.length / 1024)}KB + ${Math.round(imageBuffers.topGainers.length / 1024)}KB + ${Math.round(imageBuffers.topLosers.length / 1024)}KB)`,
           severity: 'info',
         },
       });
 
-      let images: Awaited<ReturnType<typeof generateAllImages>>;
-      try {
-        images = await generateAllImages(nepseDataForFormat, gainers, losers);
-      } catch (genError) {
-        const errMsg = genError instanceof Error ? genError.message : 'Image generation failed';
-        await db.systemEvent.create({
-          data: {
-            eventType: 'generate',
-            entityType: 'image',
-            description: `Image generation failed for ${marketData.tradingDate}: ${errMsg}`,
-            severity: 'error',
-          },
-        });
-        return NextResponse.json(
-          { error: 'Image generation failed', details: errMsg },
-          { status: 500 },
-        );
-      }
-
-      // Validate generated images
-      const imageEntries: Array<{ key: keyof typeof images; label: string }> = [
-        { key: 'marketSummary', label: 'Market Summary' },
-        { key: 'topGainers', label: 'Top Gainers' },
-        { key: 'topLosers', label: 'Top Losers' },
-      ];
-
-      for (const entry of imageEntries) {
-        const buf = images[entry.key];
-        if (!buf || buf.length < 100) {
-          await db.systemEvent.create({
-            data: {
-              eventType: 'generate',
-              entityType: 'image',
-              description: `${entry.label} image is invalid (size: ${buf?.length || 0} bytes)`,
-              severity: 'error',
-            },
-          });
-          return NextResponse.json(
-            { error: `${entry.label} image generation produced invalid data`, details: `Buffer size: ${buf?.length || 0}` },
-            { status: 500 },
-          );
-        }
-      }
+      // Get gainers/losers for captions
+      const { gainers, losers } = generateGainersLosers();
 
       // Post captions
       const summaryCaption = formatImageCaption(nepseDataForFormat);
@@ -150,9 +138,9 @@ export async function POST(request: NextRequest) {
       const losersCaption = formatLosersCaption(marketData.tradingDate, losers);
 
       const postsToMake: Array<{ buffer: Buffer; caption: string; label: string }> = [
-        { buffer: images.marketSummary, caption: summaryCaption, label: 'Market Summary' },
-        { buffer: images.topGainers, caption: gainersCaption, label: 'Top Gainers' },
-        { buffer: images.topLosers, caption: losersCaption, label: 'Top Losers' },
+        { buffer: imageBuffers.marketSummary, caption: summaryCaption, label: 'Market Summary' },
+        { buffer: imageBuffers.topGainers, caption: gainersCaption, label: 'Top Gainers' },
+        { buffer: imageBuffers.topLosers, caption: losersCaption, label: 'Top Losers' },
       ];
 
       const results: Array<{ label: string; success: boolean; postId?: string; error?: string }> = [];
@@ -160,7 +148,6 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < postsToMake.length; i++) {
         const post = postsToMake[i];
 
-        // Create Facebook post record
         const fbPost = await db.facebookPost.create({
           data: {
             marketDataId: marketData.id,
@@ -176,7 +163,7 @@ export async function POST(request: NextRequest) {
             entityType: 'facebook_post',
             entityId: fbPost.id,
             facebookPostId: fbPost.id,
-            description: `Posting ${post.label} image for ${marketData.tradingDate}...`,
+            description: `Posting ${post.label} image (${Math.round(post.buffer.length / 1024)}KB) for ${marketData.tradingDate}...`,
             severity: 'info',
           },
         });
@@ -248,10 +235,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ---- TEXT MODE (original behavior) ----
+    // ---- TEXT MODE ----
     const message = formatMarketUpdate(nepseDataForFormat);
 
-    // Create Facebook post record
     const fbPost = await db.facebookPost.create({
       data: {
         marketDataId: marketData.id,
@@ -272,7 +258,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Post to Facebook
     const result = await postToFacebook(message, pageAccessToken, pageId);
 
     if (result.success) {
@@ -317,7 +302,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Return final result
     const updatedPost = await db.facebookPost.findUnique({
       where: { id: fbPost.id },
     });

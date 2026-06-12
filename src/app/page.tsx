@@ -66,6 +66,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+import { generateImagesInBrowser } from '@/lib/client-image-generator';
+import { generateGainersLosers } from '@/lib/nepse-stocks';
+
 // ---- Types ----
 interface MarketData {
   id: string;
@@ -579,22 +582,33 @@ export default function HomePage() {
 
   // ---- Image Actions ----
   const handleGenerateImages = async () => {
+    if (!previewData) return;
     setImagePreview(null);
     setIsGeneratingImages(true);
     try {
-      const res = await fetch('/api/posts/generate-images', { method: 'POST' });
-      const json = await res.json();
-      if (res.ok && json.success) {
-        setImagePreview(json.images);
-        toast.success('3 post images generated! Review them below.');
-        fetchSystemStatus();
-        fetchLatestData();
-        fetchMarketData(1);
-      } else {
-        toast.error(json.error || 'Failed to generate images');
-      }
-    } catch {
-      toast.error('Network error generating images');
+      // Generate images entirely in the browser — no server-side WASM/native deps
+      const { gainers, losers } = generateGainersLosers();
+      const images = await generateImagesInBrowser(
+        {
+          tradingDate: previewData.marketData.tradingDate,
+          nepseIndex: previewData.marketData.nepseIndex,
+          change: previewData.marketData.change,
+          changePercentage: previewData.marketData.changePercentage,
+          turnover: previewData.marketData.turnover,
+          volume: previewData.marketData.volume,
+          trades: previewData.marketData.trades,
+          gainers: previewData.marketData.gainers,
+          losers: previewData.marketData.losers,
+          unchanged: previewData.marketData.unchanged,
+          rawData: previewData.marketData.rawData,
+        },
+        gainers,
+        losers,
+      );
+      setImagePreview(images);
+      toast.success('3 post images generated! Review them below.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to generate images');
     } finally {
       setIsGeneratingImages(false);
     }
@@ -604,9 +618,12 @@ export default function HomePage() {
     if (!imagePreview) return;
     setIsPosting(true);
     try {
-      // Pass the trading date so the server uses the correct data
+      // Send client-generated images + date to the server for Facebook posting
       const dateToUse = previewData?.marketData?.tradingDate;
-      const body: Record<string, string> = { mode: 'image' };
+      const body: Record<string, unknown> = {
+        mode: 'image',
+        images: imagePreview, // base64 data URIs from browser
+      };
       if (dateToUse) body.date = dateToUse;
 
       const res = await fetch('/api/posts/manual', {
