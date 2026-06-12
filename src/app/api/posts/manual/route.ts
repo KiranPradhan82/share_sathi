@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { fetchNepseData } from '@/lib/nepse';
-import { formatMarketUpdate } from '@/lib/content-formatter';
+import { formatMarketUpdate, formatImageCaption, formatGainersCaption, formatLosersCaption } from '@/lib/content-formatter';
 import { postToFacebook } from '@/lib/facebook';
+import { postPhotoToFacebook } from '@/lib/facebook-photo';
+import { generateAllImages } from '@/lib/image-generator';
+import { generateGainersLosers } from '@/lib/nepse-stocks';
+
+async function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function getConfigValue(key: string): Promise<string> {
   const config = await db.systemConfig.findUnique({ where: { key } });
@@ -12,9 +19,12 @@ async function getConfigValue(key: string): Promise<string> {
 export async function POST(request: NextRequest) {
   try {
     let date: string | undefined;
+    let mode = 'image'; // default to image mode
+
     try {
       const body = await request.json();
       date = body.date || undefined;
+      mode = body.mode || 'image';
     } catch {
       date = undefined;
     }
@@ -56,7 +66,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 2: Format content
+    // Step 2: Get Facebook credentials
+    const pageAccessToken = await getConfigValue('facebook_page_access_token');
+    const pageId = await getConfigValue('facebook_page_id');
+
+    // Convert to NepseData format
     const nepseDataForFormat = {
       tradingDate: marketData.tradingDate,
       nepseIndex: marketData.nepseIndex,
@@ -71,13 +85,131 @@ export async function POST(request: NextRequest) {
       rawData: marketData.rawData,
     };
 
+    // ---- IMAGE MODE ----
+    if (mode === 'image') {
+      // Generate stock data for gainers/losers
+      const { gainers, losers } = generateGainersLosers();
+
+      // Generate all 3 images
+      await db.systemEvent.create({
+        data: {
+          eventType: 'generate',
+          entityType: 'image',
+          description: `Generating 3 Facebook post images for ${marketData.tradingDate}`,
+          severity: 'info',
+        },
+      });
+
+      const images = await generateAllImages(nepseDataForFormat, gainers, losers);
+
+      // Post captions
+      const summaryCaption = formatImageCaption(nepseDataForFormat);
+      const gainersCaption = formatGainersCaption(marketData.tradingDate, gainers);
+      const losersCaption = formatLosersCaption(marketData.tradingDate, losers);
+
+      const postsToMake: Array<{ buffer: Buffer; caption: string; label: string }> = [
+        { buffer: images.marketSummary, caption: summaryCaption, label: 'Market Summary' },
+        { buffer: images.topGainers, caption: gainersCaption, label: 'Top Gainers' },
+        { buffer: images.topLosers, caption: losersCaption, label: 'Top Losers' },
+      ];
+
+      const results: Array<{ label: string; success: boolean; postId?: string; error?: string }> = [];
+
+      for (let i = 0; i < postsToMake.length; i++) {
+        const post = postsToMake[i];
+
+        // Create Facebook post record
+        const fbPost = await db.facebookPost.create({
+          data: {
+            marketDataId: marketData.id,
+            message: `[IMAGE] ${post.label}: ${post.caption.substring(0, 100)}...`,
+            status: 'posting',
+            attemptCount: 1,
+          },
+        });
+
+        await db.systemEvent.create({
+          data: {
+            eventType: 'post',
+            entityType: 'facebook_post',
+            entityId: fbPost.id,
+            facebookPostId: fbPost.id,
+            description: `Posting ${post.label} image for ${marketData.tradingDate}...`,
+            severity: 'info',
+          },
+        });
+
+        const result = await postPhotoToFacebook(post.buffer, post.caption, pageAccessToken, pageId);
+
+        if (result.success) {
+          await db.facebookPost.update({
+            where: { id: fbPost.id },
+            data: {
+              status: 'success',
+              facebookPostId: result.postId || null,
+              postedTime: new Date(),
+            },
+          });
+          await db.systemEvent.create({
+            data: {
+              eventType: 'post',
+              entityType: 'facebook_post',
+              entityId: fbPost.id,
+              facebookPostId: fbPost.id,
+              description: `Successfully posted ${post.label} image. Facebook Post ID: ${result.postId}`,
+              severity: 'success',
+            },
+          });
+        } else {
+          await db.facebookPost.update({
+            where: { id: fbPost.id },
+            data: {
+              status: 'failed',
+              attemptCount: 1,
+              errorMessage: result.error || 'Unknown error',
+            },
+          });
+          await db.systemEvent.create({
+            data: {
+              eventType: 'post',
+              entityType: 'facebook_post',
+              entityId: fbPost.id,
+              facebookPostId: fbPost.id,
+              description: `Failed to post ${post.label} image: ${result.error}`,
+              severity: 'error',
+            },
+          });
+        }
+
+        results.push({
+          label: post.label,
+          success: result.success,
+          postId: result.postId,
+          error: result.error,
+        });
+
+        // 10-second delay between posts to avoid rate limiting
+        if (i < postsToMake.length - 1) {
+          await delay(10000);
+        }
+      }
+
+      const allSuccess = results.every((r) => r.success);
+      return NextResponse.json({
+        success: allSuccess,
+        mode: 'image',
+        marketData,
+        posts: results,
+        message: allSuccess
+          ? `All 3 image posts published for ${marketData.tradingDate}`
+          : `Some posts failed for ${marketData.tradingDate}`,
+      });
+    }
+
+    // ---- TEXT MODE (original behavior) ----
     const message = formatMarketUpdate(nepseDataForFormat);
 
-    // Step 3: Get Facebook credentials
-    const pageAccessToken = await getConfigValue('facebook_page_access_token');
-    const pageId = await getConfigValue('facebook_page_id');
-
-    // Step 4: Create Facebook post record
+    // Create Facebook post record
     const fbPost = await db.facebookPost.create({
       data: {
         marketDataId: marketData.id,
@@ -93,12 +225,12 @@ export async function POST(request: NextRequest) {
         entityType: 'facebook_post',
         entityId: fbPost.id,
         facebookPostId: fbPost.id,
-        description: `Attempting to post market update for ${marketData.tradingDate} to Facebook.`,
+        description: `Attempting to post market update for ${marketData.tradingDate} to Facebook (text mode).`,
         severity: 'info',
       },
     });
 
-    // Step 5: Post to Facebook
+    // Post to Facebook
     const result = await postToFacebook(message, pageAccessToken, pageId);
 
     if (result.success) {
@@ -150,6 +282,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: result.success,
+      mode: 'text',
       marketData,
       post: updatedPost,
       message: result.success

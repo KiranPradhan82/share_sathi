@@ -37,6 +37,27 @@ export function formatMarketUpdate(data: NepseData): string {
   return message;
 }
 
+export function formatImageCaption(data: NepseData): string {
+  const arrow = data.change >= 0 ? '▲' : '▼';
+  const sign = data.change >= 0 ? '+' : '';
+  return `NEPSE Index ${data.nepseIndex.toFixed(2)} ${arrow} ${sign}${data.change.toFixed(2)} (${sign}${data.changePercentage.toFixed(2)}%)
+
+Turnover: Rs. ${formatNumber(data.turnover)} | Trades: ${data.trades.toLocaleString()}
+Gainers: ${data.gainers} | Losers: ${data.losers} | Unchanged: ${data.unchanged}
+
+#NEPSE #ShareSathi #NepalStockExchange #ShareMarket #StockMarketNepal`;
+}
+
+export function formatGainersCaption(date: string, gainers: Array<{ symbol: string; change: number; changePercent: number }>): string {
+  const rows = gainers.slice(0, 5).map((g, i) => `${i + 1}. ${g.symbol}: +${g.change.toFixed(2)} (+${g.changePercent.toFixed(2)}%)`).join('\n');
+  return `Today's Top Gainers - ${date}\n\n${rows}\n\n#NEPSE #ShareSathi #TopGainers #NepalStockMarket`;
+}
+
+export function formatLosersCaption(date: string, losers: Array<{ symbol: string; change: number; changePercent: number }>): string {
+  const rows = losers.slice(0, 5).map((l, i) => `${i + 1}. ${l.symbol}: ${l.change.toFixed(2)} (${l.changePercent.toFixed(2)}%)`).join('\n');
+  return `Today's Top Losers - ${date}\n\n${rows}\n\n#NEPSE #ShareSathi #TopLosers #NepalStockMarket`;
+}
+
 export function getPostTemplate(): string {
   return `📈 NEPSE Daily Market Update
 📅 Date: {tradingDate}

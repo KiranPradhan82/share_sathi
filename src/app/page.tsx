@@ -26,6 +26,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Sprout,
+  Image as ImageIcon,
+  Type,
+  Loader2,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -249,6 +252,15 @@ export default function HomePage() {
     result: null,
   });
 
+  // Image post state
+  const [postMode, setPostMode] = useState<'text' | 'image'>('image');
+  const [imagePreview, setImagePreview] = useState<{
+    marketSummary: string;
+    topGainers: string;
+    topLosers: string;
+  } | null>(null);
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+
   // Loading states
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
@@ -397,7 +409,7 @@ export default function HomePage() {
       const res = await fetch('/api/posts/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: previewData.marketData.tradingDate }),
+        body: JSON.stringify({ date: previewData.marketData.tradingDate, mode: 'text' }),
       });
       const json = await res.json();
       if (res.ok && json.success) {
@@ -559,6 +571,85 @@ export default function HomePage() {
     }
   };
 
+  // ---- Image Actions ----
+  const handleGenerateImages = async () => {
+    setImagePreview(null);
+    setIsGeneratingImages(true);
+    try {
+      const res = await fetch('/api/posts/generate-images', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setImagePreview(json.images);
+        toast.success('3 post images generated! Review them below.');
+        fetchSystemStatus();
+        fetchLatestData();
+        fetchMarketData(1);
+      } else {
+        toast.error(json.error || 'Failed to generate images');
+      }
+    } catch {
+      toast.error('Network error generating images');
+    } finally {
+      setIsGeneratingImages(false);
+    }
+  };
+
+  const handlePostImages = async () => {
+    if (!imagePreview) return;
+    setIsPosting(true);
+    try {
+      const res = await fetch('/api/posts/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'image' }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        const postCount = json.posts?.length || 3;
+        const successCount = json.posts?.filter((p: { success: boolean }) => p.success).length || 0;
+        toast.success(`Posted ${successCount}/${postCount} images to Facebook!`);
+        setImagePreview(null);
+        fetchSystemStatus();
+        fetchLatestData();
+        fetchRecentEvents();
+        fetchPosts(1, 'all');
+      } else {
+        toast.error(json.error || json.message || 'Failed to post images');
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  const handlePostTextMode = async () => {
+    if (!previewData) return;
+    setIsPosting(true);
+    try {
+      const res = await fetch('/api/posts/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: previewData.marketData.tradingDate, mode: 'text' }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        toast.success('Posted to Facebook successfully!');
+        setPreviewData(null);
+        fetchSystemStatus();
+        fetchLatestData();
+        fetchRecentEvents();
+        fetchPosts(1, 'all');
+      } else {
+        toast.error(json.error || json.message || 'Failed to post');
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
   // ---- Render helpers ----
   const renderSkeletonCards = () => (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -583,51 +674,160 @@ export default function HomePage() {
           <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
           <p className="text-muted-foreground text-sm">NEPSE market automation overview</p>
         </div>
-        <div className="flex gap-2">
-          {!previewData ? (
-            <Button
-              onClick={handleFetchPreview}
-              disabled={isFetchingPreview}
-              size="lg"
-              className="gap-2"
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Post Mode Selector */}
+          <div className="flex rounded-lg border border-border overflow-hidden">
+            <button
+              onClick={() => setPostMode('image')}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                postMode === 'image'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-muted'
+              }`}
             >
-              {isFetchingPreview ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
+              <ImageIcon className="h-3.5 w-3.5" />
+              Image
+            </button>
+            <button
+              onClick={() => setPostMode('text')}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                postMode === 'text'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <Type className="h-3.5 w-3.5" />
+              Text
+            </button>
+          </div>
+
+          {postMode === 'image' ? (
+            <>
+              {!imagePreview ? (
+                <Button
+                  onClick={handleGenerateImages}
+                  disabled={isGeneratingImages}
+                  size="lg"
+                  className="gap-2"
+                >
+                  {isGeneratingImages ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4" />
+                  )}
+                  {isGeneratingImages ? 'Generating...' : 'Generate Images'}
+                </Button>
               ) : (
-                <Download className="h-4 w-4" />
+                <>
+                  <Button
+                    onClick={handlePostImages}
+                    disabled={isPosting}
+                    size="lg"
+                    className="gap-2"
+                  >
+                    {isPosting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    {isPosting ? 'Posting 3 Images...' : 'Post 3 Images'}
+                  </Button>
+                  <Button
+                    onClick={() => setImagePreview(null)}
+                    variant="outline"
+                    size="lg"
+                    className="gap-2"
+                  >
+                    Cancel
+                  </Button>
+                </>
               )}
-              {isFetchingPreview ? 'Fetching...' : 'Fetch & Preview'}
-            </Button>
+            </>
           ) : (
             <>
-              <Button
-                onClick={handleConfirmPost}
-                disabled={isPosting}
-                size="lg"
-                className="gap-2"
-              >
-                {isPosting ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                {isPosting ? 'Posting...' : 'Confirm & Post'}
-              </Button>
-              <Button
-                onClick={handleCancelPreview}
-                variant="outline"
-                size="lg"
-                className="gap-2"
-              >
-                Cancel
-              </Button>
+              {!previewData ? (
+                <Button
+                  onClick={handleFetchPreview}
+                  disabled={isFetchingPreview}
+                  size="lg"
+                  className="gap-2"
+                >
+                  {isFetchingPreview ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {isFetchingPreview ? 'Fetching...' : 'Fetch & Preview'}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    onClick={handlePostTextMode}
+                    disabled={isPosting}
+                    size="lg"
+                    className="gap-2"
+                  >
+                    {isPosting ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    {isPosting ? 'Posting...' : 'Confirm & Post'}
+                  </Button>
+                  <Button
+                    onClick={handleCancelPreview}
+                    variant="outline"
+                    size="lg"
+                    className="gap-2"
+                  >
+                    Cancel
+                  </Button>
+                </>
+              )}
             </>
           )}
         </div>
       </div>
 
-      {/* Preview Card */}
-      {previewData && (
+      {/* Image Preview Grid */}
+      {imagePreview && (
+        <div className="space-y-4">
+          <Card className="border-emerald-500/50 bg-emerald-500/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-emerald-500" />
+                Image Post Preview
+              </CardTitle>
+              <CardDescription>3 images will be posted to Facebook: Market Summary, Top 10 Gainers, Top 10 Losers</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">1. Market Summary</p>
+                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={imagePreview.marketSummary} alt="Market Summary" className="w-full h-auto" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">2. Top 10 Gainers</p>
+                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={imagePreview.topGainers} alt="Top 10 Gainers" className="w-full h-auto" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">3. Top 10 Losers</p>
+                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={imagePreview.topLosers} alt="Top 10 Losers" className="w-full h-auto" />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Text Preview Card (text mode only) */}
+      {postMode === 'text' && previewData && (
         <Card className="border-blue-500/50 bg-blue-500/5">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
