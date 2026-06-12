@@ -8,16 +8,12 @@ async function ensureUserTable() {
     await db.user.count();
   } catch {
     try {
-      await db.$executeRawUnsafe(`
-        CREATE TABLE IF NOT EXISTS "User" (
-          "id" TEXT NOT NULL PRIMARY KEY,
-          "email" TEXT NOT NULL,
-          "passwordHash" TEXT NOT NULL,
-          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" DATETIME NOT NULL
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
-      `);
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "User" ("id" TEXT NOT NULL PRIMARY KEY, "email" TEXT NOT NULL, "passwordHash" TEXT NOT NULL, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`
+      );
+      await db.$executeRawUnsafe(
+        `CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email")`
+      );
     } catch (e) {
       console.error('Auto-create User table failed:', e);
     }
@@ -28,6 +24,7 @@ async function ensureUserTable() {
 export async function POST(request: NextRequest) {
   try {
     await ensureUserTable();
+
     const { email, password } = await request.json();
 
     if (!email || !password) {
@@ -66,9 +63,10 @@ export async function POST(request: NextRequest) {
       },
     );
   } catch (error) {
-    console.error('Login error:', error);
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Login error:', errMsg, error);
     return NextResponse.json(
-      { error: 'Login failed. Please try again.' },
+      { error: `Login failed: ${errMsg}` },
       { status: 500 },
     );
   }

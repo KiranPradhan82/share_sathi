@@ -3,24 +3,40 @@ import { db } from '@/lib/db';
 import { hashPassword, createSession, hasAnyUser } from '@/lib/auth';
 
 // Auto-create the User table if it doesn't exist (for Turso on first deploy)
-async function ensureUserTable() {
+async function ensureUserTable(): Promise<{ ok: boolean; error?: string }> {
   try {
     await db.user.count();
-  } catch {
-    // Table doesn't exist — create it via raw SQL
+    return { ok: true };
+  } catch (firstErr) {
+    // Table likely doesn't exist — create it via raw SQL
+    // Use separate statements (some adapters don't support multi-statement)
     try {
-      await db.$executeRawUnsafe(`
-        CREATE TABLE IF NOT EXISTS "User" (
-          "id" TEXT NOT NULL PRIMARY KEY,
-          "email" TEXT NOT NULL,
-          "passwordHash" TEXT NOT NULL,
-          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" DATETIME NOT NULL
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
-      `);
+      await db.$executeRawUnsafe(
+        `CREATE TABLE IF NOT EXISTS "User" ("id" TEXT NOT NULL PRIMARY KEY, "email" TEXT NOT NULL, "passwordHash" TEXT NOT NULL, "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`
+      );
     } catch (e) {
-      console.error('Auto-create User table failed:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('CREATE TABLE failed:', msg);
+      return { ok: false, error: `CREATE TABLE failed: ${msg}` };
+    }
+
+    try {
+      await db.$executeRawUnsafe(
+        `CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email")`
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('CREATE INDEX failed:', msg);
+      // Non-fatal — continue
+    }
+
+    // Verify the table works now
+    try {
+      await db.user.count();
+      return { ok: true };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: `Table created but Prisma can't query it: ${msg}` };
     }
   }
 }
@@ -28,7 +44,13 @@ async function ensureUserTable() {
 // POST /api/auth/setup — First-time user creation
 export async function POST(request: NextRequest) {
   try {
-    await ensureUserTable();
+    const tableResult = await ensureUserTable();
+    if (!tableResult.ok) {
+      return NextResponse.json(
+        { error: `Database setup failed: ${tableResult.error}` },
+        { status: 500 },
+      );
+    }
 
     // Only allow setup if no user exists yet
     const userExists = await hasAnyUser();
@@ -77,9 +99,10 @@ export async function POST(request: NextRequest) {
       },
     );
   } catch (error) {
-    console.error('Setup error:', error);
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Setup error:', errMsg, error);
     return NextResponse.json(
-      { error: 'Setup failed. Please try again.' },
+      { error: `Setup failed: ${errMsg}` },
       { status: 500 },
     );
   }
