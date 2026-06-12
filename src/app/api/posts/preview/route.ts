@@ -5,13 +5,20 @@ import { formatMarketUpdate } from '@/lib/content-formatter';
 
 export async function POST() {
   try {
-    // Check if we already have today's data
     const today = new Date().toISOString().split('T')[0];
     let existing = await db.marketData.findUnique({ where: { tradingDate: today } });
 
     if (!existing) {
-      // Fetch from NEPSE API
       const nepseData = await fetchNepseData();
+
+      // Determine source from rawData
+      let source = 'unknown';
+      try {
+        const raw = JSON.parse(nepseData.rawData);
+        source = raw.source || 'unknown';
+      } catch {
+        source = 'parsed-data';
+      }
 
       existing = await db.marketData.create({
         data: {
@@ -36,10 +43,21 @@ export async function POST() {
           entityType: 'market_data',
           entityId: existing.id,
           marketDataId: existing.id,
-          description: `Fetched NEPSE data for ${existing.tradingDate}. Index: ${existing.nepseIndex}`,
-          severity: 'success',
+          description: `Fetched NEPSE data for ${existing.tradingDate} [source: ${source}]. Index: ${existing.nepseIndex}, Turnover: ${existing.turnover}, Shares: ${existing.volume}`,
+          severity: source === 'mock' ? 'warning' : 'success',
         },
       });
+    }
+
+    // Determine source from DB rawData (it's stored as JSON string)
+    let source = 'NEPSE Data';
+    try {
+      const raw = JSON.parse(existing.rawData);
+      source = raw.source === 'mock' ? 'MOCK DATA (API/Website failed)' :
+               raw.source === 'nepse-website' ? 'NEPSE Website (scraped)' :
+               raw.source === 'nepse-api' ? 'NEPSE API' : 'NEPSE Data';
+    } catch {
+      source = 'NEPSE Data (cached)';
     }
 
     // Format the post
@@ -61,7 +79,8 @@ export async function POST() {
       success: true,
       marketData: existing,
       previewMessage: message,
-      source: existing.rawData?.source || 'NEPSE API',
+      source,
+      isMock: source.includes('MOCK'),
     });
   } catch (error) {
     return NextResponse.json(

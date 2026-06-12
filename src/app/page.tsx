@@ -209,7 +209,7 @@ export default function HomePage() {
   const [latestData, setLatestData] = useState<MarketData | null>(null);
   const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
   const [isLoadingPipeline, setIsLoadingPipeline] = useState(false);
-  const [previewData, setPreviewData] = useState<{ marketData: MarketData; message: string; source: string } | null>(null);
+  const [previewData, setPreviewData] = useState<{ marketData: MarketData; message: string; source: string; isMock?: boolean } | null>(null);
   const [isFetchingPreview, setIsFetchingPreview] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
 
@@ -387,8 +387,13 @@ export default function HomePage() {
           marketData: json.marketData,
           message: json.previewMessage,
           source: json.source,
+          isMock: json.isMock,
         });
-        toast.success('Data fetched! Review the preview below.');
+        if (json.isMock) {
+          toast.warning('WARNING: Using MOCK data! Real NEPSE data could not be fetched.');
+        } else {
+          toast.success('Real NEPSE data fetched! Review the preview below.');
+        }
         fetchSystemStatus();
         fetchLatestData();
         fetchMarketData(1);
@@ -837,7 +842,7 @@ export default function HomePage() {
                   Post Preview
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  Data source: {previewData.source} | Date: {previewData.marketData.tradingDate}
+                  Data source: <span className={previewData.isMock ? 'text-red-500 font-semibold' : 'text-emerald-500 font-medium'}>{previewData.source}</span> | Date: {previewData.marketData.tradingDate}
                 </CardDescription>
               </div>
               <div className="text-right text-sm">
@@ -851,6 +856,12 @@ export default function HomePage() {
             </div>
           </CardHeader>
           <CardContent>
+            {previewData.isMock && (
+              <div className="mb-3 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-500 flex items-center gap-2">
+                <WifiOff className="h-4 w-4 shrink-0" />
+                This is <strong>MOCK data</strong>, not real NEPSE data. The website scraping failed. Do NOT post this.
+              </div>
+            )}
             <div className="rounded-lg bg-muted p-4 text-sm whitespace-pre-line font-mono leading-relaxed">
               {previewData.message}
             </div>

@@ -16,21 +16,48 @@ function formatNumber(num: number): string {
   return num.toLocaleString('en-US');
 }
 
+function getChangeEmoji(change: number): string {
+  return change >= 0 ? '\u25B2' : '\u25BC'; // ▲ or ▼
+}
+
+function getSign(change: number): string {
+  return change >= 0 ? '+' : '';
+}
+
 export function formatMarketUpdate(data: NepseData): string {
-  const arrow = data.change >= 0 ? '▲' : '▼';
-  const sign = data.change >= 0 ? '+' : '';
+  const arrow = getChangeEmoji(data.change);
+  const sign = getSign(data.change);
   const turnoverFormatted = formatNumber(data.turnover);
   const volumeFormatted = formatNumber(data.volume);
+
+  // Build sub-indexes line if available
+  let subIndicesLine = '';
+  if (data.sensitiveIndex) {
+    const sArrow = getChangeEmoji(data.sensitiveIndexChange || 0);
+    const sSign = getSign(data.sensitiveIndexChange || 0);
+    subIndicesLine += `\n📊 Sensitive: ${data.sensitiveIndex.toLocaleString('en-US', { minimumFractionDigits: 2 })} (${sArrow} ${sSign}${(data.sensitiveIndexChange || 0).toFixed(2)})`;
+  }
+  if (data.floatIndex) {
+    const fArrow = getChangeEmoji(data.floatIndexChange || 0);
+    const fSign = getSign(data.floatIndexChange || 0);
+    subIndicesLine += `\n📊 Float: ${data.floatIndex.toLocaleString('en-US', { minimumFractionDigits: 2 })} (${fArrow} ${fSign}${(data.floatIndexChange || 0).toFixed(2)})`;
+  }
+
+  // Build market cap line if available
+  let marketCapLine = '';
+  if (data.marketCap) {
+    marketCapLine = `\n🏢 Market Cap: NPR ${formatNumber(data.marketCap)}`;
+  }
 
   const message = `📈 NEPSE Daily Market Update
 📅 Date: ${data.tradingDate}
 
-🏛️ NEPSE Index: ${data.nepseIndex.toLocaleString('en-US', { minimumFractionDigits: 2 })} (${arrow} ${sign}${data.change.toLocaleString('en-US', { minimumFractionDigits: 2 })} | ${sign}${data.changePercentage}%)
+🏛️ NEPSE Index: ${data.nepseIndex.toLocaleString('en-US', { minimumFractionDigits: 2 })} (${arrow} ${sign}${data.change.toLocaleString('en-US', { minimumFractionDigits: 2 })} | ${sign}${data.changePercentage.toFixed(2)}%)
 💰 Total Turnover: NPR ${turnoverFormatted}
-📊 Total Trades: ${data.trades.toLocaleString()}
-📦 Volume: ${volumeFormatted} shares
-
-🟢 Gainers: ${data.gainers} | 🔴 Losers: ${data.losers} | ⚪ Unchanged: ${data.unchanged}
+📊 Total Transactions: ${data.trades.toLocaleString()}
+📦 Total Traded Shares: ${volumeFormatted}${marketCapLine}
+${subIndicesLine}
+🟢 Advanced: ${data.gainers} | 🔴 Declined: ${data.losers} | ⚪ Unchanged: ${data.unchanged}
 
 #NEPSE #NepalStockExchange #ShareMarket #ShareSathi`;
 
@@ -38,14 +65,20 @@ export function formatMarketUpdate(data: NepseData): string {
 }
 
 export function formatImageCaption(data: NepseData): string {
-  const arrow = data.change >= 0 ? '▲' : '▼';
-  const sign = data.change >= 0 ? '+' : '';
-  return `NEPSE Index ${data.nepseIndex.toFixed(2)} ${arrow} ${sign}${data.change.toFixed(2)} (${sign}${data.changePercentage.toFixed(2)}%)
+  const arrow = getChangeEmoji(data.change);
+  const sign = getSign(data.change);
 
-Turnover: Rs. ${formatNumber(data.turnover)} | Trades: ${data.trades.toLocaleString()}
-Gainers: ${data.gainers} | Losers: ${data.losers} | Unchanged: ${data.unchanged}
+  let caption = `NEPSE Index ${data.nepseIndex.toFixed(2)} ${arrow} ${sign}${data.change.toFixed(2)} (${sign}${data.changePercentage.toFixed(2)}%)\n\n`;
+  caption += `Turnover: Rs. ${formatNumber(data.turnover)} | Transactions: ${data.trades.toLocaleString()}\n`;
+  caption += `Traded Shares: ${formatNumber(data.volume)}\n`;
+  caption += `Advanced: ${data.gainers} | Declined: ${data.losers} | Unchanged: ${data.unchanged}`;
 
-#NEPSE #ShareSathi #NepalStockExchange #ShareMarket #StockMarketNepal`;
+  if (data.marketCap) {
+    caption += `\nMarket Cap: Rs. ${formatNumber(data.marketCap)}`;
+  }
+
+  caption += `\n\n#NEPSE #ShareSathi #NepalStockExchange #ShareMarket #StockMarketNepal`;
+  return caption;
 }
 
 export function formatGainersCaption(date: string, gainers: Array<{ symbol: string; change: number; changePercent: number }>): string {
@@ -64,10 +97,10 @@ export function getPostTemplate(): string {
 
 🏛️ NEPSE Index: {nepseIndex} ({change > 0 ? '▲' : '▼'} {change} | {changePercentage}%)
 💰 Total Turnover: NPR {turnover}
-📊 Total Trades: {trades}
-📦 Volume: {volume} shares
+📊 Total Transactions: {trades}
+📦 Total Traded Shares: {volume}
 
-🟢 Gainers: {gainers} | 🔴 Losers: {losers} | ⚪ Unchanged: {unchanged}
+🟢 Advanced: {gainers} | 🔴 Declined: {losers} | ⚪ Unchanged: {unchanged}
 
 #NEPSE #NepalStockExchange #ShareMarket #ShareSathi`;
 }
