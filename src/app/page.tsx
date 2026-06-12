@@ -20,6 +20,7 @@ import {
   Database,
   Trash2,
   Eye,
+  Download,
   Sun,
   Moon,
   ChevronLeft,
@@ -205,6 +206,9 @@ export default function HomePage() {
   const [latestData, setLatestData] = useState<MarketData | null>(null);
   const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
   const [isLoadingPipeline, setIsLoadingPipeline] = useState(false);
+  const [previewData, setPreviewData] = useState<{ marketData: MarketData; message: string; source: string } | null>(null);
+  const [isFetchingPreview, setIsFetchingPreview] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
 
   // Market data state
   const [marketDataList, setMarketDataList] = useState<MarketData[]>([]);
@@ -360,29 +364,61 @@ export default function HomePage() {
   }, [fetchSystemStatus, fetchLatestData, fetchRecentEvents, fetchMarketData, fetchPosts, fetchLogs, fetchSettings]);
 
   // ---- Actions ----
-  const handleFetchAndPost = async () => {
-    setIsLoadingPipeline(true);
+  const handleFetchPreview = async () => {
+    setPreviewData(null);
+    setIsFetchingPreview(true);
+    try {
+      const res = await fetch('/api/posts/preview', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPreviewData({
+          marketData: json.marketData,
+          message: json.previewMessage,
+          source: json.source,
+        });
+        toast.success('Data fetched! Review the preview below.');
+        fetchSystemStatus();
+        fetchLatestData();
+        fetchMarketData(1);
+      } else {
+        toast.error(json.error || 'Failed to fetch data');
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsFetchingPreview(false);
+    }
+  };
+
+  const handleConfirmPost = async () => {
+    if (!previewData) return;
+    setIsPosting(true);
     try {
       const res = await fetch('/api/posts/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ date: previewData.marketData.tradingDate }),
       });
       const json = await res.json();
       if (res.ok && json.success) {
-        toast.success(json.message || 'Posted successfully!');
+        toast.success('Posted to Facebook successfully!');
+        setPreviewData(null);
         fetchSystemStatus();
         fetchLatestData();
         fetchRecentEvents();
         fetchPosts(1, 'all');
       } else {
-        toast.error(json.error || json.message || 'Pipeline failed');
+        toast.error(json.error || json.message || 'Failed to post');
       }
     } catch {
       toast.error('Network error. Please try again.');
     } finally {
-      setIsLoadingPipeline(false);
+      setIsPosting(false);
     }
+  };
+
+  const handleCancelPreview = () => {
+    setPreviewData(null);
   };
 
   const handleFetchLatest = async () => {
@@ -547,20 +583,80 @@ export default function HomePage() {
           <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
           <p className="text-muted-foreground text-sm">NEPSE market automation overview</p>
         </div>
-        <Button
-          onClick={handleFetchAndPost}
-          disabled={isLoadingPipeline}
-          size="lg"
-          className="gap-2"
-        >
-          {isLoadingPipeline ? (
-            <RefreshCw className="h-4 w-4 animate-spin" />
+        <div className="flex gap-2">
+          {!previewData ? (
+            <Button
+              onClick={handleFetchPreview}
+              disabled={isFetchingPreview}
+              size="lg"
+              className="gap-2"
+            >
+              {isFetchingPreview ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {isFetchingPreview ? 'Fetching...' : 'Fetch & Preview'}
+            </Button>
           ) : (
-            <Send className="h-4 w-4" />
+            <>
+              <Button
+                onClick={handleConfirmPost}
+                disabled={isPosting}
+                size="lg"
+                className="gap-2"
+              >
+                {isPosting ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                {isPosting ? 'Posting...' : 'Confirm & Post'}
+              </Button>
+              <Button
+                onClick={handleCancelPreview}
+                variant="outline"
+                size="lg"
+                className="gap-2"
+              >
+                Cancel
+              </Button>
+            </>
           )}
-          {isLoadingPipeline ? 'Processing...' : 'Fetch & Post Now'}
-        </Button>
+        </div>
       </div>
+
+      {/* Preview Card */}
+      {previewData && (
+        <Card className="border-blue-500/50 bg-blue-500/5">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Eye className="h-4 w-4 text-blue-500" />
+                  Post Preview
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Data source: {previewData.source} | Date: {previewData.marketData.tradingDate}
+                </CardDescription>
+              </div>
+              <div className="text-right text-sm">
+                <div className={`font-bold text-lg ${previewData.marketData.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                  {previewData.marketData.change >= 0 ? '+' : ''}{previewData.marketData.nepseIndex.toFixed(2)}
+                </div>
+                <div className={`text-xs ${previewData.marketData.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                  {previewData.marketData.change >= 0 ? '▲' : '▼'} {previewData.marketData.change >= 0 ? '+' : ''}{previewData.marketData.changePercentage.toFixed(2)}%
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg bg-muted p-4 text-sm whitespace-pre-line font-mono leading-relaxed">
+              {previewData.message}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoadingStatus ? (
         renderSkeletonCards()
