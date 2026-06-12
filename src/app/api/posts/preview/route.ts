@@ -1,23 +1,45 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { fetchNepseData } from '@/lib/nepse';
 import { formatMarketUpdate } from '@/lib/content-formatter';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     const today = new Date().toISOString().split('T')[0];
     let existing = await db.marketData.findUnique({ where: { tradingDate: today } });
 
-    if (!existing) {
+    // Check if existing data is mock — if so, re-fetch with real data
+    let forceRefresh = false;
+    if (existing) {
+      try {
+        const raw = JSON.parse(existing.rawData);
+        if (raw.source === 'mock') {
+          console.log('Existing data is MOCK, re-fetching with real data...');
+          forceRefresh = true;
+        }
+      } catch { /* keep existing */ }
+    }
+
+    // Parse query params for explicit force refresh
+    const { searchParams } = new URL(request.url);
+    if (searchParams.get('force') === 'true') {
+      forceRefresh = true;
+    }
+
+    if (!existing || forceRefresh) {
       const nepseData = await fetchNepseData();
 
-      // Determine source from rawData
       let source = 'unknown';
       try {
         const raw = JSON.parse(nepseData.rawData);
         source = raw.source || 'unknown';
       } catch {
         source = 'parsed-data';
+      }
+
+      if (forceRefresh && existing) {
+        // Delete old record and create fresh
+        await db.marketData.delete({ where: { id: existing.id } });
       }
 
       existing = await db.marketData.create({
@@ -49,11 +71,13 @@ export async function POST() {
       });
     }
 
-    // Determine source from DB rawData (it's stored as JSON string)
+    // Determine source from DB rawData
     let source = 'NEPSE Data';
+    let isMock = false;
     try {
       const raw = JSON.parse(existing.rawData);
-      source = raw.source === 'mock' ? 'MOCK DATA (all sources failed)' :
+      isMock = raw.source === 'mock';
+      source = isMock ? 'MOCK DATA (all sources failed)' :
                raw.source === 'yonepse' ? 'YONEPSE API (real data)' :
                raw.source === 'nepse-website' ? 'NEPSE Website (scraped)' :
                raw.source === 'nepse-api' ? 'NEPSE API' : 'NEPSE Data';
@@ -81,7 +105,7 @@ export async function POST() {
       marketData: existing,
       previewMessage: message,
       source,
-      isMock: source.includes('MOCK'),
+      isMock,
     });
   } catch (error) {
     return NextResponse.json(
