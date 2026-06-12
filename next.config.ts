@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  // Ensure sharp native addon is available in serverless functions
+  serverExternalPackages: ['sharp'],
+  // Empty turbopack config to silence the warning (no custom webpack needed)
+  turbopack: {},
 };
 
 export default nextConfig;

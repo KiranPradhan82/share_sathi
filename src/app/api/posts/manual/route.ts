@@ -100,7 +100,49 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const images = await generateAllImages(nepseDataForFormat, gainers, losers);
+      let images: Awaited<ReturnType<typeof generateAllImages>>;
+      try {
+        images = await generateAllImages(nepseDataForFormat, gainers, losers);
+      } catch (genError) {
+        const errMsg = genError instanceof Error ? genError.message : 'Image generation failed';
+        await db.systemEvent.create({
+          data: {
+            eventType: 'generate',
+            entityType: 'image',
+            description: `Image generation failed for ${marketData.tradingDate}: ${errMsg}`,
+            severity: 'error',
+          },
+        });
+        return NextResponse.json(
+          { error: 'Image generation failed', details: errMsg },
+          { status: 500 },
+        );
+      }
+
+      // Validate generated images
+      const imageEntries: Array<{ key: keyof typeof images; label: string }> = [
+        { key: 'marketSummary', label: 'Market Summary' },
+        { key: 'topGainers', label: 'Top Gainers' },
+        { key: 'topLosers', label: 'Top Losers' },
+      ];
+
+      for (const entry of imageEntries) {
+        const buf = images[entry.key];
+        if (!buf || buf.length < 100) {
+          await db.systemEvent.create({
+            data: {
+              eventType: 'generate',
+              entityType: 'image',
+              description: `${entry.label} image is invalid (size: ${buf?.length || 0} bytes)`,
+              severity: 'error',
+            },
+          });
+          return NextResponse.json(
+            { error: `${entry.label} image generation produced invalid data`, details: `Buffer size: ${buf?.length || 0}` },
+            { status: 500 },
+          );
+        }
+      }
 
       // Post captions
       const summaryCaption = formatImageCaption(nepseDataForFormat);

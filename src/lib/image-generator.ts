@@ -1,46 +1,57 @@
-// Image generation service using Satori + resvg for NEPSE market posts
+// Image generation service using Satori + sharp for NEPSE market posts
 // Generates professional Facebook-style images (1080x1080)
+// Uses sharp instead of @resvg/resvg-wasm for Vercel compatibility
 
 import satori from 'satori';
-import { Resvg, initWasm } from '@resvg/resvg-wasm';
+import sharp from 'sharp';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import type { NepseData } from './nepse';
 import type { StockData } from './nepse-stocks';
 import { formatDateForPost, formatNepaliAmount } from './nepse-stocks';
 
-// Initialize resvg WASM once
-let wasmInitialized = false;
-async function ensureWasm() {
-  if (wasmInitialized) return;
-  const wasmPath = join(process.cwd(), 'node_modules/@resvg/resvg-wasm/index_bg.wasm');
-  const wasmBuf = readFileSync(wasmPath);
-  await initWasm(wasmBuf);
-  wasmInitialized = true;
-}
-
 const WIDTH = 1080;
 const HEIGHT = 1080;
 
 // ---- Font Loading ----
+// Fonts are bundled in src/lib/fonts/ to ensure availability on Vercel serverless
 let fontsCache: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }> | null = null;
 
 function loadFonts() {
   if (fontsCache) return fontsCache;
 
-  const fontDir = join(
-    process.cwd(),
-    'node_modules/@fontsource/inter/files',
-  );
+  // Try bundled fonts first (most reliable on Vercel)
+  const bundledDir = join(process.cwd(), 'src', 'lib', 'fonts');
+  const nodeModulesDir = join(process.cwd(), 'node_modules', '@fontsource', 'inter', 'files');
 
-  const weightMap: Array<[number, string]> = [
-    [400, 'inter-latin-400-normal.woff'],
-    [500, 'inter-latin-500-normal.woff'],
-    [600, 'inter-latin-600-normal.woff'],
-    [700, 'inter-latin-700-normal.woff'],
-    [800, 'inter-latin-800-normal.woff'],
-    [900, 'inter-latin-900-normal.woff'],
-  ];
+  let fontDir = bundledDir;
+  let useBundledNaming = true;
+
+  try {
+    readFileSync(join(bundledDir, 'Inter-400.woff'), { flag: 'r' });
+  } catch {
+    // Fall back to node_modules
+    fontDir = nodeModulesDir;
+    useBundledNaming = false;
+  }
+
+  const weightMap: Array<[number, string]> = useBundledNaming
+    ? [
+        [400, 'Inter-400.woff'],
+        [500, 'Inter-500.woff'],
+        [600, 'Inter-600.woff'],
+        [700, 'Inter-700.woff'],
+        [800, 'Inter-800.woff'],
+        [900, 'Inter-900.woff'],
+      ]
+    : [
+        [400, 'inter-latin-400-normal.woff'],
+        [500, 'inter-latin-500-normal.woff'],
+        [600, 'inter-latin-600-normal.woff'],
+        [700, 'inter-latin-700-normal.woff'],
+        [800, 'inter-latin-800-normal.woff'],
+        [900, 'inter-latin-900-normal.woff'],
+      ];
 
   fontsCache = weightMap.map(([weight, filename]) => {
     const buf = readFileSync(join(fontDir, filename));
@@ -55,19 +66,13 @@ function loadFonts() {
   return fontsCache;
 }
 
-// ---- SVG to PNG ----
+// ---- SVG to PNG (using sharp - reliable on Vercel) ----
 async function svgToPng(svg: string): Promise<Buffer> {
-  await ensureWasm();
-  const resvg = new Resvg(svg);
-  const pngData = resvg.render();
-  const buf = Buffer.from(pngData.asPng());
-  try {
-    // Explicit cleanup to prevent GC aliasing error in Node.js 24
-    resvg.free?.();
-  } catch {
-    // Ignore WASM cleanup errors — PNG data is already captured
-  }
-  return buf;
+  const pngBuffer = await sharp(Buffer.from(svg))
+    .resize(WIDTH, HEIGHT)
+    .png()
+    .toBuffer();
+  return pngBuffer;
 }
 
 // ---- Shared Elements ----
@@ -155,7 +160,7 @@ function footerBar(theme: 'dark' | 'green' | 'red'): React.ReactNode {
 // ===================================================
 async function renderMarketSummary(data: NepseData): Promise<Buffer> {
   const isUp = data.change >= 0;
-  const arrow = isUp ? '▲' : '▼';
+  const arrow = isUp ? '\u25B2' : '\u25BC';
   const sign = isUp ? '+' : '';
   const color = isUp ? '#22C55E' : '#EF4444';
   const dateStr = formatDateForPost(data.tradingDate);
@@ -555,7 +560,7 @@ async function renderTopGainers(
                       type: 'div',
                       props: {
                         style: { fontSize: 26, color: '#22C55E', fontWeight: 700 },
-                        children: '▲',
+                        children: '\u25B2',
                       },
                     },
                     {
@@ -755,7 +760,7 @@ async function renderTopLosers(
                       type: 'div',
                       props: {
                         style: { fontSize: 26, color: '#EF4444', fontWeight: 700 },
-                        children: '▼',
+                        children: '\u25BC',
                       },
                     },
                     {

@@ -77,7 +77,9 @@ export async function postPhotoToFacebook(
       }
 
       const errorObj = data.error as Record<string, string> | undefined;
-      lastError = errorObj?.message || `HTTP ${response.status}: Unknown error`;
+      const fbErrorCode = errorObj?.code || '';
+      const fbErrorMsg = errorObj?.message || `HTTP ${response.status}: Unknown error`;
+      lastError = `[${fbErrorCode}] ${fbErrorMsg}`;
     } catch (err) {
       lastError = err instanceof Error ? err.message : 'Unknown error';
     }

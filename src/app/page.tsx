@@ -604,16 +604,26 @@ export default function HomePage() {
     if (!imagePreview) return;
     setIsPosting(true);
     try {
+      // Pass the trading date so the server uses the correct data
+      const dateToUse = previewData?.marketData?.tradingDate;
+      const body: Record<string, string> = { mode: 'image' };
+      if (dateToUse) body.date = dateToUse;
+
       const res = await fetch('/api/posts/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'image' }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (res.ok && json.success) {
         const postCount = json.posts?.length || 3;
         const successCount = json.posts?.filter((p: { success: boolean }) => p.success).length || 0;
-        toast.success(`Posted ${successCount}/${postCount} images to Facebook!`);
+        const failedPosts = json.posts?.filter((p: { success: boolean }) => !p.success) || [];
+        if (successCount === postCount) {
+          toast.success(`All ${postCount} images posted to Facebook!`);
+        } else {
+          toast.warning(`${successCount}/${postCount} posted. ${failedPosts.map((p: { label: string; error?: string }) => `${p.label}: ${p.error || 'unknown error'}`).join(', ')}`);
+        }
         setImagePreview(null);
         fetchSystemStatus();
         fetchLatestData();
