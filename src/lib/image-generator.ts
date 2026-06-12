@@ -2,12 +2,22 @@
 // Generates professional Facebook-style images (1080x1080)
 
 import satori from 'satori';
-import { Resvg } from '@resvg/resvg-wasm';
+import { Resvg, initWasm } from '@resvg/resvg-wasm';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import type { NepseData } from './nepse';
 import type { StockData } from './nepse-stocks';
 import { formatDateForPost, formatNepaliAmount } from './nepse-stocks';
+
+// Initialize resvg WASM once
+let wasmInitialized = false;
+async function ensureWasm() {
+  if (wasmInitialized) return;
+  const wasmPath = join(process.cwd(), 'node_modules/@resvg/resvg-wasm/index_bg.wasm');
+  const wasmBuf = readFileSync(wasmPath);
+  await initWasm(wasmBuf);
+  wasmInitialized = true;
+}
 
 const WIDTH = 1080;
 const HEIGHT = 1080;
@@ -20,33 +30,44 @@ function loadFonts() {
 
   const fontDir = join(
     process.cwd(),
-    'node_modules/@codesandbox/sandpack-client/sandpack/static/fonts/inter',
+    'node_modules/@fontsource/inter/files',
   );
 
-  const regular = readFileSync(join(fontDir, 'Inter-Regular.woff'));
-  const medium = readFileSync(join(fontDir, 'Inter-Medium.woff'));
-  const semibold = readFileSync(join(fontDir, 'Inter-SemiBold.woff'));
-  const bold = readFileSync(join(fontDir, 'Inter-Bold.woff'));
-  const extrabold = readFileSync(join(fontDir, 'Inter-ExtraBold.woff'));
-  const black = readFileSync(join(fontDir, 'Inter-Black.woff'));
-
-  fontsCache = [
-    { name: 'Inter', data: regular.buffer, weight: 400, style: 'normal' },
-    { name: 'Inter', data: medium.buffer, weight: 500, style: 'normal' },
-    { name: 'Inter', data: semibold.buffer, weight: 600, style: 'normal' },
-    { name: 'Inter', data: bold.buffer, weight: 700, style: 'normal' },
-    { name: 'Inter', data: extrabold.buffer, weight: 800, style: 'normal' },
-    { name: 'Inter', data: black.buffer, weight: 900, style: 'normal' },
+  const weightMap: Array<[number, string]> = [
+    [400, 'inter-latin-400-normal.woff'],
+    [500, 'inter-latin-500-normal.woff'],
+    [600, 'inter-latin-600-normal.woff'],
+    [700, 'inter-latin-700-normal.woff'],
+    [800, 'inter-latin-800-normal.woff'],
+    [900, 'inter-latin-900-normal.woff'],
   ];
+
+  fontsCache = weightMap.map(([weight, filename]) => {
+    const buf = readFileSync(join(fontDir, filename));
+    return {
+      name: 'Inter',
+      data: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+      weight,
+      style: 'normal' as const,
+    };
+  });
 
   return fontsCache;
 }
 
 // ---- SVG to PNG ----
-function svgToPng(svg: string): Buffer {
+async function svgToPng(svg: string): Promise<Buffer> {
+  await ensureWasm();
   const resvg = new Resvg(svg);
   const pngData = resvg.render();
-  return Buffer.from(pngData.asPng());
+  const buf = Buffer.from(pngData.asPng());
+  try {
+    // Explicit cleanup to prevent GC aliasing error in Node.js 24
+    resvg.free?.();
+  } catch {
+    // Ignore WASM cleanup errors — PNG data is already captured
+  }
+  return buf;
 }
 
 // ---- Shared Elements ----
@@ -311,7 +332,7 @@ async function renderMarketSummary(data: NepseData): Promise<Buffer> {
                 flexDirection: 'column',
                 alignItems: 'center',
                 width: WIDTH,
-                padding: '0 50',
+                padding: '0px 50px',
                 gap: 12,
               },
               children: [0, 1, 2].map((row) => ({
@@ -558,7 +579,7 @@ async function renderTopGainers(
                 display: 'flex',
                 flexDirection: 'column',
                 width: WIDTH,
-                padding: '0 35',
+                padding: '0px 35px',
                 gap: 0,
                 borderRadius: 12,
                 overflow: 'hidden',
@@ -758,7 +779,7 @@ async function renderTopLosers(
                 display: 'flex',
                 flexDirection: 'column',
                 width: WIDTH,
-                padding: '0 35',
+                padding: '0px 35px',
                 gap: 0,
                 borderRadius: 12,
                 overflow: 'hidden',
