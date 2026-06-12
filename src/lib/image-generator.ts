@@ -1,9 +1,9 @@
-// Image generation service using Satori + sharp for NEPSE market posts
+// Image generation service using Satori + resvg-js for NEPSE market posts
 // Generates professional Facebook-style images (1080x1080)
-// Uses sharp instead of @resvg/resvg-wasm for Vercel compatibility
+// Uses @resvg/resvg-js (native addon) for reliable SVG-to-PNG on Vercel
 
 import satori from 'satori';
-import sharp from 'sharp';
+import { Resvg } from '@resvg/resvg-js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import type { NepseData } from './nepse';
@@ -66,13 +66,16 @@ function loadFonts() {
   return fontsCache;
 }
 
-// ---- SVG to PNG (using sharp - reliable on Vercel) ----
-async function svgToPng(svg: string): Promise<Buffer> {
-  const pngBuffer = await sharp(Buffer.from(svg))
-    .resize(WIDTH, HEIGHT)
-    .png()
-    .toBuffer();
-  return pngBuffer;
+// ---- SVG to PNG (using resvg-js native addon - reliable on Vercel) ----
+function svgToPng(svg: string): Buffer {
+  const resvg = new Resvg(svg, {
+    fitTo: {
+      mode: 'width',
+      value: WIDTH,
+    },
+  });
+  const pngData = resvg.render();
+  return Buffer.from(pngData.asPng());
 }
 
 // ---- Shared Elements ----
