@@ -239,6 +239,11 @@ export default function HomePage() {
   const [logsTypeFilter, setLogsTypeFilter] = useState('all');
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
+  // Error detail dialog
+  const [errorDialogTitle, setErrorDialogTitle] = useState('');
+  const [errorDetailText, setErrorDetailText] = useState('');
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+
   // Settings state
   const [settings, setSettings] = useState<Record<string, string>>({
     facebook_app_id: '',
@@ -632,33 +637,84 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const json = await res.json();
-      if (res.ok && json.success) {
-        const postCount = json.posts?.length || 3;
-        const successCount = json.posts?.filter((p: { success: boolean }) => p.success).length || 0;
-        const failedPosts = json.posts?.filter((p: { success: boolean }) => !p.success) || [];
-        if (successCount === postCount) {
-          toast.success(`All ${postCount} images posted to Facebook!`);
-        } else {
-          // Show detailed error for each failed post including debug info
-          for (const p of failedPosts) {
-            const debugInfo = p.debug ? ` [Image: ${(p.debug as { imageBufferSize: number }).imageBufferSize}KB, Caption: ${(p.debug as { captionLength: number }).captionLength}chars]` : '';
-            toast.error(`${p.label} failed: ${p.error || 'unknown error'}${debugInfo}`, { duration: 8000 });
-          }
-          if (successCount > 0) {
-            toast.success(`${successCount}/${postCount} posted successfully`);
-          }
-        }
-        setImagePreview(null);
-        fetchSystemStatus();
-        fetchLatestData();
-        fetchRecentEvents();
-        fetchPosts(1, 'all');
-      } else {
-        toast.error(json.error || json.message || 'Failed to post images');
+
+      let json: Record<string, unknown>;
+      try {
+        json = await res.json();
+      } catch {
+        toast.error('Received non-JSON response from server');
+        return;
       }
-    } catch {
-      toast.error('Network error. Please try again.');
+
+      // If HTTP error or API returned success=false, show full error detail
+      if (!res.ok || !json.success) {
+        const failedPosts = (json.posts as Array<Record<string, unknown>>)?.filter((p) => !p.success) || [];
+        if (failedPosts.length > 0) {
+          // Build detailed error report
+          const lines = failedPosts.map((p, i) => {
+            const debug = p.debug as Record<string, unknown> | undefined;
+            const lines = [
+              `--- Post ${i + 1}: ${p.label || 'Unknown'} ---`,
+              `Status: FAILED`,
+              `Error: ${p.error || 'No error message'}`,
+              debug ? `Image Size: ${((debug.imageBufferSize as number) || 0)} bytes` : '',
+              debug ? `Caption Length: ${debug.captionLength || 0} chars` : '',
+              debug ? `Caption Preview: ${debug.captionPreview || 'N/A'}` : '',
+            ].filter(Boolean).join('\n');
+            return lines;
+          });
+          setErrorDialogTitle(`Facebook Posting Failed (${failedPosts.length} post${failedPosts.length > 1 ? 's' : ''})`);
+          setErrorDetailText(lines.join('\n\n'));
+          setShowErrorDialog(true);
+        } else {
+          // No per-post errors — show the top-level error
+          setErrorDialogTitle('Posting Failed');
+          setErrorDetailText(`HTTP Status: ${res.status}\n\nFull Response:\n${JSON.stringify(json, null, 2)}`);
+          setShowErrorDialog(true);
+        }
+        return;
+      }
+
+      // Success path
+      const posts = json.posts as Array<{ success: boolean; label: string; postId?: string; error?: string; debug?: Record<string, unknown> }>;
+      const postCount = posts?.length || 3;
+      const successCount = posts?.filter((p) => p.success).length || 0;
+      const failedPosts = posts?.filter((p) => !p.success) || [];
+
+      if (successCount === postCount) {
+        toast.success(`All ${postCount} images posted to Facebook!`);
+      } else {
+        // Show error dialog with full details for each failed post
+        const lines = failedPosts.map((p, i) => {
+          const debug = p.debug;
+          return [
+            `--- Post ${i + 1}: ${p.label || 'Unknown'} ---`,
+            `Status: FAILED`,
+            `Error: ${p.error || 'No error message'}`,
+            debug ? `Image Size: ${debug.imageBufferSize || 0} bytes` : '',
+            debug ? `Caption Length: ${debug.captionLength || 0} chars` : '',
+            debug ? `Caption Preview: ${debug.captionPreview || 'N/A'}` : '',
+          ].filter(Boolean).join('\n');
+        });
+        setErrorDialogTitle(`Partial Failure (${successCount}/${postCount} posted)`);
+        setErrorDetailText(lines.join('\n\n'));
+        setShowErrorDialog(true);
+
+        if (successCount > 0) {
+          toast.success(`${successCount}/${postCount} posted successfully`);
+        }
+      }
+        // Refresh data on any response (success or partial)
+      setImagePreview(null);
+      fetchSystemStatus();
+      fetchLatestData();
+      fetchRecentEvents();
+      fetchPosts(1, 'all');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setErrorDialogTitle('Network Error');
+      setErrorDetailText(msg);
+      setShowErrorDialog(true);
     } finally {
       setIsPosting(false);
     }
@@ -1683,6 +1739,34 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Error Detail Dialog */}
+      <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-red-500">{errorDialogTitle}</DialogTitle>
+            <DialogDescription>Full error details below. You can copy this to share for debugging.</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            <pre className="bg-muted p-4 rounded-md text-xs font-mono whitespace-pre-wrap break-all text-foreground">{errorDetailText}</pre>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(errorDetailText);
+                toast.success('Error details copied to clipboard');
+              }}
+            >
+              Copy to Clipboard
+            </Button>
+            <Button size="sm" onClick={() => setShowErrorDialog(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
