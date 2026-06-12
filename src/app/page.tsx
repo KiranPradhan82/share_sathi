@@ -436,6 +436,7 @@ export default function HomePage() {
 
   const handleCancelPreview = () => {
     setPreviewData(null);
+    setImagePreview(null);
   };
 
   const handleFetchLatest = async () => {
@@ -706,9 +707,24 @@ export default function HomePage() {
             </button>
           </div>
 
-          {postMode === 'image' ? (
+          {/* Fetch & Preview - always visible when no data yet */}
+          {!previewData ? (
+            <Button
+              onClick={handleFetchPreview}
+              disabled={isFetchingPreview}
+              size="lg"
+              className="gap-2"
+            >
+              {isFetchingPreview ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {isFetchingPreview ? 'Fetching...' : 'Fetch & Preview'}
+            </Button>
+          ) : (
             <>
-              {!imagePreview ? (
+              {postMode === 'image' && !imagePreview && (
                 <Button
                   onClick={handleGenerateImages}
                   disabled={isGeneratingImages}
@@ -722,73 +738,45 @@ export default function HomePage() {
                   )}
                   {isGeneratingImages ? 'Generating...' : 'Generate Images'}
                 </Button>
-              ) : (
-                <>
-                  <Button
-                    onClick={handlePostImages}
-                    disabled={isPosting}
-                    size="lg"
-                    className="gap-2"
-                  >
-                    {isPosting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                    {isPosting ? 'Posting 3 Images...' : 'Post 3 Images'}
-                  </Button>
-                  <Button
-                    onClick={() => setImagePreview(null)}
-                    variant="outline"
-                    size="lg"
-                    className="gap-2"
-                  >
-                    Cancel
-                  </Button>
-                </>
               )}
-            </>
-          ) : (
-            <>
-              {!previewData ? (
+              {postMode === 'image' && imagePreview && (
                 <Button
-                  onClick={handleFetchPreview}
-                  disabled={isFetchingPreview}
+                  onClick={handlePostImages}
+                  disabled={isPosting}
                   size="lg"
                   className="gap-2"
                 >
-                  {isFetchingPreview ? (
+                  {isPosting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  {isPosting ? 'Posting 3 Images...' : 'Post 3 Images'}
+                </Button>
+              )}
+              {postMode === 'text' && (
+                <Button
+                  onClick={handlePostTextMode}
+                  disabled={isPosting}
+                  size="lg"
+                  className="gap-2"
+                >
+                  {isPosting ? (
                     <RefreshCw className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Download className="h-4 w-4" />
+                    <Send className="h-4 w-4" />
                   )}
-                  {isFetchingPreview ? 'Fetching...' : 'Fetch & Preview'}
+                  {isPosting ? 'Posting...' : 'Confirm & Post'}
                 </Button>
-              ) : (
-                <>
-                  <Button
-                    onClick={handlePostTextMode}
-                    disabled={isPosting}
-                    size="lg"
-                    className="gap-2"
-                  >
-                    {isPosting ? (
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                    {isPosting ? 'Posting...' : 'Confirm & Post'}
-                  </Button>
-                  <Button
-                    onClick={handleCancelPreview}
-                    variant="outline"
-                    size="lg"
-                    className="gap-2"
-                  >
-                    Cancel
-                  </Button>
-                </>
               )}
+              <Button
+                onClick={handleCancelPreview}
+                variant="outline"
+                size="lg"
+                className="gap-2"
+              >
+                Cancel
+              </Button>
             </>
           )}
         </div>
@@ -831,8 +819,8 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Text Preview Card (text mode only) */}
-      {postMode === 'text' && previewData && (
+      {/* Preview Card - shown for both modes after fetch */}
+      {previewData && (
         <Card className="border-blue-500/50 bg-blue-500/5">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
