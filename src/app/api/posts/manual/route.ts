@@ -5,6 +5,7 @@ import { formatMarketUpdate, formatImageCaption, formatGainersCaption, formatLos
 import { postToFacebook } from '@/lib/facebook';
 import { postPhotoToFacebook } from '@/lib/facebook-photo';
 import { generateGainersLosers } from '@/lib/nepse-stocks';
+import { requireAuth } from '@/lib/require-auth';
 
 async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,6 +23,9 @@ function dataUriToBuffer(dataUri: string): Buffer {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (!auth.authorized) return auth.response;
+
   try {
     let date: string | undefined;
     let mode = 'image';
@@ -94,8 +98,6 @@ export async function POST(request: NextRequest) {
 
     // ---- IMAGE MODE ----
     if (mode === 'image') {
-      // Use client-sent images if available (new flow)
-      // Otherwise return error — server-side image generation removed
       if (!clientImages || !clientImages.marketSummary || !clientImages.topGainers || !clientImages.topLosers) {
         return NextResponse.json(
           { error: 'No images provided. Generate images in the browser first.' },
@@ -104,17 +106,35 @@ export async function POST(request: NextRequest) {
       }
 
       // Convert data URIs to buffers
-      const imageBuffers = {
-        marketSummary: dataUriToBuffer(clientImages.marketSummary),
-        topGainers: dataUriToBuffer(clientImages.topGainers),
-        topLosers: dataUriToBuffer(clientImages.topLosers),
-      };
+      let imageBuffers: Record<string, Buffer>;
+      try {
+        imageBuffers = {
+          marketSummary: dataUriToBuffer(clientImages.marketSummary),
+          topGainers: dataUriToBuffer(clientImages.topGainers),
+          topLosers: dataUriToBuffer(clientImages.topLosers),
+        };
+      } catch (convErr) {
+        const errMsg = convErr instanceof Error ? convErr.message : 'Unknown conversion error';
+        return NextResponse.json(
+          { error: `Failed to decode base64 images: ${errMsg}` },
+          { status: 400 },
+        );
+      }
 
-      // Validate buffers
+      // Validate buffers — check for PNG header
+      const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
       for (const [key, buf] of Object.entries(imageBuffers)) {
         if (buf.length < 100) {
           return NextResponse.json(
-            { error: `Invalid ${key} image (size: ${buf.length} bytes)` },
+            { error: `Invalid ${key} image (${buf.length} bytes) — too small, likely corrupted` },
+            { status: 400 },
+          );
+        }
+        const hasValidHeader = buf.length >= 8 && buf.slice(0, 8).equals(pngSignature);
+        if (!hasValidHeader) {
+          const firstBytes = buf.slice(0, 16).toString('hex');
+          return NextResponse.json(
+            { error: `Invalid ${key} image — not a valid PNG. First bytes: ${firstBytes}` },
             { status: 400 },
           );
         }
@@ -132,7 +152,6 @@ export async function POST(request: NextRequest) {
       // Get gainers/losers for captions
       const { gainers, losers } = generateGainersLosers();
 
-      // Post captions
       const summaryCaption = formatImageCaption(nepseDataForFormat);
       const gainersCaption = formatGainersCaption(marketData.tradingDate, gainers);
       const losersCaption = formatLosersCaption(marketData.tradingDate, losers);
@@ -143,7 +162,13 @@ export async function POST(request: NextRequest) {
         { buffer: imageBuffers.topLosers, caption: losersCaption, label: 'Top Losers' },
       ];
 
-      const results: Array<{ label: string; success: boolean; postId?: string; error?: string }> = [];
+      const results: Array<{
+        label: string;
+        success: boolean;
+        postId?: string;
+        error?: string;
+        debug?: { imageBufferSize: number; captionLength: number; captionPreview: string };
+      }> = [];
 
       for (let i = 0; i < postsToMake.length; i++) {
         const post = postsToMake[i];
@@ -215,9 +240,9 @@ export async function POST(request: NextRequest) {
           success: result.success,
           postId: result.postId,
           error: result.error,
+          debug: result.debug,
         });
 
-        // 10-second delay between posts to avoid rate limiting
         if (i < postsToMake.length - 1) {
           await delay(10000);
         }

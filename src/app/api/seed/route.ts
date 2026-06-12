@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { formatMarketUpdate } from '@/lib/content-formatter';
+import { requireAuth } from '@/lib/require-auth';
 
 function generateHistoricalData(days: number) {
   const data: Array<{
@@ -58,7 +59,9 @@ function generateHistoricalData(days: number) {
   return data;
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (!auth.authorized) return auth.response;
   try {
     // Check if data already exists
     const existingCount = await db.marketData.count();

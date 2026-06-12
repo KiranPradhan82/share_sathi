@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { fetchNepseData } from '@/lib/nepse';
 import { formatMarketUpdate } from '@/lib/content-formatter';
+import { requireAuth } from '@/lib/require-auth';
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (!auth.authorized) return auth.response;
+
   try {
     const today = new Date().toISOString().split('T')[0];
     let existing = await db.marketData.findUnique({ where: { tradingDate: today } });

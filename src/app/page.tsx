@@ -29,6 +29,7 @@ import {
   Image as ImageIcon,
   Type,
   Loader2,
+  LogOut,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -639,7 +640,14 @@ export default function HomePage() {
         if (successCount === postCount) {
           toast.success(`All ${postCount} images posted to Facebook!`);
         } else {
-          toast.warning(`${successCount}/${postCount} posted. ${failedPosts.map((p: { label: string; error?: string }) => `${p.label}: ${p.error || 'unknown error'}`).join(', ')}`);
+          // Show detailed error for each failed post including debug info
+          for (const p of failedPosts) {
+            const debugInfo = p.debug ? ` [Image: ${(p.debug as { imageBufferSize: number }).imageBufferSize}KB, Caption: ${(p.debug as { captionLength: number }).captionLength}chars]` : '';
+            toast.error(`${p.label} failed: ${p.error || 'unknown error'}${debugInfo}`, { duration: 8000 });
+          }
+          if (successCount > 0) {
+            toast.success(`${successCount}/${postCount} posted successfully`);
+          }
         }
         setImagePreview(null);
         fetchSystemStatus();
@@ -1689,14 +1697,28 @@ export default function HomePage() {
               <p className="text-[10px] text-muted-foreground leading-none">NEPSE Market Automation</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={async () => {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/auth/login';
+              }}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 

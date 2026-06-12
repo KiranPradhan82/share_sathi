@@ -1,12 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth } from '@/lib/require-auth';
 
 async function getConfigValue(key: string): Promise<string> {
   const config = await db.systemConfig.findUnique({ where: { key } });
   return config?.value || '';
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (!auth.authorized) return auth.response;
+
   try {
     const [lastFetch, lastPost, totalPosts, successPosts, failedPosts, recentEvents, configs] =
       await Promise.all([
