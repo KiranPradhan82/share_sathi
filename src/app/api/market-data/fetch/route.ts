@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { fetchNepseData } from '@/lib/nepse';
+import { requireAuth } from '@/lib/require-auth';
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (!auth.authorized) return auth.response;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || undefined;

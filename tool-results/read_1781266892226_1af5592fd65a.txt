@@ -1,0 +1,796 @@
+    43→    43→}
+    44→    44→
+    45→    45→// ---- SVG to PNG ----
+    46→    46→function svgToPng(svg: string): Buffer {
+    47→    47→  const resvg = new Resvg(svg);
+    48→    48→  const pngData = resvg.render();
+    49→    49→  return Buffer.from(pngData.asPng());
+    50→    50→}
+    51→    51→
+    52→    52→// ---- Shared Elements ----
+    53→    53→function logoWatermark(): React.ReactNode {
+    54→    54→  return {
+    55→    55→    type: 'div',
+    56→    56→    props: {
+    57→    57→      style: {
+    58→    58→        position: 'absolute',
+    59→    59→        top: '50%',
+    60→    60→        left: '50%',
+    61→    61→        display: 'flex',
+    62→    62→        alignItems: 'center',
+    63→    63→        justifyContent: 'center',
+    64→    64→        transform: 'translate(-50%, -50%) scale(2.5)',
+    65→    65→        opacity: 0.04,
+    66→    66→      },
+    67→    67→      children: {
+    68→    68→        type: 'div',
+    69→    69→        props: {
+    70→    70→          style: {
+    71→    71→            fontSize: 140,
+    72→    72→            fontWeight: 900,
+    73→    73→            color: '#ffffff',
+    74→    74→            letterSpacing: '0.05em',
+    75→    75→            textTransform: 'uppercase',
+    76→    76→          },
+    77→    77→          children: 'SS',
+    78→    78→        },
+    79→    79→      },
+    80→    80→    },
+    81→    81→  };
+    82→    82→}
+    83→    83→
+    84→    84→function footerBar(theme: 'dark' | 'green' | 'red'): React.ReactNode {
+    85→    85→  const bgColor = theme === 'green' ? '#166534' : theme === 'red' ? '#991B1B' : '#0F172A';
+    86→    86→  return {
+    87→    87→    type: 'div',
+    88→    88→    props: {
+    89→    89→      style: {
+    90→    90→        position: 'absolute',
+    91→    91→        bottom: 0,
+    92→    92→        left: 0,
+    93→    93→        right: 0,
+    94→    94→        height: 90,
+    95→    95→        backgroundColor: bgColor,
+    96→    96→        display: 'flex',
+    97→    97→        flexDirection: 'column',
+    98→    98→        alignItems: 'center',
+    99→    99→        justifyContent: 'center',
+   100→   100→        gap: 4,
+   101→   101→        borderTop: `1px solid ${theme === 'green' ? '#22C55E33' : theme === 'red' ? '#EF444433' : '#33415566'}`,
+   102→   102→      },
+   103→   103→      children: [
+   104→   104→        {
+   105→   105→          type: 'div',
+   106→   106→          props: {
+   107→   107→            style: {
+   108→   108→              fontSize: 20,
+   109→   109→              fontWeight: 800,
+   110→   110→              color: '#ffffff',
+   111→   111→              letterSpacing: '0.08em',
+   112→   112→            },
+   113→   113→            children: 'SHARE SATHI',
+   114→   114→          },
+   115→   115→        },
+   116→   116→        {
+   117→   117→          type: 'div',
+   118→   118→          props: {
+   119→   119→            style: {
+   120→   120→              fontSize: 13,
+   121→   121→              color: '#ffffff88',
+   122→   122→              letterSpacing: '0.05em',
+   123→   123→            },
+   124→   124→            children: '#NEPSE #ShareSathi #NepalStockExchange #StockMarket',
+   125→   125→          },
+   126→   126→        },
+   127→   127→      ],
+   128→   128→    },
+   129→   129→  };
+   130→   130→}
+   131→   131→
+   132→   132→// ===================================================
+   133→   133→// Template 1: Market Summary (NEPSE TODAY)
+   134→   134→// ===================================================
+   135→   135→async function renderMarketSummary(data: NepseData): Promise<Buffer> {
+   136→   136→  const isUp = data.change >= 0;
+   137→   137→  const arrow = isUp ? '▲' : '▼';
+   138→   138→  const sign = isUp ? '+' : '';
+   139→   139→  const color = isUp ? '#22C55E' : '#EF4444';
+   140→   140→  const dateStr = formatDateForPost(data.tradingDate);
+   141→   141→
+   142→   142→  const turnoverFormatted = formatNepaliAmount(data.turnover);
+   143→   143→  const volumeFormatted = formatNepaliAmount(data.volume);
+   144→   144→
+   145→   145→  const metrics = [
+   146→   146→    { label: 'Turnover', value: `Rs. ${turnoverFormatted}`, color: '#3B82F6' },
+   147→   147→    { label: 'Traded Shares', value: volumeFormatted, color: '#8B5CF6' },
+   148→   148→    { label: 'Trades', value: data.trades.toLocaleString(), color: '#F59E0B' },
+   149→   149→    { label: 'Advanced', value: data.gainers.toString(), color: '#22C55E' },
+   150→   150→    { label: 'Declined', value: data.losers.toString(), color: '#EF4444' },
+   151→   151→    { label: 'Unchanged', value: data.unchanged.toString(), color: '#3B82F6' },
+   152→   152→  ];
+   153→   153→
+   154→   154→  const svg = await satori(
+   155→   155→    {
+   156→   156→      type: 'div',
+   157→   157→      props: {
+   158→   158→        style: {
+   159→   159→          width: WIDTH,
+   160→   160→          height: HEIGHT,
+   161→   161→          display: 'flex',
+   162→   162→          flexDirection: 'column',
+   163→   163→          background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%)',
+   164→   164→          position: 'relative',
+   165→   165→          overflow: 'hidden',
+   166→   166→        },
+   167→   167→        children: [
+   168→   168→          // Watermark
+   169→   169→          logoWatermark(),
+   170→   170→
+   171→   171→          // Top accent line
+   172→   172→          {
+   173→   173→            type: 'div',
+   174→   174→            props: {
+   175→   175→              style: {
+   176→   176→                position: 'absolute',
+   177→   177→                top: 0,
+   178→   178→                left: 0,
+   179→   179→                right: 0,
+   180→   180→                height: 4,
+   181→   181→                backgroundColor: color,
+   182→   182→              },
+   183→   183→            },
+   184→   184→          },
+   185→   185→
+   186→   186→          // Header
+   187→   187→          {
+   188→   188→            type: 'div',
+   189→   189→            props: {
+   190→   190→              style: {
+   191→   191→                display: 'flex',
+   192→   192→                flexDirection: 'column',
+   193→   193→                alignItems: 'center',
+   194→   194→                paddingTop: 55,
+   195→   195→                paddingBottom: 10,
+   196→   196→              },
+   197→   197→              children: [
+   198→   198→                {
+   199→   199→                  type: 'div',
+   200→   200→                  props: {
+   201→   201→                    style: {
+   202→   202→                      fontSize: 44,
+   203→   203→                      fontWeight: 900,
+   204→   204→                      color: '#ffffff',
+   205→   205→                      letterSpacing: '0.12em',
+   206→   206→                      textTransform: 'uppercase',
+   207→   207→                    },
+   208→   208→                    children: 'NEPSE TODAY',
+   209→   209→                  },
+   210→   210→                },
+   211→   211→                {
+   212→   212→                  type: 'div',
+   213→   213→                  props: {
+   214→   214→                    style: {
+   215→   215→                      fontSize: 22,
+   216→   216→                      color: '#ffffff99',
+   217→   217→                      marginTop: 8,
+   218→   218→                      fontWeight: 500,
+   219→   219→                    },
+   220→   220→                    children: dateStr,
+   221→   221→                  },
+   222→   222→                },
+   223→   223→              ],
+   224→   224→            },
+   225→   225→          },
+   226→   226→
+   227→   227→          // Main index display
+   228→   228→          {
+   229→   229→            type: 'div',
+   230→   230→            props: {
+   231→   231→              style: {
+   232→   232→                display: 'flex',
+   233→   233→                flexDirection: 'column',
+   234→   234→                alignItems: 'center',
+   235→   235→                paddingTop: 30,
+   236→   236→                paddingBottom: 20,
+   237→   237→              },
+   238→   238→              children: [
+   239→   239→                {
+   240→   240→                  type: 'div',
+   241→   241→                  props: {
+   242→   242→                    style: {
+   243→   243→                      fontSize: 96,
+   244→   244→                      fontWeight: 900,
+   245→   245→                      color: '#ffffff',
+   246→   246→                      lineHeight: 1,
+   247→   247→                    },
+   248→   248→                    children: data.nepseIndex.toFixed(2),
+   249→   249→                  },
+   250→   250→                },
+   251→   251→                {
+   252→   252→                  type: 'div',
+   253→   253→                  props: {
+   254→   254→                    style: {
+   255→   255→                      display: 'flex',
+   256→   256→                      flexDirection: 'row',
+   257→   257→                      alignItems: 'center',
+   258→   258→                      gap: 16,
+   259→   259→                      marginTop: 16,
+   260→   260→                    },
+   261→   261→                    children: [
+   262→   262→                      {
+   263→   263→                        type: 'div',
+   264→   264→                        props: {
+   265→   265→                          style: {
+   266→   266→                            fontSize: 36,
+   267→   267→                            fontWeight: 700,
+   268→   268→                            color: color,
+   269→   269→                          },
+   270→   270→                          children: `${arrow} ${sign}${data.change.toFixed(2)}`,
+   271→   271→                        },
+   272→   272→                      },
+   273→   273→                      {
+   274→   274→                        type: 'div',
+   275→   275→                        props: {
+   276→   276→                          style: {
+   277→   277→                            fontSize: 30,
+   278→   278→                            fontWeight: 600,
+   279→   279→                            color: color,
+   280→   280→                            opacity: 0.85,
+   281→   281→                          },
+   282→   282→                          children: `(${sign}${data.changePercentage.toFixed(2)}%)`,
+   283→   283→                        },
+   284→   284→                      },
+   285→   285→                    ],
+   286→   286→                  },
+   287→   287→                },
+   288→   288→                // Separator line
+   289→   289→                {
+   290→   290→                  type: 'div',
+   291→   291→                  props: {
+   292→   292→                    style: {
+   293→   293→                      width: 300,
+   294→   294→                      height: 2,
+   295→   295→                      backgroundColor: '#334155',
+   296→   296→                      marginTop: 25,
+   297→   297→                      borderRadius: 1,
+   298→   298→                    },
+   299→   299→                  },
+   300→   300→                },
+   301→   301→              ],
+   302→   302→            },
+   303→   303→          },
+   304→   304→
+   305→   305→          // Metrics grid (2 columns, 3 rows)
+   306→   306→          {
+   307→   307→            type: 'div',
+   308→   308→            props: {
+   309→   309→              style: {
+   310→   310→                display: 'flex',
+   311→   311→                flexDirection: 'column',
+   312→   312→                alignItems: 'center',
+   313→   313→                width: WIDTH,
+   314→   314→                padding: '0 50',
+   315→   315→                gap: 12,
+   316→   316→              },
+   317→   317→              children: [0, 1, 2].map((row) => ({
+   318→   318→                type: 'div',
+   319→   319→                props: {
+   320→   320→                  style: {
+   321→   321→                    display: 'flex',
+   322→   322→                    flexDirection: 'row',
+   323→   323→                    width: '100%',
+   324→   324→                    gap: 12,
+   325→   325→                  },
+   326→   326→                  children: metrics.slice(row * 2, row * 2 + 2).map((m) => ({
+   327→   327→                    type: 'div',
+   328→   328→                    props: {
+   329→   329→                      style: {
+   330→   330→                        flex: 1,
+   331→   331→                        display: 'flex',
+   332→   332→                        flexDirection: 'row',
+   333→   333→                        alignItems: 'center',
+   334→   334→                        justifyContent: 'space-between',
+   335→   335→                        backgroundColor: '#1E293B99',
+   336→   336→                        borderRadius: 12,
+   337→   337→                        padding: '16px 22px',
+   338→   338→                        borderLeft: `4px solid ${m.color}`,
+   339→   339→                      },
+   340→   340→                      children: [
+   341→   341→                        {
+   342→   342→                          type: 'div',
+   343→   343→                          props: {
+   344→   344→                            style: {
+   345→   345→                              fontSize: 20,
+   346→   346→                              color: '#ffffff99',
+   347→   347→                              fontWeight: 500,
+   348→   348→                            },
+   349→   349→                            children: m.label,
+   350→   350→                          },
+   351→   351→                        },
+   352→   352→                        {
+   353→   353→                          type: 'div',
+   354→   354→                          props: {
+   355→   355→                            style: {
+   356→   356→                              fontSize: 24,
+   357→   357→                              color: '#ffffff',
+   358→   358→                              fontWeight: 700,
+   359→   359→                            },
+   360→   360→                            children: m.value,
+   361→   361→                          },
+   362→   362→                        },
+   363→   363→                      ],
+   364→   364→                    },
+   365→   365→                  })),
+   366→   366→                },
+   367→   367→              })),
+   368→   368→            },
+   369→   369→          },
+   370→   370→
+   371→   371→          // Footer
+   372→   372→          footerBar('dark'),
+   373→   373→        ],
+   374→   374→      },
+   375→   375→    },
+   376→   376→    {
+   377→   377→      width: WIDTH,
+   378→   378→      height: HEIGHT,
+   379→   379→      fonts: loadFonts(),
+   380→   380→    },
+   381→   381→  );
+   382→   382→
+   383→   383→  return svgToPng(svg);
+   384→   384→}
+   385→   385→
+   386→   386→// ===================================================
+   387→   387→// Template 2: Top 10 Gainers
+   388→   388→// ===================================================
+   389→   389→async function renderTopGainers(
+   390→   390→  gainers: StockData[],
+   391→   391→  dateStr: string,
+   392→   392→): Promise<Buffer> {
+   393→   393→  const formattedDate = formatDateForPost(dateStr);
+   394→   394→
+   395→   395→  const headerRow = {
+   396→   396→    type: 'div',
+   397→   397→    props: {
+   398→   398→      style: {
+   399→   399→        display: 'flex',
+   400→   400→        flexDirection: 'row',
+   401→   401→        width: '100%',
+   402→   402→        backgroundColor: '#166534',
+   403→   403→        padding: '14px 20px',
+   404→   404→        borderTopLeftRadius: 12,
+   405→   405→        borderTopRightRadius: 12,
+   406→   406→      },
+   407→   407→      children: [
+   408→   408→        { type: 'div', props: { style: { width: 50, fontSize: 18, fontWeight: 700, color: '#ffffff' }, children: 'SN' } },
+   409→   409→        { type: 'div', props: { style: { flex: 1, fontSize: 18, fontWeight: 700, color: '#ffffff' }, children: 'Symbol' } },
+   410→   410→        { type: 'div', props: { style: { width: 140, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'Close' } },
+   411→   411→        { type: 'div', props: { style: { width: 120, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'Change' } },
+   412→   412→        { type: 'div', props: { style: { width: 120, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: '% Chg' } },
+   413→   413→      ],
+   414→   414→    },
+   415→   415→  };
+   416→   416→
+   417→   417→  const dataRows = gainers.map((stock, idx) => ({
+   418→   418→    type: 'div',
+   419→   419→    props: {
+   420→   420→      style: {
+   421→   421→        display: 'flex',
+   422→   422→        flexDirection: 'row',
+   423→   423→        width: '100%',
+   424→   424→        backgroundColor: idx % 2 === 0 ? '#F0FDF4' : '#ffffff',
+   425→   425→        padding: '13px 20px',
+   426→   426→      },
+   427→   427→      children: [
+   428→   428→        { type: 'div', props: { style: { width: 50, fontSize: 17, fontWeight: 600, color: '#374151' }, children: (idx + 1).toString() } },
+   429→   429→        { type: 'div', props: { style: { flex: 1, fontSize: 17, fontWeight: 700, color: '#166534' }, children: stock.symbol } },
+   430→   430→        { type: 'div', props: { style: { width: 140, fontSize: 17, fontWeight: 500, color: '#374151', textAlign: 'right' as const }, children: stock.closePrice.toFixed(2) } },
+   431→   431→        { type: 'div', props: { style: { width: 120, fontSize: 17, fontWeight: 700, color: '#166534', textAlign: 'right' as const }, children: `+${stock.change.toFixed(2)}` } },
+   432→   432→        { type: 'div', props: { style: { width: 120, fontSize: 17, fontWeight: 700, color: '#166534', textAlign: 'right' as const }, children: `+${stock.changePercent.toFixed(2)}%` } },
+   433→   433→      ],
+   434→   434→    },
+   435→   435→  }));
+   436→   436→
+   437→   437→  const svg = await satori(
+   438→   438→    {
+   439→   439→      type: 'div',
+   440→   440→      props: {
+   441→   441→        style: {
+   442→   442→          width: WIDTH,
+   443→   443→          height: HEIGHT,
+   444→   444→          display: 'flex',
+   445→   445→          flexDirection: 'column',
+   446→   446→          background: 'linear-gradient(135deg, #052E16 0%, #14532D 40%, #052E16 100%)',
+   447→   447→          position: 'relative',
+   448→   448→          overflow: 'hidden',
+   449→   449→        },
+   450→   450→        children: [
+   451→   451→          logoWatermark(),
+   452→   452→
+   453→   453→          // Top accent
+   454→   454→          {
+   455→   455→            type: 'div',
+   456→   456→            props: {
+   457→   457→              style: {
+   458→   458→                position: 'absolute',
+   459→   459→                top: 0,
+   460→   460→                left: 0,
+   461→   461→                right: 0,
+   462→   462→                height: 4,
+   463→   463→                backgroundColor: '#22C55E',
+   464→   464→              },
+   465→   465→            },
+   466→   466→          },
+   467→   467→
+   468→   468→          // Header
+   469→   469→          {
+   470→   470→            type: 'div',
+   471→   471→            props: {
+   472→   472→              style: {
+   473→   473→                display: 'flex',
+   474→   474→                flexDirection: 'column',
+   475→   475→                alignItems: 'center',
+   476→   476→                paddingTop: 50,
+   477→   477→                paddingBottom: 10,
+   478→   478→              },
+   479→   479→              children: [
+   480→   480→                {
+   481→   481→                  type: 'div',
+   482→   482→                  props: {
+   483→   483→                    style: {
+   484→   484→                      fontSize: 38,
+   485→   485→                      fontWeight: 900,
+   486→   486→                      color: '#ffffff',
+   487→   487→                      letterSpacing: '0.08em',
+   488→   488→                      textTransform: 'uppercase',
+   489→   489→                    },
+   490→   490→                    children: "TODAY'S TOP 10 GAINERS",
+   491→   491→                  },
+   492→   492→                },
+   493→   493→                {
+   494→   494→                  type: 'div',
+   495→   495→                  props: {
+   496→   496→                    style: {
+   497→   497→                      fontSize: 22,
+   498→   498→                      color: '#ffffff88',
+   499→   499→                      marginTop: 8,
+   500→   500→                      fontWeight: 500,
+   501→   501→                    },
+   502→   502→                    children: formattedDate,
+   503→   503→                  },
+   504→   504→                },
+   505→   505→              ],
+   506→   506→            },
+   507→   507→          },
+   508→   508→
+   509→   509→          // Green arrow indicator
+   510→   510→          {
+   511→   511→            type: 'div',
+   512→   512→            props: {
+   513→   513→              style: {
+   514→   514→                display: 'flex',
+   515→   515→                alignItems: 'center',
+   516→   516→                justifyContent: 'center',
+   517→   517→                marginTop: 15,
+   518→   518→                marginBottom: 20,
+   519→   519→              },
+   520→   520→              children: {
+   521→   521→                type: 'div',
+   522→   522→                props: {
+   523→   523→                  style: {
+   524→   524→                    display: 'flex',
+   525→   525→                    alignItems: 'center',
+   526→   526→                    gap: 10,
+   527→   527→                    backgroundColor: '#22C55E22',
+   528→   528→                    padding: '8px 24px',
+   529→   529→                    borderRadius: 30,
+   530→   530→                    border: '1px solid #22C55E44',
+   531→   531→                  },
+   532→   532→                  children: [
+   533→   533→                    {
+   534→   534→                      type: 'div',
+   535→   535→                      props: {
+   536→   536→                        style: { fontSize: 26, color: '#22C55E', fontWeight: 700 },
+   537→   537→                        children: '▲',
+   538→   538→                      },
+   539→   539→                    },
+   540→   540→                    {
+   541→   541→                      type: 'div',
+   542→   542→                      props: {
+   543→   543→                        style: { fontSize: 20, color: '#22C55E', fontWeight: 600 },
+   544→   544→                        children: 'Bullish Session',
+   545→   545→                      },
+   546→   546→                    },
+   547→   547→                  ],
+   548→   548→                },
+   549→   549→              },
+   550→   550→            },
+   551→   551→          },
+   552→   552→
+   553→   553→          // Table
+   554→   554→          {
+   555→   555→            type: 'div',
+   556→   556→            props: {
+   557→   557→              style: {
+   558→   558→                display: 'flex',
+   559→   559→                flexDirection: 'column',
+   560→   560→                width: WIDTH,
+   561→   561→                padding: '0 35',
+   562→   562→                gap: 0,
+   563→   563→                borderRadius: 12,
+   564→   564→                overflow: 'hidden',
+   565→   565→                border: '1px solid #22C55E33',
+   566→   566→              },
+   567→   567→              children: [headerRow, ...dataRows],
+   568→   568→            },
+   569→   569→          },
+   570→   570→
+   571→   571→          // Footer
+   572→   572→          footerBar('green'),
+   573→   573→        ],
+   574→   574→      },
+   575→   575→    },
+   576→   576→    {
+   577→   577→      width: WIDTH,
+   578→   578→      height: HEIGHT,
+   579→   579→      fonts: loadFonts(),
+   580→   580→    },
+   581→   581→  );
+   582→   582→
+   583→   583→  return svgToPng(svg);
+   584→   584→}
+   585→   585→
+   586→   586→// ===================================================
+   587→   587→// Template 3: Top 10 Losers
+   588→   588→// ===================================================
+   589→   589→async function renderTopLosers(
+   590→   590→  losers: StockData[],
+   591→   591→  dateStr: string,
+   592→   592→): Promise<Buffer> {
+   593→   593→  const formattedDate = formatDateForPost(dateStr);
+   594→   594→
+   595→   595→  const headerRow = {
+   596→   596→    type: 'div',
+   597→   597→    props: {
+   598→   598→      style: {
+   599→   599→        display: 'flex',
+   600→   600→        flexDirection: 'row',
+   601→   601→        width: '100%',
+   602→   602→        backgroundColor: '#991B1B',
+   603→   603→        padding: '14px 20px',
+   604→   604→        borderTopLeftRadius: 12,
+   605→   605→        borderTopRightRadius: 12,
+   606→   606→      },
+   607→   607→      children: [
+   608→   608→        { type: 'div', props: { style: { width: 50, fontSize: 18, fontWeight: 700, color: '#ffffff' }, children: 'SN' } },
+   609→   609→        { type: 'div', props: { style: { flex: 1, fontSize: 18, fontWeight: 700, color: '#ffffff' }, children: 'Symbol' } },
+   610→   610→        { type: 'div', props: { style: { width: 140, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'Close' } },
+   611→   611→        { type: 'div', props: { style: { width: 120, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'Change' } },
+   612→   612→        { type: 'div', props: { style: { width: 120, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: '% Chg' } },
+   613→   613→      ],
+   614→   614→    },
+   615→   615→  };
+   616→   616→
+   617→   617→  const dataRows = losers.map((stock, idx) => ({
+   618→   618→    type: 'div',
+   619→   619→    props: {
+   620→   620→      style: {
+   621→   621→        display: 'flex',
+   622→   622→        flexDirection: 'row',
+   623→   623→        width: '100%',
+   624→   624→        backgroundColor: idx % 2 === 0 ? '#FEF2F2' : '#ffffff',
+   625→   625→        padding: '13px 20px',
+   626→   626→      },
+   627→   627→      children: [
+   628→   628→        { type: 'div', props: { style: { width: 50, fontSize: 17, fontWeight: 600, color: '#374151' }, children: (idx + 1).toString() } },
+   629→   629→        { type: 'div', props: { style: { flex: 1, fontSize: 17, fontWeight: 700, color: '#991B1B' }, children: stock.symbol } },
+   630→   630→        { type: 'div', props: { style: { width: 140, fontSize: 17, fontWeight: 500, color: '#374151', textAlign: 'right' as const }, children: stock.closePrice.toFixed(2) } },
+   631→   631→        { type: 'div', props: { style: { width: 120, fontSize: 17, fontWeight: 700, color: '#991B1B', textAlign: 'right' as const }, children: stock.change.toFixed(2) } },
+   632→   632→        { type: 'div', props: { style: { width: 120, fontSize: 17, fontWeight: 700, color: '#991B1B', textAlign: 'right' as const }, children: `${stock.changePercent.toFixed(2)}%` } },
+   633→   633→      ],
+   634→   634→    },
+   635→   635→  }));
+   636→   636→
+   637→   637→  const svg = await satori(
+   638→   638→    {
+   639→   639→      type: 'div',
+   640→   640→      props: {
+   641→   641→        style: {
+   642→   642→          width: WIDTH,
+   643→   643→          height: HEIGHT,
+   644→   644→          display: 'flex',
+   645→   645→          flexDirection: 'column',
+   646→   646→          background: 'linear-gradient(135deg, #450A0A 0%, #7F1D1D 40%, #450A0A 100%)',
+   647→   647→          position: 'relative',
+   648→   648→          overflow: 'hidden',
+   649→   649→        },
+   650→   650→        children: [
+   651→   651→          logoWatermark(),
+   652→   652→
+   653→   653→          // Top accent
+   654→   654→          {
+   655→   655→            type: 'div',
+   656→   656→            props: {
+   657→   657→              style: {
+   658→   658→                position: 'absolute',
+   659→   659→                top: 0,
+   660→   660→                left: 0,
+   661→   661→                right: 0,
+   662→   662→                height: 4,
+   663→   663→                backgroundColor: '#EF4444',
+   664→   664→              },
+   665→   665→            },
+   666→   666→          },
+   667→   667→
+   668→   668→          // Header
+   669→   669→          {
+   670→   670→            type: 'div',
+   671→   671→            props: {
+   672→   672→              style: {
+   673→   673→                display: 'flex',
+   674→   674→                flexDirection: 'column',
+   675→   675→                alignItems: 'center',
+   676→   676→                paddingTop: 50,
+   677→   677→                paddingBottom: 10,
+   678→   678→              },
+   679→   679→              children: [
+   680→   680→                {
+   681→   681→                  type: 'div',
+   682→   682→                  props: {
+   683→   683→                    style: {
+   684→   684→                      fontSize: 38,
+   685→   685→                      fontWeight: 900,
+   686→   686→                      color: '#ffffff',
+   687→   687→                      letterSpacing: '0.08em',
+   688→   688→                      textTransform: 'uppercase',
+   689→   689→                    },
+   690→   690→                    children: "TODAY'S TOP 10 LOSERS",
+   691→   691→                  },
+   692→   692→                },
+   693→   693→                {
+   694→   694→                  type: 'div',
+   695→   695→                  props: {
+   696→   696→                    style: {
+   697→   697→                      fontSize: 22,
+   698→   698→                      color: '#ffffff88',
+   699→   699→                      marginTop: 8,
+   700→   700→                      fontWeight: 500,
+   701→   701→                    },
+   702→   702→                    children: formattedDate,
+   703→   703→                  },
+   704→   704→                },
+   705→   705→              ],
+   706→   706→            },
+   707→   707→          },
+   708→   708→
+   709→   709→          // Red arrow indicator
+   710→   710→          {
+   711→   711→            type: 'div',
+   712→   712→            props: {
+   713→   713→              style: {
+   714→   714→                display: 'flex',
+   715→   715→                alignItems: 'center',
+   716→   716→                justifyContent: 'center',
+   717→   717→                marginTop: 15,
+   718→   718→                marginBottom: 20,
+   719→   719→              },
+   720→   720→              children: {
+   721→   721→                type: 'div',
+   722→   722→                props: {
+   723→   723→                  style: {
+   724→   724→                    display: 'flex',
+   725→   725→                    alignItems: 'center',
+   726→   726→                    gap: 10,
+   727→   727→                    backgroundColor: '#EF444422',
+   728→   728→                    padding: '8px 24px',
+   729→   729→                    borderRadius: 30,
+   730→   730→                    border: '1px solid #EF444444',
+   731→   731→                  },
+   732→   732→                  children: [
+   733→   733→                    {
+   734→   734→                      type: 'div',
+   735→   735→                      props: {
+   736→   736→                        style: { fontSize: 26, color: '#EF4444', fontWeight: 700 },
+   737→   737→                        children: '▼',
+   738→   738→                      },
+   739→   739→                    },
+   740→   740→                    {
+   741→   741→                      type: 'div',
+   742→   742→                      props: {
+   743→   743→                        style: { fontSize: 20, color: '#EF4444', fontWeight: 600 },
+   744→   744→                        children: 'Bearish Session',
+   745→   745→                      },
+   746→   746→                    },
+   747→   747→                  ],
+   748→   748→                },
+   749→   749→              },
+   750→   750→            },
+   751→   751→          },
+   752→   752→
+   753→   753→          // Table
+   754→   754→          {
+   755→   755→            type: 'div',
+   756→   756→            props: {
+   757→   757→              style: {
+   758→   758→                display: 'flex',
+   759→   759→                flexDirection: 'column',
+   760→   760→                width: WIDTH,
+   761→   761→                padding: '0 35',
+   762→   762→                gap: 0,
+   763→   763→                borderRadius: 12,
+   764→   764→                overflow: 'hidden',
+   765→   765→                border: '1px solid #EF444433',
+   766→   766→              },
+   767→   767→              children: [headerRow, ...dataRows],
+   768→   768→            },
+   769→   769→          },
+   770→   770→
+   771→   771→          // Footer
+   772→   772→          footerBar('red'),
+   773→   773→        ],
+   774→   774→      },
+   775→   775→    },
+   776→   776→    {
+   777→   777→      width: WIDTH,
+   778→   778→      height: HEIGHT,
+   779→   779→      fonts: loadFonts(),
+   780→   780→    },
+   781→   781→  );
+   782→   782→
+   783→   783→  return svgToPng(svg);
+   784→   784→}
+   785→   785→
+   786→   786→// ===================================================
+   787→   787→// Public API
+   788→   788→// ===================================================
+   789→   789→export interface GeneratedImages {
+   790→   790→  marketSummary: Buffer;
+   791→   791→  topGainers: Buffer;
+   792→   792→  topLosers: Buffer;
+   793→   793→}
+   794→   794→
+   795→   795→export interface GeneratedImagesBase64 {
+   796→   796→  marketSummary: string;
+   797→   797→  topGainers: string;
+   798→   798→  topLosers: string;
+   799→   799→  data: {
+   800→   800→    marketData: NepseData;
+   801→   801→    gainers: StockData[];
+   802→   802→    losers: StockData[];
+   803→   803→  };
+   804→   804→}
+   805→   805→
+   806→   806→export async function generateAllImages(
+   807→   807→  nepseData: NepseData,
+   808→   808→  gainers: StockData[],
+   809→   809→  losers: StockData[],
+   810→   810→): Promise<GeneratedImages> {
+   811→   811→  const [marketSummary, topGainers, topLosers] = await Promise.all([
+   812→   812→    renderMarketSummary(nepseData),
+   813→   813→    renderTopGainers(gainers, nepseData.tradingDate),
+   814→   814→    renderTopLosers(losers, nepseData.tradingDate),
+   815→   815→  ]);
+   816→   816→
+   817→   817→  return { marketSummary, topGainers, topLosers };
+   818→   818→}
+   819→   819→
+   820→   820→export async function generateAllImagesAsBase64(
+   821→   821→  nepseData: NepseData,
+   822→   822→  gainers: StockData[],
+   823→   823→  losers: StockData[],
+   824→   824→): Promise<GeneratedImagesBase64> {
+   825→   825→  const images = await generateAllImages(nepseData, gainers, losers);
+   826→   826→
+   827→   827→  return {
+   828→   828→    marketSummary: images.marketSummary.toString('base64'),
+   829→   829→    topGainers: images.topGainers.toString('base64'),
+   830→   830→    topLosers: images.topLosers.toString('base64'),
+   831→   831→    data: {
+   832→   832→      marketData: nepseData,
+   833→   833→      gainers,
+   834→   834→      losers,
+   835→   835→    },
+   836→   836→  };
+   837→   837→}
+   838→   838→

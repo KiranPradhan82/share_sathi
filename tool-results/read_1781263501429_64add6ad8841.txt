@@ -1,0 +1,602 @@
+   360→   360→    fetchMarketData(1);
+   361→   361→    fetchPosts(1, 'all');
+   362→   362→    fetchLogs(1, 'all', 'all');
+   363→   363→    fetchSettings();
+   364→   364→  }, [fetchSystemStatus, fetchLatestData, fetchRecentEvents, fetchMarketData, fetchPosts, fetchLogs, fetchSettings]);
+   365→   365→
+   366→   366→  // ---- Actions ----
+   367→   367→  const handleFetchPreview = async () => {
+   368→   368→    setPreviewData(null);
+   369→   369→    setIsFetchingPreview(true);
+   370→   370→    try {
+   371→   371→      const res = await fetch('/api/posts/preview', { method: 'POST' });
+   372→   372→      const json = await res.json();
+   373→   373→      if (res.ok && json.success) {
+   374→   374→        setPreviewData({
+   375→   375→          marketData: json.marketData,
+   376→   376→          message: json.previewMessage,
+   377→   377→          source: json.source,
+   378→   378→        });
+   379→   379→        toast.success('Data fetched! Review the preview below.');
+   380→   380→        fetchSystemStatus();
+   381→   381→        fetchLatestData();
+   382→   382→        fetchMarketData(1);
+   383→   383→      } else {
+   384→   384→        toast.error(json.error || 'Failed to fetch data');
+   385→   385→      }
+   386→   386→    } catch {
+   387→   387→      toast.error('Network error. Please try again.');
+   388→   388→    } finally {
+   389→   389→      setIsFetchingPreview(false);
+   390→   390→    }
+   391→   391→  };
+   392→   392→
+   393→   393→  const handleConfirmPost = async () => {
+   394→   394→    if (!previewData) return;
+   395→   395→    setIsPosting(true);
+   396→   396→    try {
+   397→   397→      const res = await fetch('/api/posts/manual', {
+   398→   398→        method: 'POST',
+   399→   399→        headers: { 'Content-Type': 'application/json' },
+   400→   400→        body: JSON.stringify({ date: previewData.marketData.tradingDate }),
+   401→   401→      });
+   402→   402→      const json = await res.json();
+   403→   403→      if (res.ok && json.success) {
+   404→   404→        toast.success('Posted to Facebook successfully!');
+   405→   405→        setPreviewData(null);
+   406→   406→        fetchSystemStatus();
+   407→   407→        fetchLatestData();
+   408→   408→        fetchRecentEvents();
+   409→   409→        fetchPosts(1, 'all');
+   410→   410→      } else {
+   411→   411→        toast.error(json.error || json.message || 'Failed to post');
+   412→   412→      }
+   413→   413→    } catch {
+   414→   414→      toast.error('Network error. Please try again.');
+   415→   415→    } finally {
+   416→   416→      setIsPosting(false);
+   417→   417→    }
+   418→   418→  };
+   419→   419→
+   420→   420→  const handleCancelPreview = () => {
+   421→   421→    setPreviewData(null);
+   422→   422→  };
+   423→   423→
+   424→   424→  const handleFetchLatest = async () => {
+   425→   425→    try {
+   426→   426→      const res = await fetch('/api/market-data/fetch', { method: 'POST' });
+   427→   427→      const json = await res.json();
+   428→   428→      if (res.ok) {
+   429→   429→        toast.success('Market data fetched!');
+   430→   430→        fetchMarketData(1);
+   431→   431→        fetchLatestData();
+   432→   432→        fetchSystemStatus();
+   433→   433→      } else {
+   434→   434→        toast.error(json.error || 'Fetch failed');
+   435→   435→      }
+   436→   436→    } catch {
+   437→   437→      toast.error('Failed to fetch market data');
+   438→   438→    }
+   439→   439→  };
+   440→   440→
+   441→   441→  const handleSeed = async () => {
+   442→   442→    setIsSeeding(true);
+   443→   443→    try {
+   444→   444→      const res = await fetch('/api/seed', { method: 'POST' });
+   445→   445→      const json = await res.json();
+   446→   446→      if (res.ok) {
+   447→   447→        toast.success(json.message || 'Database seeded!');
+   448→   448→        fetchSystemStatus();
+   449→   449→        fetchLatestData();
+   450→   450→        fetchRecentEvents();
+   451→   451→        fetchMarketData(1);
+   452→   452→        fetchPosts(1, 'all');
+   453→   453→      } else {
+   454→   454→        toast.error(json.error || 'Seed failed');
+   455→   455→      }
+   456→   456→    } catch {
+   457→   457→      toast.error('Failed to seed database');
+   458→   458→    } finally {
+   459→   459→      setIsSeeding(false);
+   460→   460→    }
+   461→   461→  };
+   462→   462→
+   463→   463→  const [savingSection, setSavingSection] = useState<string | null>(null);
+   464→   464→
+   465→   465→  const handleSaveSection = async (keys: string[], sectionName: string) => {
+   466→   466→    setSavingSection(sectionName);
+   467→   467→    try {
+   468→   468→      const sectionSettings: Record<string, string> = {};
+   469→   469→      for (const key of keys) {
+   470→   470→        sectionSettings[key] = settings[key];
+   471→   471→      }
+   472→   472→      const res = await fetch('/api/settings', {
+   473→   473→        method: 'PUT',
+   474→   474→        headers: { 'Content-Type': 'application/json' },
+   475→   475→        body: JSON.stringify({ settings: sectionSettings }),
+   476→   476→      });
+   477→   477→      const json = await res.json();
+   478→   478→      if (res.ok) {
+   479→   479→        toast.success(`${sectionName} saved!`);
+   480→   480→        fetchSystemStatus();
+   481→   481→      } else {
+   482→   482→        toast.error(json.error || 'Failed to save');
+   483→   483→      }
+   484→   484→    } catch {
+   485→   485→      toast.error('Network error');
+   486→   486→    } finally {
+   487→   487→      setSavingSection(null);
+   488→   488→    }
+   489→   489→  };
+   490→   490→
+   491→   491→  const handleSaveSettings = async () => {
+   492→   492→    setIsSavingSettings(true);
+   493→   493→    try {
+   494→   494→      const res = await fetch('/api/settings', {
+   495→   495→        method: 'PUT',
+   496→   496→        headers: { 'Content-Type': 'application/json' },
+   497→   497→        body: JSON.stringify({ settings }),
+   498→   498→      });
+   499→   499→      const json = await res.json();
+   500→   500→      if (res.ok) {
+   501→   501→        toast.success('All settings saved!');
+   502→   502→        fetchSystemStatus();
+   503→   503→      } else {
+   504→   504→        toast.error(json.error || 'Failed to save');
+   505→   505→      }
+   506→   506→    } catch {
+   507→   507→      toast.error('Network error');
+   508→   508→    } finally {
+   509→   509→      setIsSavingSettings(false);
+   510→   510→    }
+   511→   511→  };
+   512→   512→
+   513→   513→  const handleTestConnection = async () => {
+   514→   514→    if (!settings.facebook_page_id || !settings.facebook_page_access_token) {
+   515→   515→      setConnectionTest({ testing: false, result: 'Please enter Page ID and Access Token first' });
+   516→   516→      toast.error('Please enter Page ID and Access Token first');
+   517→   517→      return;
+   518→   518→    }
+   519→   519→
+   520→   520→    setConnectionTest({ testing: true, result: null });
+   521→   521→    try {
+   522→   522→      const res = await fetch('/api/facebook/test-connection', {
+   523→   523→        method: 'POST',
+   524→   524→        headers: { 'Content-Type': 'application/json' },
+   525→   525→        body: JSON.stringify({
+   526→   526→          pageId: settings.facebook_page_id,
+   527→   527→          pageAccessToken: settings.facebook_page_access_token,
+   528→   528→          appId: settings.facebook_app_id,
+   529→   529→          appSecret: settings.facebook_app_secret,
+   530→   530→        }),
+   531→   531→      });
+   532→   532→
+   533→   533→      const data = await res.json();
+   534→   534→
+   535→   535→      if (data.success) {
+   536→   536→        const pageName = data.pageName ? ` (${data.pageName})` : '';
+   537→   537→        setConnectionTest({ testing: false, result: `Connection successful!${pageName}` });
+   538→   538→        toast.success(`Connected to Facebook Page${pageName}`);
+   539→   539→      } else {
+   540→   540→        setConnectionTest({ testing: false, result: `Failed: ${data.error || 'Unknown error'}` });
+   541→   541→        toast.error(data.error || 'Connection test failed');
+   542→   542→      }
+   543→   543→    } catch {
+   544→   544→      setConnectionTest({ testing: false, result: 'Connection test failed — network error' });
+   545→   545→      toast.error('Connection test failed — check your network');
+   546→   546→    }
+   547→   547→  };
+   548→   548→
+   549→   549→  const handleClearLogs = async () => {
+   550→   550→    try {
+   551→   551→      const res = await fetch('/api/system/logs', { method: 'DELETE' });
+   552→   552→      if (res.ok) {
+   553→   553→        toast.success('Logs cleared');
+   554→   554→        fetchLogs(1, 'all', 'all');
+   555→   555→        fetchRecentEvents();
+   556→   556→      }
+   557→   557→    } catch {
+   558→   558→      toast.error('Failed to clear logs');
+   559→   559→    }
+   560→   560→  };
+   561→   561→
+   562→   562→  // ---- Render helpers ----
+   563→   563→  const renderSkeletonCards = () => (
+   564→   564→    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+   565→   565→      {Array.from({ length: 5 }).map((_, i) => (
+   566→   566→        <Card key={i}>
+   567→   567→          <CardContent className="p-4">
+   568→   568→            <Skeleton className="h-4 w-24 mb-2" />
+   569→   569→            <Skeleton className="h-8 w-32 mb-1" />
+   570→   570→            <Skeleton className="h-3 w-20" />
+   571→   571→          </CardContent>
+   572→   572→        </Card>
+   573→   573→      ))}
+   574→   574→    </div>
+   575→   575→  );
+   576→   576→
+   577→   577→  // ---- Dashboard Tab ----
+   578→   578→  const renderDashboard = () => (
+   579→   579→    <div className="space-y-6">
+   580→   580→      {/* Action Bar */}
+   581→   581→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   582→   582→        <div>
+   583→   583→          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+   584→   584→          <p className="text-muted-foreground text-sm">NEPSE market automation overview</p>
+   585→   585→        </div>
+   586→   586→        <div className="flex gap-2">
+   587→   587→          {!previewData ? (
+   588→   588→            <Button
+   589→   589→              onClick={handleFetchPreview}
+   590→   590→              disabled={isFetchingPreview}
+   591→   591→              size="lg"
+   592→   592→              className="gap-2"
+   593→   593→            >
+   594→   594→              {isFetchingPreview ? (
+   595→   595→                <RefreshCw className="h-4 w-4 animate-spin" />
+   596→   596→              ) : (
+   597→   597→                <Download className="h-4 w-4" />
+   598→   598→              )}
+   599→   599→              {isFetchingPreview ? 'Fetching...' : 'Fetch & Preview'}
+   600→   600→            </Button>
+   601→   601→          ) : (
+   602→   602→            <>
+   603→   603→              <Button
+   604→   604→                onClick={handleConfirmPost}
+   605→   605→                disabled={isPosting}
+   606→   606→                size="lg"
+   607→   607→                className="gap-2"
+   608→   608→              >
+   609→   609→                {isPosting ? (
+   610→   610→                  <RefreshCw className="h-4 w-4 animate-spin" />
+   611→   611→                ) : (
+   612→   612→                  <Send className="h-4 w-4" />
+   613→   613→                )}
+   614→   614→                {isPosting ? 'Posting...' : 'Confirm & Post'}
+   615→   615→              </Button>
+   616→   616→              <Button
+   617→   617→                onClick={handleCancelPreview}
+   618→   618→                variant="outline"
+   619→   619→                size="lg"
+   620→   620→                className="gap-2"
+   621→   621→              >
+   622→   622→                Cancel
+   623→   623→              </Button>
+   624→   624→            </>
+   625→   625→          )}
+   626→   626→        </div>
+   627→   627→      </div>
+   628→   628→
+   629→   629→      {/* Preview Card */}
+   630→   630→      {previewData && (
+   631→   631→        <Card className="border-blue-500/50 bg-blue-500/5">
+   632→   632→          <CardHeader className="pb-3">
+   633→   633→            <div className="flex items-center justify-between">
+   634→   634→              <div>
+   635→   635→                <CardTitle className="text-base font-semibold flex items-center gap-2">
+   636→   636→                  <Eye className="h-4 w-4 text-blue-500" />
+   637→   637→                  Post Preview
+   638→   638→                </CardTitle>
+   639→   639→                <CardDescription className="mt-1">
+   640→   640→                  Data source: {previewData.source} | Date: {previewData.marketData.tradingDate}
+   641→   641→                </CardDescription>
+   642→   642→              </div>
+   643→   643→              <div className="text-right text-sm">
+   644→   644→                <div className={`font-bold text-lg ${previewData.marketData.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+   645→   645→                  {previewData.marketData.change >= 0 ? '+' : ''}{previewData.marketData.nepseIndex.toFixed(2)}
+   646→   646→                </div>
+   647→   647→                <div className={`text-xs ${previewData.marketData.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+   648→   648→                  {previewData.marketData.change >= 0 ? '▲' : '▼'} {previewData.marketData.change >= 0 ? '+' : ''}{previewData.marketData.changePercentage.toFixed(2)}%
+   649→   649→                </div>
+   650→   650→              </div>
+   651→   651→            </div>
+   652→   652→          </CardHeader>
+   653→   653→          <CardContent>
+   654→   654→            <div className="rounded-lg bg-muted p-4 text-sm whitespace-pre-line font-mono leading-relaxed">
+   655→   655→              {previewData.message}
+   656→   656→            </div>
+   657→   657→          </CardContent>
+   658→   658→        </Card>
+   659→   659→      )}
+   660→   660→
+   661→   661→      {isLoadingStatus ? (
+   662→   662→        renderSkeletonCards()
+   663→   663→      ) : (
+   664→   664→        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+   665→   665→          {/* NEPSE Index Card */}
+   666→   666→          <Card>
+   667→   667→            <CardContent className="p-4">
+   668→   668→              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
+   669→   669→                <BarChart3 className="h-3.5 w-3.5" />
+   670→   670→                NEPSE Index
+   671→   671→              </div>
+   672→   672→              {latestData ? (
+   673→   673→                <>
+   674→   674→                  <div className="text-2xl font-bold">
+   675→   675→                    {latestData.nepseIndex.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+   676→   676→                  </div>
+   677→   677→                  <div className={`flex items-center gap-1 text-xs font-medium ${latestData.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+   678→   678→                    {latestData.change >= 0 ? (
+   679→   679→                      <TrendingUp className="h-3 w-3" />
+   680→   680→                    ) : (
+   681→   681→                      <TrendingDown className="h-3 w-3" />
+   682→   682→                    )}
+   683→   683→                    {latestData.change >= 0 ? '+' : ''}{latestData.change.toFixed(2)} ({latestData.changePercentage >= 0 ? '+' : ''}{latestData.changePercentage}%)
+   684→   684→                  </div>
+   685→   685→                </>
+   686→   686→              ) : (
+   687→   687→                <div className="text-muted-foreground text-sm">No data</div>
+   688→   688→              )}
+   689→   689→            </CardContent>
+   690→   690→          </Card>
+   691→   691→
+   692→   692→          {/* Turnover Card */}
+   693→   693→          <Card>
+   694→   694→            <CardContent className="p-4">
+   695→   695→              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
+   696→   696→                <DollarSign className="h-3.5 w-3.5" />
+   697→   697→                Today&apos;s Turnover
+   698→   698→              </div>
+   699→   699→              {latestData ? (
+   700→   700→                <>
+   701→   701→                  <div className="text-2xl font-bold">{formatNpr(latestData.turnover)}</div>
+   702→   702→                  <div className="text-xs text-muted-foreground">
+   703→   703→                    {formatNumber(latestData.trades)} trades
+   704→   704→                  </div>
+   705→   705→                </>
+   706→   706→              ) : (
+   707→   707→                <div className="text-muted-foreground text-sm">No data</div>
+   708→   708→              )}
+   709→   709→            </CardContent>
+   710→   710→          </Card>
+   711→   711→
+   712→   712→          {/* Total Posts Card */}
+   713→   713→          <Card>
+   714→   714→            <CardContent className="p-4">
+   715→   715→              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
+   716→   716→                <Send className="h-3.5 w-3.5" />
+   717→   717→                Total Posts
+   718→   718→              </div>
+   719→   719→              <div className="text-2xl font-bold">{systemStatus?.totalPosts ?? 0}</div>
+   720→   720→              <div className="text-xs text-muted-foreground">
+   721→   721→                {systemStatus?.successPosts ?? 0} successful
+   722→   722→              </div>
+   723→   723→            </CardContent>
+   724→   724→          </Card>
+   725→   725→
+   726→   726→          {/* Success Rate Card */}
+   727→   727→          <Card>
+   728→   728→            <CardContent className="p-4">
+   729→   729→              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
+   730→   730→                <CheckCircle2 className="h-3.5 w-3.5" />
+   731→   731→                Success Rate
+   732→   732→              </div>
+   733→   733→              <div className="text-2xl font-bold">{systemStatus?.successRate ?? 0}%</div>
+   734→   734→              <Progress value={systemStatus?.successRate ?? 0} className="h-1.5 mt-1" />
+   735→   735→            </CardContent>
+   736→   736→          </Card>
+   737→   737→
+   738→   738→          {/* System Status Card */}
+   739→   739→          <Card>
+   740→   740→            <CardContent className="p-4">
+   741→   741→              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
+   742→   742→                <Activity className="h-3.5 w-3.5" />
+   743→   743→                System Status
+   744→   744→              </div>
+   745→   745→              <div className="flex items-center gap-2">
+   746→   746→                {(systemStatus?.status ?? 'online') === 'online' ? (
+   747→   747→                  <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/20">
+   748→   748→                    <Wifi className="h-3 w-3 mr-1" /> Online
+   749→   749→                  </Badge>
+   750→   750→                ) : (
+   751→   751→                  <Badge variant="destructive">
+   752→   752→                    <WifiOff className="h-3 w-3 mr-1" /> Offline
+   753→   753→                  </Badge>
+   754→   754→                )}
+   755→   755→              </div>
+   756→   756→              <div className="text-xs text-muted-foreground mt-1">
+   757→   757→                {systemStatus?.configuration?.autoPostEnabled ? (
+   758→   758→                  <span className="text-emerald-500">Auto-post ON</span>
+   759→   759→                ) : (
+   760→   760→                  <span>Auto-post OFF</span>
+   761→   761→                )}
+   762→   762→              </div>
+   763→   763→            </CardContent>
+   764→   764→          </Card>
+   765→   765→        </div>
+   766→   766→      )}
+   767→   767→
+   768→   768→      {/* Two-column layout */}
+   769→   769→      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+   770→   770→        {/* Latest Market Data */}
+   771→   771→        <Card>
+   772→   772→          <CardHeader className="pb-3">
+   773→   773→            <CardTitle className="text-base font-semibold">Latest Market Data</CardTitle>
+   774→   774→            <CardDescription>Most recent NEPSE trading data</CardDescription>
+   775→   775→          </CardHeader>
+   776→   776→          <CardContent>
+   777→   777→            {latestData ? (
+   778→   778→              <div className="grid grid-cols-2 gap-3">
+   779→   779→                <div className="space-y-0.5">
+   780→   780→                  <p className="text-xs text-muted-foreground">Trading Date</p>
+   781→   781→                  <p className="text-sm font-medium">{latestData.tradingDate}</p>
+   782→   782→                </div>
+   783→   783→                <div className="space-y-0.5">
+   784→   784→                  <p className="text-xs text-muted-foreground">NEPSE Index</p>
+   785→   785→                  <p className="text-sm font-medium">{latestData.nepseIndex.toFixed(2)}</p>
+   786→   786→                </div>
+   787→   787→                <div className="space-y-0.5">
+   788→   788→                  <p className="text-xs text-muted-foreground">Change</p>
+   789→   789→                  <p className={`text-sm font-medium ${latestData.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+   790→   790→                    {latestData.change >= 0 ? '+' : ''}{latestData.change.toFixed(2)} ({latestData.changePercentage >= 0 ? '+' : ''}{latestData.changePercentage}%)
+   791→   791→                  </p>
+   792→   792→                </div>
+   793→   793→                <div className="space-y-0.5">
+   794→   794→                  <p className="text-xs text-muted-foreground">Turnover</p>
+   795→   795→                  <p className="text-sm font-medium">{formatNpr(latestData.turnover)}</p>
+   796→   796→                </div>
+   797→   797→                <div className="space-y-0.5">
+   798→   798→                  <p className="text-xs text-muted-foreground">Volume</p>
+   799→   799→                  <p className="text-sm font-medium">{formatNumber(latestData.volume)} shares</p>
+   800→   800→                </div>
+   801→   801→                <div className="space-y-0.5">
+   802→   802→                  <p className="text-xs text-muted-foreground">Trades</p>
+   803→   803→                  <p className="text-sm font-medium">{formatNumber(latestData.trades)}</p>
+   804→   804→                </div>
+   805→   805→                <div className="space-y-0.5">
+   806→   806→                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+   807→   807→                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" /> Gainers
+   808→   808→                  </p>
+   809→   809→                  <p className="text-sm font-medium text-emerald-500">{latestData.gainers}</p>
+   810→   810→                </div>
+   811→   811→                <div className="space-y-0.5">
+   812→   812→                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+   813→   813→                    <span className="inline-block w-2 h-2 rounded-full bg-red-500" /> Losers
+   814→   814→                  </p>
+   815→   815→                  <p className="text-sm font-medium text-red-500">{latestData.losers}</p>
+   816→   816→                </div>
+   817→   817→              </div>
+   818→   818→            ) : (
+   819→   819→              <div className="text-center py-8 text-muted-foreground">
+   820→   820→                <Database className="h-10 w-10 mx-auto mb-2 opacity-30" />
+   821→   821→                <p className="text-sm">No market data available</p>
+   822→   822→                <Button variant="outline" size="sm" onClick={handleSeed} className="mt-3 gap-1">
+   823→   823→                  <Sprout className="h-3.5 w-3.5" /> Seed Demo Data
+   824→   824→                </Button>
+   825→   825→              </div>
+   826→   826→            )}
+   827→   827→          </CardContent>
+   828→   828→        </Card>
+   829→   829→
+   830→   830→        {/* Recent Activity */}
+   831→   831→        <Card>
+   832→   832→          <CardHeader className="pb-3">
+   833→   833→            <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+   834→   834→            <CardDescription>Latest system events</CardDescription>
+   835→   835→          </CardHeader>
+   836→   836→          <CardContent>
+   837→   837→            {recentEvents.length > 0 ? (
+   838→   838→              <div className="max-h-64 overflow-y-auto space-y-3">
+   839→   839→                {recentEvents.map((event) => (
+   840→   840→                  <div key={event.id} className="flex items-start gap-3">
+   841→   841→                    <div className="mt-1.5">
+   842→   842→                      <div className={`w-2 h-2 rounded-full ${
+   843→   843→                        event.severity === 'success' ? 'bg-emerald-500' :
+   844→   844→                        event.severity === 'error' ? 'bg-red-500' :
+   845→   845→                        event.severity === 'warning' ? 'bg-yellow-500' :
+   846→   846→                        'bg-sky-500'
+   847→   847→                      }`} />
+   848→   848→                    </div>
+   849→   849→                    <div className="flex-1 min-w-0">
+   850→   850→                      <p className="text-xs text-muted-foreground">{timeAgo(event.createdAt)}</p>
+   851→   851→                      <p className="text-sm truncate">{event.description}</p>
+   852→   852→                    </div>
+   853→   853→                    <Badge variant="outline" className="text-[10px] shrink-0">
+   854→   854→                      {event.eventType}
+   855→   855→                    </Badge>
+   856→   856→                  </div>
+   857→   857→                ))}
+   858→   858→              </div>
+   859→   859→            ) : (
+   860→   860→              <div className="text-center py-8 text-muted-foreground">
+   861→   861→                <Activity className="h-10 w-10 mx-auto mb-2 opacity-30" />
+   862→   862→                <p className="text-sm">No recent activity</p>
+   863→   863→              </div>
+   864→   864→            )}
+   865→   865→          </CardContent>
+   866→   866→        </Card>
+   867→   867→      </div>
+   868→   868→    </div>
+   869→   869→  );
+   870→   870→
+   871→   871→  // ---- Market Data Tab ----
+   872→   872→  const renderMarketData = () => (
+   873→   873→    <div className="space-y-4">
+   874→   874→      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+   875→   875→        <div>
+   876→   876→          <h2 className="text-2xl font-bold tracking-tight">Market Data</h2>
+   877→   877→          <p className="text-muted-foreground text-sm">Historical NEPSE trading data</p>
+   878→   878→        </div>
+   879→   879→        <div className="flex gap-2">
+   880→   880→          <Button onClick={handleFetchLatest} size="sm" className="gap-1">
+   881→   881→            <RefreshCw className="h-3.5 w-3.5" /> Fetch Latest
+   882→   882→          </Button>
+   883→   883→          <Button onClick={handleSeed} size="sm" variant="outline" className="gap-1" disabled={isSeeding}>
+   884→   884→            {isSeeding ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sprout className="h-3.5 w-3.5" />}
+   885→   885→            Seed Data
+   886→   886→          </Button>
+   887→   887→        </div>
+   888→   888→      </div>
+   889→   889→
+   890→   890→      <Card>
+   891→   891→        <CardContent className="p-0">
+   892→   892→          {isLoadingMarket ? (
+   893→   893→            <div className="p-4 space-y-2">
+   894→   894→              {Array.from({ length: 5 }).map((_, i) => (
+   895→   895→                <Skeleton key={i} className="h-10 w-full" />
+   896→   896→              ))}
+   897→   897→            </div>
+   898→   898→          ) : marketDataList.length === 0 ? (
+   899→   899→            <div className="text-center py-12 text-muted-foreground">
+   900→   900→              <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+   901→   901→              <p className="text-sm font-medium">No market data available</p>
+   902→   902→              <p className="text-xs mt-1">Click &quot;Seed Data&quot; to populate with demo data</p>
+   903→   903→            </div>
+   904→   904→          ) : (
+   905→   905→            <div className="overflow-x-auto">
+   906→   906→              <Table>
+   907→   907→                <TableHeader>
+   908→   908→                  <TableRow>
+   909→   909→                    <TableHead className="text-xs">Date</TableHead>
+   910→   910→                    <TableHead className="text-xs text-right">Index</TableHead>
+   911→   911→                    <TableHead className="text-xs text-right">Change</TableHead>
+   912→   912→                    <TableHead className="text-xs text-right">Change %</TableHead>
+   913→   913→                    <TableHead className="text-xs text-right hidden md:table-cell">Turnover</TableHead>
+   914→   914→                    <TableHead className="text-xs text-right hidden lg:table-cell">Trades</TableHead>
+   915→   915→                    <TableHead className="text-xs text-right hidden lg:table-cell">Gainers</TableHead>
+   916→   916→                    <TableHead className="text-xs text-right hidden lg:table-cell">Losers</TableHead>
+   917→   917→                    <TableHead className="text-xs text-center">Status</TableHead>
+   918→   918→                  </TableRow>
+   919→   919→                </TableHeader>
+   920→   920→                <TableBody>
+   921→   921→                  {marketDataList.map((item) => (
+   922→   922→                    <TableRow key={item.id}>
+   923→   923→                      <TableCell className="text-xs font-medium">{item.tradingDate}</TableCell>
+   924→   924→                      <TableCell className="text-xs text-right font-mono">{item.nepseIndex.toFixed(2)}</TableCell>
+   925→   925→                      <TableCell className={`text-xs text-right font-mono ${item.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+   926→   926→                        {item.change >= 0 ? '+' : ''}{item.change.toFixed(2)}
+   927→   927→                      </TableCell>
+   928→   928→                      <TableCell className={`text-xs text-right font-mono ${item.changePercentage >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+   929→   929→                        {item.changePercentage >= 0 ? '+' : ''}{item.changePercentage}%
+   930→   930→                      </TableCell>
+   931→   931→                      <TableCell className="text-xs text-right hidden md:table-cell">{formatNpr(item.turnover)}</TableCell>
+   932→   932→                      <TableCell className="text-xs text-right hidden lg:table-cell">{formatNumber(item.trades)}</TableCell>
+   933→   933→                      <TableCell className="text-xs text-right text-emerald-500 hidden lg:table-cell">{item.gainers}</TableCell>
+   934→   934→                      <TableCell className="text-xs text-right text-red-500 hidden lg:table-cell">{item.losers}</TableCell>
+   935→   935→                      <TableCell className="text-xs text-center">{statusBadge(item.status)}</TableCell>
+   936→   936→                    </TableRow>
+   937→   937→                  ))}
+   938→   938→                </TableBody>
+   939→   939→              </Table>
+   940→   940→            </div>
+   941→   941→          )}
+   942→   942→        </CardContent>
+   943→   943→      </Card>
+   944→   944→
+   945→   945→      {/* Pagination */}
+   946→   946→      {marketTotalPages > 1 && (
+   947→   947→        <div className="flex items-center justify-center gap-2">
+   948→   948→          <Button
+   949→   949→            variant="outline"
+   950→   950→            size="sm"
+   951→   951→            onClick={() => { setMarketPage((p) => Math.max(1, p - 1)); fetchMarketData(Math.max(1, marketPage - 1)); }}
+   952→   952→            disabled={marketPage <= 1}
+   953→   953→          >
+   954→   954→            <ChevronLeft className="h-4 w-4" />
+   955→   955→          </Button>
+   956→   956→          <span className="text-sm text-muted-foreground">Page {marketPage} of {marketTotalPages}</span>
+   957→   957→          <Button
+   958→   958→            variant="outline"
+   959→   959→            size="sm"
+
+[showing lines 360-959 of 1520; use offset=960 with limit to continue reading]
