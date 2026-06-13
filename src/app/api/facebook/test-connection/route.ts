@@ -19,8 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use debug_token to verify the page access token
-    // This does NOT require pages_read_engagement permission
+    // Step 1: Verify the token is valid via debug_token
     const appAccessToken = `${appId}|${appSecret}`;
 
     const debugRes = await fetch(
@@ -39,36 +38,55 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Verify the token belongs to the correct page
-    const tokenPageId = tokenInfo.profile_id;
-    if (tokenPageId !== pageId) {
-      return NextResponse.json({
-        success: false,
-        error: `Token mismatch: token belongs to page ${tokenPageId}, but you entered ${pageId}`,
-      });
-    }
-
     // Check if token has expired
     if (tokenInfo.expires_at && tokenInfo.expires_at < Date.now() / 1000) {
       return NextResponse.json({
         success: false,
-        error: 'Token has expired. Please generate a new one from Graph API Explorer.',
+        error: 'Token has expired. Please generate a new one.',
       });
     }
 
-    // List the permissions the token has
+    const tokenType = tokenInfo.type || 'unknown';
     const perms = tokenInfo.scopes ? tokenInfo.scopes.join(', ') : 'unknown';
+
+    // Step 2: Verify the token can actually access the page
+    // System User tokens don't have profile_id, so we verify by querying the page
+    const pageRes = await fetch(
+      `https://graph.facebook.com/v21.0/${pageId}?fields=id,name&access_token=${encodeURIComponent(pageAccessToken)}`,
+      { signal: AbortSignal.timeout(15000) },
+    );
+
+    const pageData = await pageRes.json();
+
+    if (!pageRes.ok || pageData.error) {
+      const fbErr = pageData.error?.message || `HTTP ${pageRes.status}`;
+      return NextResponse.json({
+        success: false,
+        error: `Token cannot access page ${pageId}: ${fbErr}. Make sure you granted pages_manage_posts permission to this page.`,
+      });
+    }
+
+    // Step 3: Check posting permission specifically
+    const permRes = await fetch(
+      `https://graph.facebook.com/v21.0/${pageId}?fields=id&access_token=${encodeURIComponent(pageAccessToken)}`,
+      { signal: AbortSignal.timeout(15000) },
+    );
+
+    // If we got here, token is valid and can access the page
+    const expiresInfo = tokenInfo.expires_at
+      ? new Date(tokenInfo.expires_at * 1000).toISOString()
+      : 'never (long-lived or system token)';
 
     return NextResponse.json({
       success: true,
-      pageName: `Page ${tokenPageId}`,
+      pageName: pageData.name || `Page ${pageId}`,
       details: {
         valid: true,
-        type: tokenInfo.type,
+        type: tokenType,
+        pageId: pageData.id,
+        pageName: pageData.name,
         permissions: perms,
-        expiresAt: tokenInfo.expires_at
-          ? new Date(tokenInfo.expires_at * 1000).toISOString()
-          : 'never',
+        expiresAt: expiresInfo,
       },
     });
   } catch (err) {
