@@ -4,7 +4,7 @@ import { fetchNepseData } from '@/lib/nepse';
 import { formatMarketUpdate, formatImageCaption, formatGainersCaption, formatLosersCaption } from '@/lib/content-formatter';
 import { postToFacebook } from '@/lib/facebook';
 import { postPhotoToFacebook } from '@/lib/facebook-photo';
-import { generateGainersLosers } from '@/lib/nepse-stocks';
+import { parseTopStocksFromRawData } from '@/lib/nepse';
 import { requireAuth } from '@/lib/require-auth';
 
 async function delay(ms: number): Promise<void> {
@@ -164,8 +164,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Get gainers/losers for captions
-      const { gainers, losers } = generateGainersLosers();
+      // Get real gainers/losers from stored rawData
+      const { gainers, losers } = parseTopStocksFromRawData(marketData.rawData);
 
       const summaryCaption = formatImageCaption(nepseDataForFormat);
       const gainersCaption = formatGainersCaption(marketData.tradingDate, gainers);

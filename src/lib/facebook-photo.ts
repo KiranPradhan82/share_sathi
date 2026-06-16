@@ -30,14 +30,11 @@ export async function postPhotoToFacebook(
     captionPreview: message.substring(0, 80) + (message.length > 80 ? '...' : ''),
   };
 
-  // Check sandbox mode (empty/missing credentials)
-  const isSandbox = !pageAccessToken || !pageId || pageAccessToken === '' || pageId === '';
-
-  if (isSandbox) {
-    await delay(500);
+  // Validate credentials before attempting
+  if (!pageAccessToken || !pageId || pageAccessToken === '' || pageId === '') {
     return {
-      success: true,
-      postId: `photo_mock_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      success: false,
+      error: `Facebook Page ID and Access Token are required. Configure them in Settings.`,
       debug,
     };
   }

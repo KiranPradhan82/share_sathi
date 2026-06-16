@@ -1,3 +1,8 @@
+// NEPSE Market Data Fetcher
+// Primary source: YONEPSE (GitHub Pages, free, no auth, no WAF)
+// Secondary source: NEPSE direct API (may be blocked by WAF)
+// NO mock/fallback data — throws clear error if all sources fail
+
 const YONEPSE_BASE = 'https://shubhamnpk.github.io/yonepse';
 
 export interface NepseData {
@@ -28,48 +33,28 @@ export interface NepseData {
   source?: string;
 }
 
-function generateMockData(date: string): NepseData {
-  const baseIndex = 2280;
-  const indexVariation = (Math.random() - 0.45) * 40;
-  const nepseIndex = parseFloat((baseIndex + indexVariation).toFixed(2));
-  const change = parseFloat((indexVariation * (0.5 + Math.random())).toFixed(2));
-  const changePercentage = parseFloat(((change / nepseIndex) * 100).toFixed(2));
-  const turnover = parseFloat((2.5 + Math.random() * 5.5).toFixed(2));
-  const volume = parseFloat((15000000 + Math.random() * 25000000).toFixed(0));
-  const trades = Math.floor(40000 + Math.random() * 30000);
-  const totalListed = 220;
-  const gainers = Math.floor(totalListed * (0.2 + Math.random() * 0.35));
-  const losers = Math.floor(totalListed * (0.2 + Math.random() * 0.3));
-  const unchanged = totalListed - gainers - losers;
+export interface TopStock {
+  symbol: string;
+  name: string;
+  change: number;
+  changePercent: number;
+}
 
-  const rawData = JSON.stringify({
-    source: 'mock',
-    generatedAt: new Date().toISOString(),
-    index: nepseIndex,
-    turnover,
-    volume,
-  });
-
-  return {
-    tradingDate: date,
-    nepseIndex,
-    change,
-    changePercentage,
-    turnover: turnover * 100000000,
-    volume,
-    trades,
-    gainers,
-    losers,
-    unchanged,
-    rawData,
-    source: 'mock',
-  };
+// Re-exported StockData type (used by client-image-generator)
+export interface StockData {
+  symbol: string;
+  name: string;
+  closePrice: number;
+  change: number;
+  changePercent: number;
+  previousClose: number;
 }
 
 /**
  * Fetch from YONEPSE static JSON API (GitHub Pages).
  * Free, no auth, no WAF, works from any server.
- * Updates every 30 min during market hours (11 AM - 3 PM NPT, Mon-Fri).
+ * Updates every 30 min during market hours (11 AM - 3 PM NPT, Sun-Thu).
+ * Returns the most reliable free NEPSE data available.
  */
 async function fetchFromYonepse(date: string): Promise<NepseData | null> {
   try {
@@ -132,32 +117,37 @@ async function fetchFromYonepse(date: string): Promise<NepseData | null> {
     // Parse top stocks for gainers/losers counts
     const topGainers = (topStocks.top_gainer || []) as Array<Record<string, unknown>>;
     const topLosers = (topStocks.top_loser || []) as Array<Record<string, unknown>>;
-    
-    // Count gainers/losers/unchanged from top stocks data
-    // top_gainer contains ALL stocks with positive change, top_loser has ALL with negative
+
     const gainers = topGainers.length;
     const losers = topLosers.length;
-    const totalTraded = topGainers.length + topLosers.length;
-    
-    // We need to find unchanged too - approximate from scrips traded
-    // YONEPSE doesn't directly provide unchanged count, so we compute:
-    // unchanged = scrips_traded - gainers - losers (if we have scrips data)
     const unchanged = Math.max(0, Math.round(scripsTraded) - gainers - losers);
 
-    // Extract top 5 gainers/losers for image posts
-    const top5Gainers = topGainers.slice(0, 5).map(g => ({
-      symbol: String(g.symbol || ''),
-      name: String(g.securityName || ''),
-      change: Number(g.pointChange || 0),
-      changePercent: Number(g.percentageChange || 0),
-    }));
+    // Extract top 10 gainers/losers for image posts (with full StockData format)
+    const top10Gainers: StockData[] = topGainers.slice(0, 10).map(g => {
+      const ltp = Number(g.ltp || 0);
+      const pointChange = Number(g.pointChange || 0);
+      return {
+        symbol: String(g.symbol || ''),
+        name: String(g.securityName || ''),
+        closePrice: ltp,
+        change: pointChange,
+        changePercent: Number(g.percentageChange || 0),
+        previousClose: Math.max(0, ltp - pointChange),
+      };
+    });
 
-    const top5Losers = topLosers.slice(0, 5).map(l => ({
-      symbol: String(l.symbol || ''),
-      name: String(l.securityName || ''),
-      change: Number(l.pointChange || 0),
-      changePercent: Number(l.percentageChange || 0),
-    }));
+    const top10Losers: StockData[] = topLosers.slice(0, 10).map(l => {
+      const ltp = Number(l.ltp || 0);
+      const pointChange = Number(l.pointChange || 0);
+      return {
+        symbol: String(l.symbol || ''),
+        name: String(l.securityName || ''),
+        closePrice: ltp,
+        change: pointChange,
+        changePercent: Number(l.percentageChange || 0),
+        previousClose: Math.max(0, ltp - pointChange),
+      };
+    });
 
     // Get trading date from indices generatedTime or use provided date
     const generatedTime = String(nepseIdx.generatedTime || '');
@@ -184,8 +174,8 @@ async function fetchFromYonepse(date: string): Promise<NepseData | null> {
       gainers,
       losers,
       unchanged,
-      top5Gainers,
-      top5Losers,
+      top10Gainers,
+      top10Losers,
       sensitiveIndex: sensIdx ? Number(sensIdx.currentValue || sensIdx.close) : undefined,
       floatIndex: floatIdx ? Number(floatIdx.currentValue || floatIdx.close) : undefined,
       sensitiveFloatIndex: sfIdx ? Number(sfIdx.currentValue || sfIdx.close) : undefined,
@@ -226,6 +216,7 @@ async function fetchFromYonepse(date: string): Promise<NepseData | null> {
 
 /**
  * Try the NEPSE API directly (may be blocked by WAF/Cloudflare).
+ * Fallback only — YONEPSE is more reliable from server-side.
  */
 async function fetchFromNepseApi(date: string): Promise<NepseData | null> {
   try {
@@ -269,39 +260,92 @@ async function fetchFromNepseApi(date: string): Promise<NepseData | null> {
 export async function fetchNepseData(date?: string): Promise<NepseData> {
   const targetDate = date || new Date().toISOString().split('T')[0];
 
-  // Method 1: YONEPSE static JSON API (most reliable, free, no WAF)
-  const yonepseResult = await fetchFromYonepse(targetDate);
-  if (yonepseResult) {
-    console.log(`NEPSE data fetched via YONEPSE. Index: ${yonepseResult.nepseIndex}`);
-    return yonepseResult;
+  const errors: string[] = [];
+
+  // Source 1: YONEPSE static JSON API (most reliable, free, no WAF)
+  try {
+    const yonepseResult = await fetchFromYonepse(targetDate);
+    if (yonepseResult) {
+      console.log(`NEPSE data fetched via YONEPSE. Index: ${yonepseResult.nepseIndex}`);
+      return yonepseResult;
+    }
+    errors.push('YONEPSE: no valid data returned (market may be closed)');
+  } catch (e) {
+    errors.push(`YONEPSE: ${e instanceof Error ? e.message : 'unknown error'}`);
   }
 
-  // Method 2: Try the direct NEPSE API
-  const apiResult = await fetchFromNepseApi(targetDate);
-  if (apiResult) {
-    console.log('NEPSE data fetched via direct API');
-    return apiResult;
+  // Source 2: Try the direct NEPSE API
+  try {
+    const apiResult = await fetchFromNepseApi(targetDate);
+    if (apiResult) {
+      console.log('NEPSE data fetched via direct API');
+      return apiResult;
+    }
+    errors.push('NEPSE Direct API: no valid data returned');
+  } catch (e) {
+    errors.push(`NEPSE Direct API: ${e instanceof Error ? e.message : 'unknown error'}`);
   }
 
-  // Method 3: Fallback to mock data (last resort)
-  console.warn('WARNING: All data sources failed. Using MOCK data!');
-  return generateMockData(targetDate);
+  // All sources failed — throw a clear error (NO mock data)
+  throw new Error(
+    `All NEPSE data sources failed. The market may be closed (weekends/holidays) or all APIs are unreachable.\n\n` +
+    `Attempted:\n${errors.map(e => `  - ${e}`).join('\n')}\n\n` +
+    `Please try again during market hours (11:00 AM - 3:00 PM NPT, Sunday-Thursday).`
+  );
 }
 
-// Re-export for use in image generation / gainers-losers formatting
-export interface TopStock {
-  symbol: string;
-  name: string;
-  change: number;
-  changePercent: number;
-}
-
+/**
+ * Parse top gainers/losers from rawData (stored by YONEPSE fetch).
+ * Returns empty arrays if data not available.
+ */
 export function parseTopStocksFromRawData(rawData: string): { gainers: TopStock[]; losers: TopStock[] } {
   try {
     const parsed = JSON.parse(rawData);
+    // top10Gainers has full StockData format with closePrice
+    const gainerData = parsed.top10Gainers || parsed.top5Gainers || [];
+    const loserData = parsed.top10Losers || parsed.top5Losers || [];
     return {
-      gainers: parsed.top5Gainers || [],
-      losers: parsed.top5Losers || [],
+      gainers: gainerData.map((g: Record<string, unknown>) => ({
+        symbol: String(g.symbol || ''),
+        name: String(g.name || ''),
+        change: Number(g.change || 0),
+        changePercent: Number(g.changePercent || 0),
+      })),
+      losers: loserData.map((l: Record<string, unknown>) => ({
+        symbol: String(l.symbol || ''),
+        name: String(l.name || ''),
+        change: Number(l.change || 0),
+        changePercent: Number(l.changePercent || 0),
+      })),
+    };
+  } catch {
+    return { gainers: [], losers: [] };
+  }
+}
+
+/**
+ * Parse full StockData[] (with closePrice) from rawData for image generation.
+ */
+export function parseStockDataFromRawData(rawData: string): { gainers: StockData[]; losers: StockData[] } {
+  try {
+    const parsed = JSON.parse(rawData);
+    return {
+      gainers: (parsed.top10Gainers || []).map((g: Record<string, unknown>) => ({
+        symbol: String(g.symbol || ''),
+        name: String(g.name || ''),
+        closePrice: Number(g.closePrice || 0),
+        change: Number(g.change || 0),
+        changePercent: Number(g.changePercent || 0),
+        previousClose: Number(g.previousClose || 0),
+      })),
+      losers: (parsed.top10Losers || []).map((l: Record<string, unknown>) => ({
+        symbol: String(l.symbol || ''),
+        name: String(l.name || ''),
+        closePrice: Number(l.closePrice || 0),
+        change: Number(l.change || 0),
+        changePercent: Number(l.changePercent || 0),
+        previousClose: Number(l.previousClose || 0),
+      })),
     };
   } catch {
     return { gainers: [], losers: [] };

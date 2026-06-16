@@ -19,22 +19,9 @@ export async function POST(request: NextRequest) {
     const today = new Date().toISOString().split('T')[0];
     let existing = await db.marketData.findUnique({ where: { tradingDate: today } });
 
-    // Check if existing data is mock — if so, re-fetch with real data
-    let forceRefresh = false;
-    if (existing) {
-      try {
-        const raw = JSON.parse(existing.rawData);
-        if (raw.source === 'mock') {
-          forceRefresh = true;
-        }
-      } catch { /* keep existing */ }
-    }
-
-    // Parse query params for explicit force refresh
+    // Parse query params for force refresh
     const { searchParams } = new URL(request.url);
-    if (searchParams.get('force') === 'true') {
-      forceRefresh = true;
-    }
+    const forceRefresh = searchParams.get('force') === 'true';
 
     if (!existing || forceRefresh) {
       const nepseData = await fetchNepseData();
@@ -63,13 +50,11 @@ export async function POST(request: NextRequest) {
       };
 
       if (existing && forceRefresh) {
-        // Update existing record
         existing = await db.marketData.update({
           where: { id: existing.id },
           data: upsertData,
         });
       } else {
-        // Use upsert — handles race conditions where data was created between findUnique and now
         existing = await db.marketData.upsert({
           where: { tradingDate: nepseData.tradingDate },
           update: upsertData,
@@ -84,20 +69,16 @@ export async function POST(request: NextRequest) {
           entityId: existing.id,
           marketDataId: existing.id,
           description: `Fetched NEPSE data for ${existing.tradingDate} [source: ${source}]. Index: ${existing.nepseIndex}, Turnover: ${existing.turnover}, Shares: ${existing.volume}`,
-          severity: source === 'mock' ? 'warning' : 'success',
+          severity: 'success',
         },
       });
     }
 
-    // Determine source from DB rawData
+    // Determine source label from rawData
     let source = 'NEPSE Data';
-    let isMock = false;
     try {
       const raw = JSON.parse(existing.rawData);
-      isMock = raw.source === 'mock';
-      source = isMock ? 'MOCK DATA (all sources failed)' :
-               raw.source === 'yonepse' ? 'YONEPSE API (real data)' :
-               raw.source === 'nepse-website' ? 'NEPSE Website (scraped)' :
+      source = raw.source === 'yonepse' ? 'YONEPSE API' :
                raw.source === 'nepse-api' ? 'NEPSE API' : 'NEPSE Data';
     } catch {
       source = 'NEPSE Data (cached)';
@@ -123,14 +104,11 @@ export async function POST(request: NextRequest) {
       marketData: existing,
       previewMessage: message,
       source,
-      isMock,
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch data';
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch data',
-      },
+      { success: false, error: message },
       { status: 500 },
     );
   }

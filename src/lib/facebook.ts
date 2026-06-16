@@ -13,19 +13,15 @@ export async function postToFacebook(
   pageAccessToken: string,
   pageId: string,
 ): Promise<FacebookPostResult> {
-  // Check if we have real credentials
-  const isSandbox = !pageAccessToken || !pageId || pageAccessToken === '' || pageId === '';
-
-  if (isSandbox) {
-    // Simulate successful post in sandbox mode
-    await delay(500); // Simulate network latency
+  // Validate credentials before attempting
+  if (!pageAccessToken || !pageId || pageAccessToken === '' || pageId === '') {
     return {
-      success: true,
-      postId: `mock_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      success: false,
+      error: 'Facebook Page ID and Access Token are required. Configure them in Settings.',
     };
   }
 
-  // Real Facebook Graph API call with retry logic
+  // Facebook Graph API call with retry logic
   const maxAttempts = 3;
   let lastError = '';
 
@@ -75,18 +71,11 @@ export async function testConnection(
   pageAccessToken: string,
   pageId: string,
 ): Promise<{ success: boolean; pageName?: string; error?: string }> {
+  // Validate credentials
   if (!pageAccessToken || !pageId) {
     return {
       success: false,
       error: 'Page ID and Access Token are required',
-    };
-  }
-
-  // In sandbox mode, simulate a test
-  if (pageAccessToken.startsWith('mock') || pageAccessToken.length < 20) {
-    return {
-      success: true,
-      pageName: 'Share Sathi (Demo Mode)',
     };
   }
 

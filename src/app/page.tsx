@@ -25,7 +25,6 @@ import {
   Moon,
   ChevronLeft,
   ChevronRight,
-  Sprout,
   Image as ImageIcon,
   Type,
   Loader2,
@@ -68,7 +67,8 @@ import {
 } from '@/components/ui/select';
 
 import { generateImagesInBrowser } from '@/lib/client-image-generator';
-import { generateGainersLosers } from '@/lib/nepse-stocks';
+import { parseStockDataFromRawData } from '@/lib/nepse';
+import type { StockData } from '@/lib/nepse';
 
 // ---- Types ----
 interface MarketData {
@@ -213,7 +213,7 @@ export default function HomePage() {
   const [latestData, setLatestData] = useState<MarketData | null>(null);
   const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
   const [isLoadingPipeline, setIsLoadingPipeline] = useState(false);
-  const [previewData, setPreviewData] = useState<{ marketData: MarketData; message: string; source: string; isMock?: boolean } | null>(null);
+  const [previewData, setPreviewData] = useState<{ marketData: MarketData; message: string; source: string } | null>(null);
   const [isFetchingPreview, setIsFetchingPreview] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
 
@@ -272,7 +272,7 @@ export default function HomePage() {
 
   // Loading states
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
-  const [isSeeding, setIsSeeding] = useState(false);
+
 
   // ---- Fetch functions ----
   const fetchSystemStatus = useCallback(async () => {
@@ -396,13 +396,8 @@ export default function HomePage() {
           marketData: json.marketData,
           message: json.previewMessage,
           source: json.source,
-          isMock: json.isMock,
         });
-        if (json.isMock) {
-          toast.warning('WARNING: Using MOCK data! Real NEPSE data could not be fetched.');
-        } else {
-          toast.success('Real NEPSE data fetched! Review the preview below.');
-        }
+        toast.success('NEPSE data fetched! Review the preview below.');
         fetchSystemStatus();
         fetchLatestData();
         fetchMarketData(1);
@@ -462,28 +457,6 @@ export default function HomePage() {
       }
     } catch {
       toast.error('Failed to fetch market data');
-    }
-  };
-
-  const handleSeed = async () => {
-    setIsSeeding(true);
-    try {
-      const res = await fetch('/api/seed', { method: 'POST' });
-      const json = await res.json();
-      if (res.ok) {
-        toast.success(json.message || 'Database seeded!');
-        fetchSystemStatus();
-        fetchLatestData();
-        fetchRecentEvents();
-        fetchMarketData(1);
-        fetchPosts(1, 'all');
-      } else {
-        toast.error(json.error || 'Seed failed');
-      }
-    } catch {
-      toast.error('Failed to seed database');
-    } finally {
-      setIsSeeding(false);
     }
   };
 
@@ -593,7 +566,12 @@ export default function HomePage() {
     setIsGeneratingImages(true);
     try {
       // Generate images entirely in the browser — no server-side WASM/native deps
-      const { gainers, losers } = generateGainersLosers();
+      const { gainers, losers } = parseStockDataFromRawData(previewData.marketData.rawData);
+      if (gainers.length === 0 || losers.length === 0) {
+        toast.error('No top gainers/losers data available from the data source. Cannot generate images.');
+        setIsGeneratingImages(false);
+        return;
+      }
       const images = await generateImagesInBrowser(
         {
           tradingDate: previewData.marketData.tradingDate,
@@ -921,7 +899,7 @@ export default function HomePage() {
                   Post Preview
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  Data source: <span className={previewData.isMock ? 'text-red-500 font-semibold' : 'text-emerald-500 font-medium'}>{previewData.source}</span> | Date: {previewData.marketData.tradingDate}
+                  Data source: <span className="text-emerald-500 font-medium">{previewData.source}</span> | Date: {previewData.marketData.tradingDate}
                 </CardDescription>
               </div>
               <div className="text-right text-sm">
@@ -935,12 +913,6 @@ export default function HomePage() {
             </div>
           </CardHeader>
           <CardContent>
-            {previewData.isMock && (
-              <div className="mb-3 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-500 flex items-center gap-2">
-                <WifiOff className="h-4 w-4 shrink-0" />
-                This is <strong>MOCK data</strong>, not real NEPSE data. The website scraping failed. Do NOT post this.
-              </div>
-            )}
             <div className="rounded-lg bg-muted p-4 text-sm whitespace-pre-line font-mono leading-relaxed">
               {previewData.message}
             </div>
@@ -1109,9 +1081,7 @@ export default function HomePage() {
               <div className="text-center py-8 text-muted-foreground">
                 <Database className="h-10 w-10 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">No market data available</p>
-                <Button variant="outline" size="sm" onClick={handleSeed} className="mt-3 gap-1">
-                  <Sprout className="h-3.5 w-3.5" /> Seed Demo Data
-                </Button>
+                <p className="text-xs mt-1">Click &quot;Fetch &amp; Preview&quot; to get the latest NEPSE data</p>
               </div>
             )}
           </CardContent>
@@ -1170,10 +1140,6 @@ export default function HomePage() {
           <Button onClick={handleFetchLatest} size="sm" className="gap-1">
             <RefreshCw className="h-3.5 w-3.5" /> Fetch Latest
           </Button>
-          <Button onClick={handleSeed} size="sm" variant="outline" className="gap-1" disabled={isSeeding}>
-            {isSeeding ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sprout className="h-3.5 w-3.5" />}
-            Seed Data
-          </Button>
         </div>
       </div>
 
@@ -1189,7 +1155,7 @@ export default function HomePage() {
             <div className="text-center py-12 text-muted-foreground">
               <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm font-medium">No market data available</p>
-              <p className="text-xs mt-1">Click &quot;Seed Data&quot; to populate with demo data</p>
+              <p className="text-xs mt-1">Click &quot;Fetch Latest&quot; to get NEPSE data</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1614,18 +1580,6 @@ export default function HomePage() {
               )}
               {isSavingSettings ? 'Saving All...' : 'Save All Settings'}
             </Button>
-            <Separator />
-            <Button onClick={handleSeed} disabled={isSeeding} variant="outline" className="w-full gap-1">
-              {isSeeding ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <Database className="h-4 w-4" />
-              )}
-              {isSeeding ? 'Seeding...' : 'Seed Demo Data'}
-            </Button>
-            <p className="text-[10px] text-muted-foreground text-center">
-              Seeding will populate the database with 30 days of demo data
-            </p>
           </CardContent>
         </Card>
       </div>

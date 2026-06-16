@@ -3,7 +3,7 @@
 
 import satori from 'satori';
 import type { NepseData } from './nepse';
-import type { StockData } from './nepse-stocks';
+import type { StockData } from './nepse';
 
 const WIDTH = 1080;
 const HEIGHT = 1080;
