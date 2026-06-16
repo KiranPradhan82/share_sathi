@@ -92,9 +92,39 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 2: Get Facebook credentials
+    // Step 2: Get Facebook credentials and validate token BEFORE posting
     const pageAccessToken = await getConfigValue('facebook_page_access_token');
     const pageId = await getConfigValue('facebook_page_id');
+
+    if (!pageAccessToken || !pageId) {
+      return NextResponse.json(
+        { error: 'Facebook Page ID and Access Token are not configured. Go to Settings to add them.' },
+        { status: 400 },
+      );
+    }
+
+    // Pre-validate the token by calling the test connection
+    const { testConnection } = await import('@/lib/facebook');
+    const connResult = await testConnection(pageAccessToken, pageId);
+    if (!connResult.success) {
+      const errorMsg = (connResult.error || '').toLowerCase();
+      let userMessage = connResult.error || 'Token validation failed.';
+      if (errorMsg.includes('190') || errorMsg.includes('expired') || errorMsg.includes('session has expired')) {
+        userMessage = `Your Facebook access token has EXPIRED. You need to generate a new NEVER-EXPIRING System User token:\n\n` +
+          `1. Go to Meta for Developers → your app → App Roles → System Users\n` +
+          `2. Use the "System User Token Generator" tool\n` +
+          `3. Select your Page and generate a token with pages_manage_posts permission\n` +
+          `4. The new token should show "Never" as expiry date\n` +
+          `5. Paste it in Share Sathi Settings\n\n` +
+          `Original error: ${connResult.error}`;
+      } else if (errorMsg.includes('190') || errorMsg.includes('invalid') || errorMsg.includes('oauth')) {
+        userMessage = `Your Facebook access token is INVALID. Please check the token in Settings.\n\nOriginal error: ${connResult.error}`;
+      }
+      return NextResponse.json(
+        { error: userMessage },
+        { status: 400 },
+      );
+    }
 
     // Convert to NepseData format for captions
     const nepseDataForFormat = {
