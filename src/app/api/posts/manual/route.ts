@@ -27,8 +27,23 @@ export async function POST(request: NextRequest) {
     if (!marketData) {
       const nepseData = await fetchNepseData(date);
 
-      marketData = await db.marketData.create({
-        data: {
+      // Use upsert to handle race conditions (data created between findUnique and create)
+      marketData = await db.marketData.upsert({
+        where: { tradingDate: nepseData.tradingDate },
+        update: {
+          nepseIndex: nepseData.nepseIndex,
+          change: nepseData.change,
+          changePercentage: nepseData.changePercentage,
+          turnover: nepseData.turnover,
+          volume: nepseData.volume,
+          trades: nepseData.trades,
+          gainers: nepseData.gainers,
+          losers: nepseData.losers,
+          unchanged: nepseData.unchanged,
+          rawData: nepseData.rawData,
+          status: 'completed',
+        },
+        create: {
           tradingDate: nepseData.tradingDate,
           nepseIndex: nepseData.nepseIndex,
           change: nepseData.change,

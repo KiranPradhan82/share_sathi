@@ -32,9 +32,23 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create new market data entry
-    const data = await db.marketData.create({
-      data: {
+    // Create new market data entry (upsert to avoid UNIQUE constraint race conditions)
+    const data = await db.marketData.upsert({
+      where: { tradingDate: nepseData.tradingDate },
+      update: {
+        nepseIndex: nepseData.nepseIndex,
+        change: nepseData.change,
+        changePercentage: nepseData.changePercentage,
+        turnover: nepseData.turnover,
+        volume: nepseData.volume,
+        trades: nepseData.trades,
+        gainers: nepseData.gainers,
+        losers: nepseData.losers,
+        unchanged: nepseData.unchanged,
+        rawData: nepseData.rawData,
+        status: 'completed',
+      },
+      create: {
         tradingDate: nepseData.tradingDate,
         nepseIndex: nepseData.nepseIndex,
         change: nepseData.change,
