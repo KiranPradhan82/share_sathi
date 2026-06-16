@@ -1,0 +1,303 @@
+     1→=== yonepse.json ===
+     2→YONEPSE - Real-time NEPSE Stock Dashboard &amp; Static API
+     3→Current app version:
+     4→YONEPSE v2
+     5→Important
+     6→Endpoint paths are changing.
+     7→New folder-based JSON endpoints are canonical now. Please update integrations before
+     8→November 18, 2026
+     9→; legacy paths remain available only during this transition window. See the
+    10→Migration Guide
+    11→for mappings and examples.
+    12→A modern dashboard and static JSON API for tracking Nepal Stock Exchange (NEPSE) market data. It includes live market prices, interactive stock details, LTP price history, broker data, IPO archives, proposed dividends, open-ended mutual funds, and automated updates through GitHub Actions.
+    13→Important Links
+    14→Link
+    15→Description
+    16→Live Dashboard
+    17→Main YONEPSE market dashboard
+    18→Data Hub
+    19→Broker directory and dataset browser
+    20→JSON Docs
+    21→Human-readable API documentation
+    22→Migration Guide
+    23→Endpoint migration details and old-to-new mappings
+    24→About
+    25→Project version, philosophy, and system notes
+    26→OpenAPI Spec
+    27→Machine-readable API schema
+    28→GitHub Repository
+    29→Source code and project history
+    30→Issues
+    31→Bug reports and feature requests
+    32→Contributing Guide
+    33→Local setup, PR checklist, and data change notes
+    34→Workflow Flowchart
+    35→Cron schedules, data flow, update rules, and estimated runtime
+    36→Security Policy
+    37→Private vulnerability reporting
+    38→🚀 Features
+    39→Market Dashboard
+    40→Live Market Data
+    41→: Real-time stock prices, changes, and volumes
+    42→Sector Filtering
+    43→: Filter stocks by sectors (Hydro, Banking, Insurance, etc.)
+    44→Instant Search
+    45→: Search by stock symbol or company name
+    46→Market Indices
+    47→: Live NEPSE indices with animated marquee
+    48→Top Movers
+    49→: Real-time top gainers and losers
+    50→Stock Detail Modal
+    51→: Click any stock for detailed information
+    52→Interactive Price History
+    53→: View symbol-level LTP history with 1M, 1Y, and All range filters
+    54→IPO &amp; Corporate Actions
+    55→Upcoming IPOs
+    56→: Track open, upcoming, and closed IPOs
+    57→Nepali Date Support
+    58→: Automatic BS to AD date conversion
+    59→Status Badges
+    60→: Visual indicators for Open/Upcoming/Closed IPOs
+    61→Reserved Shares
+    62→: Special indicators for NRN/reserved share issues
+    63→Proposed Dividends
+    64→: Rolling latest data and append-only historical dividend records
+    65→Data Hub
+    66→Broker Directory
+    67→: Complete broker listings with filters
+    68→Membership Types
+    69→: Filter by broker membership category
+    70→District/Province Filters
+    71→: Geographic broker search
+    72→TMS Links
+    73→: Direct access to broker trading platforms
+    74→Market History
+    75→: Historical market summary data
+    76→LTP History
+    77→: Monthly daily-history shards plus day-level intraday LTP snapshots
+    78→Open-Ended Mutual Funds
+    79→: Daily/weekly/monthly NAV snapshots in dedicated dataset
+    80→JSON API
+    81→All data is available as static JSON endpoints for developers. See the
+    82→JSON Docs
+    83→for the published API reference, or
+    84→pages/docs.html
+    85→locally.
+    86→Endpoint migration notice
+    87→: New folder-based endpoints are now canonical. Legacy endpoint paths will continue to be supported for six months, until
+    88→November 18, 2026
+    89→, and will be removed after that date. See the
+    90→Migration Guide
+    91→for old-to-new mappings and code examples.
+    92→Public static API spec:
+    93→published OpenAPI
+    94→api/openapi.yaml
+    95→Legacy NEPSE upstream endpoint spec:
+    96→api/openapi_legacy_nepse.yaml
+    97→🖼️ Live Demo
+    98→Visit the dashboard at:
+    99→https://shubhamnpk.github.io/yonepse/
+   100→🛠️ Tech Stack
+   101→Frontend
+   102→: HTML5, Vanilla CSS (Glassmorphism Design), Vanilla JavaScript
+   103→Styling
+   104→: CSS Variables, Gradient Backgrounds, Backdrop Filters
+   105→Fonts
+   106→: Google Fonts (Inter, Outfit)
+   107→Icons
+   108→: Font Awesome 6.4.0
+   109→Backend/Scraper
+   110→: Python 3.9 (NEPSE API + BeautifulSoup fallback)
+   111→Automation
+   112→: GitHub Actions (Scheduled Cron Jobs)
+   113→Data Sources
+   114→Nepal Stock Exchange (NEPSE) Official API
+   115→Merolagani
+   116→ShareSansar
+   117→📁 Project Structure
+   118→nepse-scraper/
+   119→|-- index.html                    # Main market dashboard
+   120→|-- pages/                        # Secondary HTML pages
+   121→|   |-- data.html                 # Brokers &amp; datasets page
+   122→|   |-- docs.html                 # JSON API documentation
+   123→|   |-- migration.html            # Endpoint migration guide
+   124→|   |-- about.html                # Project/version overview
+   125→|-- start_server.bat              # Windows local server starter
+   126→|-- api/                          # Machine-readable API specs
+   127→|   |-- openapi.yaml              # Published YONEPSE API schema
+   128→|   |-- openapi_legacy_nepse.yaml # Legacy upstream NEPSE reference
+   129→|-- assets/                       # Static frontend assets
+   130→|   |-- css/
+   131→|   |   |-- style.css             # Shared styling
+   132→|   |-- js/
+   133→|   |   |-- script.js             # Main dashboard logic
+   134→|   |   |-- data.js               # Data hub logic
+   135→|   |-- img/
+   136→|   |   |-- favicon.svg           # SVG favicon
+   137→|   |   |-- favicon.png           # PNG favicon/social image
+   138→|-- data/                         # JSON data files
+   139→|   |-- nepse_data.json           # Stock prices
+   140→|   |-- OMF.json                  # Open-ended mutual fund NAV data
+   141→|   |-- market/                   # Market snapshots and summaries
+   142→|   |   |-- indices.json          # Market indices
+   143→|   |   |-- sector_indices.json   # Sector indices
+   144→|   |   |-- top_stocks.json       # Top gainers/losers
+   145→|   |   |-- summary.json   # Current market summary
+   146→|   |   |-- history.json
+   147→|   |   |-- status.json    # Market open/closed status
+   148→|   |   |-- live.json      # Same rows as nepse_data.json
+   149→|   |   |-- supply_demand.json    # Supply/demand data
+   150→|   |-- ltp/                # LTP history shards
+   151→|   |   |-- manifest.json         # Available months + latest date
+   152→
+   153→=== reddit_nepse_free.json ===
+   154→Free NEPSE API newweb.nepalstock.com/api : r/NepalStock
+   155→window.addEventListener('load',function(){fetch("https://www.reddit.com/svc/events/preload-head?renderId=76676de0-3760-4663-a0b9-44709e8ec9b0&pageType=post_detail").catch(function(){});});
+   156→window.CLIENT_EXPERIMENTS = {"shreddit_ad_event_migration_cutoff_m1":"enabled","shreddit_ad_event_migration_cutoff_m3":"enabled","shreddit_ad_event_migration_m3":"enabled","ads_in_related_posts_m1":"enabled","shreddit_ads_off_reddit_opt_out":"enabled","shreddit_age_settings":"enabled","web_bermuda_remove_pm_ui":"enabled","shreddit_cuj_pdp_new_timestamps":"enabled","shreddit_feeds_cuj":"enabled","shreddit_network_info_logging":"enabled","shreddit_paid_ua_landing_good_visit":"enabled","shreddit_record_version_skew":"enabled","shreddit_screenview_counter":"enabled","shreddit_seo_referred_initiated_gv":"enabled","shreddit_server_navigation_session_telemetry":"enabled","shreddit_service_worker_registration":"enabled","shreddit_system_theme":"enabled","shreddit_repost_rename":"enabled","shreddit_repost_rename_mods":"enabled"};
+   157→window.CLIENT_EXPERIMENT_VERSIONS = {"shreddit_ads_cookie_rollout":"1","shreddit_app_first_navigation":"6","shreddit_repost_rename":"7","shreddit_repost_rename_mods":"3"};
+   158→// Setting this provides Lit a CSP nonce to use when dyamically creating style elements in
+   159→// browsers that don't support constructed stylesheets. See https://lit.dev/docs/api/LitElement/#LitElement.styles
+   160→window.litNonce = 'DzZu7ptQ3uErecejh5x2kg==';
+   161→var CLIENT_CONFIG = {"APPLE_SSO_CLIENT_ID":"com.reddit.RedditAppleSSO","ORIGIN":"https://www.reddit.com","GOOGLE_SSO_CLIENT_ID":"705819728788-b2c1kcs7tst3b7ghv7at0hkqmtc68ckl.apps.googleusercontent.com","PRECONNECT_ORIGINS":["https://www.redditstatic.com/"],"STATIC_BASE_URL":"https://www.redditstatic.com/shreddit/","IN_CLUSTER_STATIC_BASE_URL":"https://www.redditstatic.com/shreddit/","RUNTIME_CONCAT_BASE_URL":"https://www.redditstatic.com/js/concat","W3_REPORTING_WEB_VITAL_REPORTS_URL":"https://w3-reporting.reddit.com/reports","DEVVIT_GATEWAY_ORIGIN":"https://devvit-gateway.reddit.com","WORLD_ID_APP_ID":"staging_c8137371ceac59890774ccc932e11dcf","WORLD_ID_RP_ID":"rp_4e7b34a51d24e1eb"};
+   162→window.SHREDDIT_MODULE_LOADER_MAX_CONCAT_SIZE=512000;
+   163→class e{constructor(){let e,t;this.promise=new Promise((s,o)=>{e=s,t=o}),this.resolve=e,this.reject=t}}function t(e){return Array.isArray(e)?{id:e[0],size:e[1]}:{id:e}}class ShredditModuleLoader{addModulePromise(e){var t,s,o;this.moduleRegistry[e]?.promise||((t=this.moduleRegistry)[s=e]??(t[s]={}),this.moduleRegistry[e].isResolved=!1,(o=this.moduleRegistry[e]).promise??(o.promise=new Promise(t=>{this.moduleRegistry[e].resolver=t})))}resolveModule(e){this.moduleRegistry[e].resolver?.(),this.moduleRegistry[e].isResolved=!0}preDeclareModules(e){for(const t of e)this.moduleRegistry[t]||this.addModulePromise(t),this.moduleRegistry[t].isLoading=!0}dm(e,t,s){this.moduleRegistry[e]?.isDeclared||(this.moduleRegistry[e]={...this.moduleRegistry[e],deps:t,factory:s,moduleExports:void 0,isDeclared:!0},this.addModulePromise(e),this._evaluateModule(e,!0).then(()=>{this.resolveModule(e)}))}async _evaluateModule(e,t=!1){if(this.moduleRegistry[e]?.isEvaluated)return this.moduleRegistry[e].moduleExports;this.addModulePromise(e),this.moduleRegistry[e].isResolved||t||await this.moduleRegistry[e].promise;const s=this.moduleRegistry[e];if(!s.isEvaluated&&!s.isEvaluating){s.isEvaluating=!0,await Promise.resolve();const e=await Promise.all(s.deps?.map(e=>this._evaluateModule(e))||[]),t=await(s.factory?.apply(null,e));return s.moduleExports=t??{},s.isEvaluated=!0,s.isEvaluating=!1,s.moduleExports}return s.promise?.then(()=>s.moduleExports)}async di(e,t,s,o="auto"){if(this.moduleRegistry[s])return this._evaluateModule(s);const i=/\/[^/]*$/;if(!this._diState.concatMode){const o=new URL(t).href.replace(i,"/"),r=new URL(e,o);r.pathname;const d=r.href;return import(d).then(()=>this._evaluateModule(s,!0))}const r=new URL(t).searchParams.get("prefix")??this._diState.lastPrefix,d=e.replaceAll(/(^\.\/|\.js$)/g,"");return this.addModulePromise(s),"high"===o?this._load([d],r,o,[]):(this._diState.queue.push([[d],r,void 0]),this.debounce(this.debounceTimeout,25)),this.moduleRegistry[s].promise.then(()=>this._evaluateModule(s,!0))}debounce(e,t=25){var s;clearTimeout(this._diState.debounceTimeout),(s=this._diState).debounceStart||(s.debounceStart=Date.now()),Date.now()-this._diState.debounceStart>3*t?e():this._diState.debounceTimeout=setTimeout(this.debounceTimeout,t)}processDIQueue(){const e=[...this._diState.queue];this._diState.queue=[],this._diState.debounceStart=0;const t=e.reduce((e,[t,s,o])=>(e[s]||(e[s]={chunks:[],deferreds:[]}),e[s].chunks.push(...t),o&&e[s].deferreds.push(o),e),{});return Object.entries(t).map(([e,{chunks:t,deferreds:s}])=>[e,t,s])}load(t,s="",o="auto"){this._diState.concatMode=!0;const i=new e;return"high"===o?this._load(t,s,o,[i]):(this._diState.queue.push([t,s,i]),this.debounce(this.debounceTimeout)),i.promise}flushLoadBuffer(){this._diState.shouldBufferLoad=!1;for(const e of this._loadBuffer.splice(0))e()}_load(e,s="",o="auto",i){s&&(this._diState.lastPrefix=s);const r=new Map;for(const s of e.map(t))r.has(s.id)||r.set(s.id,s);const d=[...r.values()].filter(({id:e})=>{const t=this.moduleRegistry[this.urlToName(e)];return!t||!t.isLoading&&!t.isResolved}),u=()=>{i.forEach(e=>e?.resolve())},a=e=>{i.forEach(t=>t?.reject(e))};if(0===d.length)return void u();const n=this.getChunkGroups(d);if(n.length>1){let e=n.length;const t=()=>{e-=1,0===e&&u()};for(const e of n)this._loadChunkGroup(e,s,o,{resolve:t,reject:a});return}this._loadChunkGroup(d,s,o,{resolve:u,reject:a})}getChunkGroups(e){const t=this.maxConcatSize;return void 0!==t&&t>0&&(s=e,void 0!==s[0]?.size)?function(e,t){const s=[];let o=[],i=0;for(const r of e){const e=r.size;o.length>0&&i+e>t&&(s.push(o),o=[],i=0),o.push(r),i+=e}return o.length&&s.push(o),s}(e,t):e.length>this.maxChunks?function(e,t){const s=[];for(let o=0;o
+   164→e),r=i.map(e=>this.urlToName(e));this.preDeclareModules(r);const d=`${window.CONCAT_BASE_URL??"/js/concat"}?prefix=${t}&chunks=${i.sort().join(",")}`;if(this._diState.shouldBufferLoad)return this._createPreloadTag(d,s),void this._loadBuffer.push(()=>this._createScript(d,s).then(o.resolve,o.reject));this._createScript(d,s).then(()=>{i.map(e=>{this.moduleRegistry[e]?.factory||this.resolveModule(e)}),o.resolve()},o.reject)}_createScript(e,t){const s=document.createElement("script");return s.type="module",s.src=e,s.fetchPriority=t,document.body.appendChild(s),new Promise((e,t)=>{s.onload=()=>e(),s.onerror=()=>t()})}_createPreloadTag(e,t){const s=document.createElement("link");s.rel="modulepreload",s.href=e,s.as="script",s.fetchPriority=t,s.crossOrigin="anonymous",document.head.appendChild(s)}urlToName(e){return e.replaceAll(/(^.+\/|\.js$)/g,"")}constructor(e={},t=250,s){this._diState={queue:[],debounceStart:0,lastPrefix:"en-US/",shouldBufferLoad:"loading"===document.readyState},this.debounceTimeout=()=>this.processDIQueue().forEach(([e,t,s])=>this._load(t,e,void 0,s??[])),this._loadBuffer=[],this.moduleRegistry=e,this.maxChunks=t,this.maxConcatSize=s,document.addEventListener("DOMContentLoaded",()=>this.flushLoadBuffer(),{once:!0})}}window.ShredditModuleLoader=ShredditModuleLoader;{const e=window.SHREDDIT_SMALL_CHUNKS_ENABLED&&!window.SHREDDIT_MODULE_LOADER_MAX_CONCAT_SIZE?20:250;window.SML=Object.freeze(new ShredditModuleLoader({},e,window.SHREDDIT_MODULE_LOADER_MAX_CONCAT_SIZE))}
+   165→(() => {
+   166→const e=()=>!!localStorage.getItem("SUSPENSE_DEBUG"),t=globalThis;async function s(e,s){await async function(){await(t.scheduler?.yield?.())}();const o=document.adoptNode(s.content);customElements.upgrade(o),e.replaceWith(o),s.remove()}function o(e,t){customElements.get(e)||customElements.define(e,t)}function r(t){e()&&t.before(document.createComment(t.outerHTML))}o("suspense-placeholder",class extends HTMLElement{get name(){return this.getAttribute("name")||"unknown"}replaceWith(...e){const t=document.createDocumentFragment();t.append(...e);const s=new Map;for(const e of this.querySelectorAll("[id][data-persistent]")??[]){const o=t.querySelector(`#${e.id}[data-persistent]`);if(!o)continue;const r=e.querySelectorAll("[data-persistent], [data-scroll-restore]");for(const e of r)0===e.scrollTop&&0===e.scrollLeft||s.set(e,{scrollTop:e.scrollTop,scrollLeft:e.scrollLeft});o.replaceWith(e)}r(this),super.replaceWith(t),requestAnimationFrame(()=>{for(const[e,t]of s)e.scroll({top:t.scrollTop,left:t.scrollLeft,behavior:"instant"})})}connectedCallback(){const e=this.getRootNode().querySelector(`template[for=${this.id}]`);e&&s(this,e)}disconnectedCallback(){e()&&performance.measure(`suspense(${this.name})`,{start:this.startMark})}constructor(...e){super(...e),this.startMark=performance.now()}}),o("suspense-replace",class extends HTMLElement{connectedCallback(){const e=this.getRootNode(),t=e.querySelector(this.getAttribute("target")),o=e.querySelector(this.getAttribute("template"));t&&o&&s(t,o),r(this),this.remove()}}),o("suspense-execute-deferred-scripts",class extends HTMLElement{async connectedCallback(){if("loading"===document.readyState){const e=document.head.querySelectorAll("script[type=module]:not([async])");for(const t of e){if(t.nonce!==this.nonce)throw new Error("Deferred script in
+   167→must have a nonce that matches the suspense executor nonce.");if(!t.src)throw new Error("Deferred script in
+   168→must have a src attribute. Inline modules are not supported.");await import(t.src).catch(console.error)}window.SML?.flushLoadBuffer?.()}r(this),this.remove()}}),o("suspense-debug",class extends HTMLElement{connectedCallback(){e(),this.remove()}});
+   169→})();
+   170→var SENTRY_CONFIG = {"dsn":"https://9f057df6115a4bb488c08ea12a835e6e@error-tracking.reddit.com/o418887/5810803","enabled":true,"environment":"production"};
+   171→window.CONCAT_BASE_URL = "https://www.redditstatic.com/js/concat";
+   172→SML.load([]);
+   173→SML.preDeclareModules(['CGTMIGYAP9','BuDWDcwxKD'])
+   174→window.__servedBy = new Promise((resolve) => { window.__servedByRes = resolve; });
+   175→rpl-modal-card.confirmation-modal-card.full-width-buttons::part(footer){display:block}
+   176→Skip to main content
+   177→window.hasTabBeenBackgrounded = document.hidden;
+   178→Free NEPSE API newweb.nepalstock.com/api : r/NepalStock
+   179→SML.load([["HpZzhkOWWv",1]], 'en-US/', 'auto');
+   180→window.dataLayer = window.dataLayer || [];
+   181→function gtag() {
+   182→dataLayer.push(arguments);
+   183→gtag('js', new Date());
+   184→gtag('config', 'AW-788729857');
+   185→SML.load([["DzIz_bal0v",10014],["CiOUsjK1ND",7718],["WgF9uM9Ele",1781],["BT0RiTQuTS",1823],["BOUTAIpqnJ",7749],["Cm2u2QKR9m",8414],["DjbGepogHh",2993],["BuDWDcwxKD",551881],["DB-wlNiEFy",4520],["VYIDsvpl0m",1043],["CWpihLHktV",11240],["DKu6uvhxrf",3397],["xApcOk8NNQ",1240],["Bqw32gXESX",2914],["DnJYoAzqNW",13862],["zC19jJnQkp",1751],["yj11UXDxPn",885],["BiXh_ASnln",2832],["BJxBvFrJks",720],["Dj-rylp1NK",1418],["QtJC9NfTCJ",2338],["C465NrMjTt",1387],["cPRULn7SHU",5211],["Cg-GcJsjPO",57752],["D11oCruY94",1182],["Bn3TwjvsVr",25851],["DvDR6yrHgY",6484],["DIy6tF3EKA",2515],["BPTARri-8n",9446],["DvmkVzG7Gu",414],["DioH1BFgzB",9389],["mMSvnGo1SU",2600],["DTCNEW58Pc",1110],["DdlNuq_sTV",3116],["4UkdSCeoZc",14776],["P3JMTM3Hiy",22471],["PxEQmnluRx",5768],["SDxedoO7Mq",9404],["Cf5Tgcih1L",2013],["Vl65hgaerb",4813],["CJxCex7bDG",10260],["j4DkTomd5a",2490],["CPlPIjCxdU",2461],["CBlMA_BUGX",2514],["C1svFiC-Cm",1569],["CGTMIGYAP9",20551],["D5wxYW5YXa",9972],["CjatcgjhoI",9226],["DIsDvPwzfs",58548],["B1Q5ZfhaQf",7104],["38nVErxvpQ",23861],["B6OCktlJZr",2168],["c5J6LJucZz",418],["DN3Ozoig7J",567],["CZfnd27o1v",581],["BOEVjpOuzE",6871],["BY1TNllptO",7331],["ChDwhTVoQL",26096],["Br0wzN7IO4",7448],["DMnxUNxAsB",3219],["CF6qLnEDkU",3318],["C_nmofUGTB",43777],["C9rfleiyK9",4836],["BEDM2E2RE3",2023],["C5kiFLM_aO",1047],["Cf92bq96Ef",719],["BRlkI75RAE",906],["BizeoVe8PJ",4467],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["BuNwlUTQr7",1572],["3MdTcj5ylo",1697],["CW4dSjY4LP",626],["DL50lUYD8b",290],["9xi0exUoj5",3167],["CE9VoVkKvo",465],["DrIpR4VtGN",1305],["BxmAsOsKOy",516],["T3T9moq-BW",549],["e6Y0pYC30E",853],["Cu9RMwlubB",1772],["ChPXkCm418",684],["D3OgpCJMQ3",989],["CJbKv0PDfr",1836],["AU8Y7MKo4w",469],["pTX0pBXDXM",3398],["BqbSXMVQbC",2035],["C-85jsRYA6",1582],["sTv0p3J7gI",850],["eGtFlxKwCU",1226],["DTOihJ-QJx",1698],["Cqm5PVrCwO",26275],["BuUbdggIkN",1394],["C-eKqrJvR9",950],["DVpephimj3",341],["CE6lS_uYNf",6887],["DT9MvQ6Ayl",895],["BDS78oNR5w",1070],["C95BsM0fz1",2454],["Dcd0kwOGzC",4265],["COxsr1l_Z5",2796],["DInR2TBoTf",5279],["BmUPgjpoqy",1001],["Dxqx9SA3dN",122198],["Cu9CX-6gaV",6133],["CEBIJlADa1",19203],["VeZvoKCJCD",284529],["m8khMz1onr",793],["P7XVxRzmpr",89201],["2hG3R5jT41",2738],["DshC3BkHdF",369],["CyhB7pv8FI",4242],["BOrUtA9q5p",98059],["CL6kluvJ9O",16609],["ZIACW0PG6i",1641],["BH1sfM7F55",1116],["CtznvWyHqx",694],["cWAWNDNrGD",502],["yswAl7pKep",2128],["CHU-dc4frQ",911],["NQScmoH6vt",25722],["Dz4prjZKX2",515],["jxerVWkmwO",11333],["D4DQ541lA6",696],["po5DIc3k0Y",537],["BpLaX9dgwg",473],["CCBN9gX9Nf",13073],["CnhEXg2dLX",801],["D6pOWjBZjs",1255],["CjdaZYLjda",664],["R-oDBA2u2X",622],["DGaLpkGD-J",1051],["CLZqGNlodX",4629],["3qPKGSV6jg",1303],["6F5eXxVroc",5151],["Cq07SK00F4",6080],["BNXd2Ebkzt",1816],["Ccbw11ZqJ7",5608],["DRjmJ2uW-t",1029],["DY7kHuMsvl",707],["CpsFXRAxyc",1305],["3Fottk4qDR",3468],["BHWgbEwVrK",4000],["Csk2kgwdms",3082],["BsKnGre223",504]], 'en-US/', 'auto');
+   186→SML.load([["PzFW-wg3c0",8207],["BHWgbEwVrK",4000],["BuDWDcwxKD",551881],["COxsr1l_Z5",2796],["B6e6KHyZ6K",521],["DN1mT0kRSY",1199],["CiMr1_tbsM",1372],["Dv3Gow-Gml",1888],["xSich_usnG",1960],["CGTMIGYAP9",20551],["DY6B2blLw_",2655],["dZCGJFrm8l",786],["CpJ54chdl5",1126],["DugZBIvf84",3785],["Csk2kgwdms",3082],["BOEVjpOuzE",6871],["B6OCktlJZr",2168],["BsKnGre223",504],["DInR2TBoTf",5279],["DIsDvPwzfs",58548],["ChDwhTVoQL",26096],["BuUbdggIkN",1394],["Crvw5_a490",1385],["CqX0tAKXlI",1598],["rQV8r1Tt42",1445],["BzUWSxoamM",1057],["pmomiV_OU9",1199],["9Os4Ig4NEx",517],["zMlODR-pC_",664],["Bu3n0PHqHR",432],["Dy68VRKDWo",629],["WrmKVj5px3",24790],["B-C4saAC2w",233],["CS-cfl0buS",476]], 'en-US/', 'auto');
+   187→Open menu
+   188→Open navigation
+   189→Go to Reddit Home
+   190→SML.load([["-lLExhkvSK",6578],["BO9rBxflE0",53066],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["CZ-ii9SL7C",4960],["Cu9RMwlubB",1772],["Cq07SK00F4",6080],["38nVErxvpQ",23861],["B6OCktlJZr",2168],["c5J6LJucZz",418],["DN3Ozoig7J",567],["CZfnd27o1v",581],["BOEVjpOuzE",6871],["DIsDvPwzfs",58548],["CLZqGNlodX",4629],["3qPKGSV6jg",1303],["Bqw32gXESX",2914],["DioH1BFgzB",9389],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["CF6qLnEDkU",3318],["BuNwlUTQr7",1572],["4gtrzeKP9f",7695],["McoVFmf0YH",1670],["DCYhaD8gOs",3570],["BcKTKDjkMX",1032],["eGtFlxKwCU",1226],["Crvw5_a490",1385],["DJ6MuybOsc",442],["BiXh_ASnln",2832],["C_nmofUGTB",43777],["PxEQmnluRx",5768],["C9rfleiyK9",4836],["BEDM2E2RE3",2023],["WgF9uM9Ele",1781],["C1svFiC-Cm",1569],["dZCGJFrm8l",786],["QOASXF_nzc",287],["Br0wzN7IO4",7448],["DMnxUNxAsB",3219],["CPVeDcTQrb",1347],["Dw4BsxaNeq",7090],["BAZw0hvVVW",360],["CyXfeT3Q8P",649],["Br_OWwl04k",455],["C9sag9MM0S",368],["jxerVWkmwO",11333],["C5kiFLM_aO",1047],["j4DkTomd5a",2490]], 'en-US/', 'auto');
+   191→Sign Up
+   192→Sign up for Reddit
+   193→Log In
+   194→Log in to Reddit
+   195→SML.load([["COxsr1l_Z5",2796],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["DInR2TBoTf",5279],["DIsDvPwzfs",58548],["ChDwhTVoQL",26096]], 'en-US/', 'auto');
+   196→Expand user menu
+   197→Open settings menu
+   198→SML.load([["CAwC_UbRen",2746],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["CRhwNtEVXs",710],["U8VXwaM3_F",726],["DIsDvPwzfs",58548],["BOPngVauh-",234],["BNKHIEHmj7",3756],["D7wpXUS__O",4237],["avYHvO1Yia",2822],["D5wxYW5YXa",9972]], 'en-US/', 'auto');
+   199→SML.load([["DfXwRPtIPU",1]], 'en-US/', 'auto');
+   200→SML.load([["QdVMeItJGx",1]], 'en-US/', 'auto');
+   201→SML.load([["DYbsTUxGCM",991],["COxsr1l_Z5",2796],["COZpliOVrN",1924],["ChSQWm15wq",15639],["C2-R6C2_SU",10708],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["DInR2TBoTf",5279],["DIsDvPwzfs",58548],["ChDwhTVoQL",26096],["BA2u6-8HWX",6517],["D6QvXGHr1-",5848],["BS25ywstu5",1736],["SuO7qYHnq_",2351],["BpNuCoEQ73",3011],["CwIeJp019c",2595],["CE5N_8e8TJ",2104],["DY6B2blLw_",2655],["D-35Q0YYyz",10712]], 'en-US/', 'auto');
+   202→SML.load([["wXyiRHfJaS",8597],["CiOUsjK1ND",7718],["6F5eXxVroc",5151],["BT0RiTQuTS",1823],["BOUTAIpqnJ",7749],["Cm2u2QKR9m",8414],["DjbGepogHh",2993],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["DKu6uvhxrf",3397],["xApcOk8NNQ",1240],["Bqw32gXESX",2914],["DnJYoAzqNW",13862],["zC19jJnQkp",1751],["COxsr1l_Z5",2796],["Dj-rylp1NK",1418],["CseJciPXls",2152],["DlYzMcPzTN",2374],["DvDR6yrHgY",6484],["CouH9MneDv",11454],["DIy6tF3EKA",2515],["pZa4zGwIFK",3241],["DoJ5fk00PL",2676],["De2bPgS1cj",6642],["Dv3Gow-Gml",1888],["xSich_usnG",1960],["DwI8QDuvOw",4645],["BQjMKZJrlY",17720],["CFs0NmNapC",1853],["DugZBIvf84",3785],["BmL9wg-3cE",1914],["CV_eT3NcB4",824],["DW_OO2ld4U",5029],["Vl65hgaerb",4813],["D1gxODXc5X",63202],["Cm7O4Ua5Pf",1529],["D--DTeMVBw",6414],["j4DkTomd5a",2490],["CBlMA_BUGX",2514],["D5wxYW5YXa",9972],["CjatcgjhoI",9226],["DIsDvPwzfs",58548],["B1Q5ZfhaQf",7104],["BY1TNllptO",7331],["ChDwhTVoQL",26096],["DInR2TBoTf",5279],["Dz4prjZKX2",515],["BHWgbEwVrK",4000],["Csk2kgwdms",3082],["BOEVjpOuzE",6871],["B6OCktlJZr",2168],["BsKnGre223",504],["DajRcpslCR",656],["DCYhaD8gOs",3570],["DrIpR4VtGN",1305],["C5kiFLM_aO",1047],["CwIeJp019c",2595],["BABF7lU-7I",2111],["BEDM2E2RE3",2023],["DTOihJ-QJx",1698],["C9rfleiyK9",4836],["D9-aE5pNP3",9699],["BTbe_L2Ntm",3531],["pTX0pBXDXM",3398],["BqbSXMVQbC",2035],["C-85jsRYA6",1582],["sTv0p3J7gI",850],["C-eKqrJvR9",950],["DVpephimj3",341],["Brzu4g8RH1",774],["m8khMz1onr",793],["0PevL43-iV",998],["CF6qLnEDkU",3318],["Crvw5_a490",1385],["CqX0tAKXlI",1598],["rQV8r1Tt42",1445],["dZCGJFrm8l",786],["BzUWSxoamM",1057],["pmomiV_OU9",1199],["9Os4Ig4NEx",517],["zMlODR-pC_",664],["Bu3n0PHqHR",432],["Dy68VRKDWo",629],["WrmKVj5px3",24790],["BRlkI75RAE",906],["Cf92bq96Ef",719],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["BuNwlUTQr7",1572],["QIknhS47TV",142],["SuO7qYHnq_",2351],["D20kSKSyFw",1060],["DSjH0xx1u1",3024],["B-C4saAC2w",233],["CS-cfl0buS",476],["Dw4BsxaNeq",7090],["BAZw0hvVVW",360],["CyXfeT3Q8P",649],["Br_OWwl04k",455],["VYIDsvpl0m",1043],["BS25ywstu5",1736],["CZ1mAGuJDx",478],["BmUPgjpoqy",1001],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["DtZjxaQdzD",638],["oSonoHcF03",32950],["po5DIc3k0Y",537],["x3xcFb9G8_",963],["9xi0exUoj5",3167],["CE9VoVkKvo",465],["Cc6ZaMId5v",607],["DUYgUi9F2b",2170],["DT9MvQ6Ayl",895],["Cqm5PVrCwO",26275],["BuUbdggIkN",1394],["CE6lS_uYNf",6887],["QwiTuOLKUT",2121],["ZIACW0PG6i",1641],["38nVErxvpQ",23861],["c5J6LJucZz",418],["DN3Ozoig7J",567],["CZfnd27o1v",581]], 'en-US/', 'auto');
+   203→Go to NepalStock
+   204→r/NepalStock
+   205→4y ago
+   206→Present_Dig_5527
+   207→SML.load([["BhCXz9p20L",4511],["CiOUsjK1ND",7718],["BT0RiTQuTS",1823],["Cm2u2QKR9m",8414],["DKu6uvhxrf",3397],["Bqw32gXESX",2914],["Vl65hgaerb",4813],["BL1OMdIHGQ",10533],["j4DkTomd5a",2490],["CBlMA_BUGX",2514],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["D5wxYW5YXa",9972],["DIsDvPwzfs",58548],["DCYhaD8gOs",3570],["uGzdMeDdEZ",45142],["BNXd2Ebkzt",1816],["dZCGJFrm8l",786],["BzUWSxoamM",1057],["x3xcFb9G8_",963],["BzWuKC3EsI",1518],["C4ouwfsBsX",1021],["c5J6LJucZz",418],["CZ1mAGuJDx",478],["Di91aZ_CmD",1046],["D9Zfp0pZmm",607],["DNnme0d1In",537],["CyhB7pv8FI",4242],["Br_OWwl04k",455],["C05hD7t1EE",646],["Dz4prjZKX2",515],["C9sag9MM0S",368],["CjdaZYLjda",664],["uTMjmhpHfw",1522],["0kMrND_jv4",983],["CzbEkl4iei",2401],["CF6qLnEDkU",3318],["BmUPgjpoqy",1001],["DRjmJ2uW-t",1029],["9Os4Ig4NEx",517],["zMlODR-pC_",664],["B4Vk_H7Eyl",559],["BS3NFARbFV",864],["MHc2k_bdeR",676],["Crvw5_a490",1385],["C-85jsRYA6",1582],["D6d_Rfj86L",576],["DWY7mvc6DY",775],["DnW7PcgRje",573],["CGErJ5n4hW",460],["DeymSnQ6gP",603],["CyXfeT3Q8P",649],["sTv0p3J7gI",850],["Cf92bq96Ef",719],["BRlkI75RAE",906],["C74qULDMst",1338],["D20kSKSyFw",1060],["9xi0exUoj5",3167],["CE9VoVkKvo",465],["Db_jZl3i8i",8200],["BEDM2E2RE3",2023],["C9rfleiyK9",4836],["BQjMKZJrlY",17720],["CFs0NmNapC",1853],["SuO7qYHnq_",2351],["BuNwlUTQr7",1572],["DSjH0xx1u1",3024],["JaYpfg94dc",15140],["C_2MYBGa54",514],["DtZjxaQdzD",638],["CV_eT3NcB4",824],["6F5eXxVroc",5151],["CjatcgjhoI",9226],["CwIeJp019c",2595],["DNdEsmHB6n",482],["CXZeA_X1CT",1896],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["CsvTMZbjsg",900],["QIknhS47TV",142],["0PevL43-iV",998],["BxmAsOsKOy",516]], 'en-US/', 'auto');
+   208→Free NEPSE API newweb.nepalstock.com/api
+   209→Softwares
+   210→NEPSE's API seem to be pretty costly and most of the wrappers and modules available online are either achieved or not maintained. So you can access any data shown in
+   211→nepalstock.com
+   212→using this API:
+   213→nepalstock.onrender.com
+   214→/info
+   215→I am unaware about all the endpoints of the api, so only few are mentioned here. But you can access basically every data NEPSE has to offer. Say bye to Scrapping!
+   216→It basically echoes back data from
+   217→NEPSE's Web API
+   218→nepalstock.com/api/nots/index
+   219→, it says
+   220→UNAUTHORIZED ACCESS.
+   221→My proxy bypasses this using the method mentioned
+   222→here
+   223→u/basic_bgnr
+   224→nepalstock.onrender.com/index
+   225→and get the data.
+   226→Also checkout my NEPSE analysis app:
+   227→subashsapkota.info.np
+   228→chukul.com
+   229→Suggestions, Feature Requests and Contributions are always welcome :)
+   230→Edit: Updated dead links and corrected some typos.
+   231→Share
+   232→window.POST_ID = 't3_wvtlxt';
+   233→new Set(Object.values({DAY:"day",HOUR:"hour",WEEK:"week",MONTH:"month",YEAR:"year",ALL:"all"}));const e="YouTube",t="Vimeo",n="data-embed-empty",r="data-embed-obscured-deferred";function o(e){return(new DOMParser).parseFromString(e,"text/html")}function i(e){const t=o(e).querySelector("iframe");return t?function(e){try{const t=new URL(e).pathname.split("/").filter(Boolean),n=t.indexOf("embed");return-1===n?null:t[n+1]||null}catch{return null}}(t.src):null}function d(e){const t=o(e).querySelector("iframe");return t?function(e){try{const t=new URL(e).searchParams.get("src")??"",{pathname:n}=new URL(t),r=n.split("/"),o=r.indexOf("video");if(-1===o)return null;return r[o+1]||null}catch{return null}}(t.src):null}const a=["SHREDDIT-PLAYER"];function c(e,t,n,r){let o=!1;const i=()=>{o||(o=!0,r())};e.addEventListener(t,i,{once:!0}),n()&&(o||(o=!0,r()),e.removeEventListener(t,i))}const u=1,s=2,l=3,m=4,f=5,w=6,p={[e]:"lite-youtube",[t]:"lite-vimeo"};async function h(o,s){if(!o)return;const h=o.tagName;let E=u,y=o;if(null==(v=o).closest("shreddit-blurred-container")&&null==v.closest("shreddit-spoiler")||!a.includes(o.tagName)){var v;if(h.endsWith("-EMBED")){E=f,await customElements.whenDefined(o.tagName.toLowerCase());let a=o.shadowRoot?.querySelector("iframe");const u=o.getAttribute("providername"),l=u?p[u]:null;let m=null;const w=new Promise(e=>{m=e}),v=u===e&&"SHREDDIT-EMBED"===h?i(o.html):u===t&&"SHREDDIT-EMBED"===h?d(o.html):null;if(c(o,"embed-loaded",()=>!("SHREDDIT-EMBED"===h&&!o.hasAttribute(n)&&!o.hasAttribute(r)&&(l&&!o.shadowRoot?.querySelector(l)&&v||!l&&!a)),()=>m?.()),await w,a=o.shadowRoot.querySelector("iframe"),o.hasAttribute(n)||o.hasAttribute(r))return void s(E);if(!a&&u&&l){const n=o.shadowRoot?.querySelector(l);if(u===e)return n?(await function(e){return new Promise(t=>{const n=(e.style.backgroundImage||getComputedStyle(e).backgroundImage).match(/url\(['"]?(.*?)['"]?\)/);if(!n?.[1])return void t();const r=new Image;r.onload=()=>t(),r.src=n[1],r.complete&&t()})}(n),void s(E)):void s(E);if(u===t){const e=n?.shadowRoot?.querySelector("img");return void(e?c(e,"load",()=>e.complete,()=>s(E)):s(E))}}else a?y=a:window.Sentry.captureException(new Error("iframe does not exist for provider: "+u))}if("SHREDDIT-DEVVIT-UI-LOADER"===h)return E=w,void c(o,"devvit-app-first-render",()=>o.hasAttribute("data-devvit-app-first-render"),()=>s(E));if(a.includes(h)){E=m,await customElements.whenDefined(o.tagName.toLowerCase());const e=o;if(await e.updateComplete,e.autoplay){const t=e.videoElement;return t?void c(t,"loadeddata",()=>t.readyState>=2,()=>s(E)):void window.Sentry.captureException(new Error("videoElement does not exist for shreddit-player"))}return void s(E)}if(y&&"VIDEO"===y.tagName){E=m;const e=y;return void c(y,"loadeddata",()=>e.readyState>=2,()=>s(E))}if(y&&"IMG"===y.tagName){E=l;const e=y;return void c(e,"load",()=>e.complete,()=>s(E,e.complete?function(e){const t=e.src||e.currentSrc;if(!t)return null;try{const n=performance.getEntriesByType("resource").find(n=>{if(n.name===t)return!0;if(e.currentSrc&&n.name===e.currentSrc)return!0;try{const e=new URL(n.name),r=new URL(t,location.href);return e.pathname===r.pathname}catch{return!1}});if(n&&n.responseEnd>0)return n.responseEnd}catch{}return null}(e):null))}y&&y.addEventListener("load",()=>{s(E)})}else s(m)}function E(e,t){const n=function(e){return e.querySelector('div[slot="post-media-container"], shreddit-post-text-body, div[slot="thumbnail"]')?.querySelector("shreddit-player, img, video, shreddit-embed, shreddit-tweet-embed, shreddit-devvit-ui-loader")}(e);n&&function(e,t={}){const{checkInViewport:n=!0,requireVisible:r=!1}=t,o=e.getBoundingClientRect(),i=window.innerHeight||document.documentElement.clientHeight,d=window.innerWidth||document.documentElement.clientWidth;let a=!0;if(n){const e=o.bottom>0&&o.right>0&&o.top
+   234→0&&o.height>0&&"none"!==t.display&&"hidden"!==t.visibility&&"0"!==t.opacity;a=a&&n}return a}(n)?h(n,t):t(s)}function y(e){return performance.mark("post-consumption-ready",{detail:{mediaType:e}})}function v(){if(!window.POST_ID)return void window.Sentry.captureException(new Error("[post-load-performance-mark] POST_ID not found"));const e=document.querySelector(`shreddit-post[id=${window.POST_ID}], shreddit-ad-post[id=${window.POST_ID}]`);e&&E(e,y)}"undefined"==typeof window||window.process?.env?.WTR_TEST||window.SKIP_POST_LOAD_PERF_MARK_AUTO_RUN||v();export{v as init};
+   235→SML.load([["Ct5GexaUju",9375],["CiOUsjK1ND",7718],["BT0RiTQuTS",1823],["BOUTAIpqnJ",7749],["Cm2u2QKR9m",8414],["DjbGepogHh",2993],["BuDWDcwxKD",551881],["DB-wlNiEFy",4520],["VYIDsvpl0m",1043],["CWpihLHktV",11240],["DKu6uvhxrf",3397],["xApcOk8NNQ",1240],["Bqw32gXESX",2914],["DnJYoAzqNW",13862],["zC19jJnQkp",1751],["yj11UXDxPn",885],["Dj-rylp1NK",1418],["QtJC9NfTCJ",2338],["C465NrMjTt",1387],["cPRULn7SHU",5211],["Cg-GcJsjPO",57752],["DvDR6yrHgY",6484],["DIy6tF3EKA",2515],["BPTARri-8n",9446],["DioH1BFgzB",9389],["mMSvnGo1SU",2600],["DTCNEW58Pc",1110],["DdlNuq_sTV",3116],["4UkdSCeoZc",14776],["P3JMTM3Hiy",22471],["PxEQmnluRx",5768],["SDxedoO7Mq",9404],["Vl65hgaerb",4813],["CJxCex7bDG",10260],["j4DkTomd5a",2490],["CPlPIjCxdU",2461],["CBlMA_BUGX",2514],["6gXW4svLAM",2501],["CGTMIGYAP9",20551],["D5wxYW5YXa",9972],["CjatcgjhoI",9226],["DIsDvPwzfs",58548],["B1Q5ZfhaQf",7104],["38nVErxvpQ",23861],["B6OCktlJZr",2168],["c5J6LJucZz",418],["DN3Ozoig7J",567],["CZfnd27o1v",581],["BOEVjpOuzE",6871],["BY1TNllptO",7331],["ChDwhTVoQL",26096],["Br0wzN7IO4",7448],["DMnxUNxAsB",3219],["CF6qLnEDkU",3318],["C5kiFLM_aO",1047],["Cf92bq96Ef",719],["BRlkI75RAE",906],["BizeoVe8PJ",4467],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["BuNwlUTQr7",1572],["3MdTcj5ylo",1697],["CW4dSjY4LP",626],["DL50lUYD8b",290],["9xi0exUoj5",3167],["CE9VoVkKvo",465],["DrIpR4VtGN",1305],["BxmAsOsKOy",516],["T3T9moq-BW",549],["e6Y0pYC30E",853],["Cu9RMwlubB",1772],["pTX0pBXDXM",3398],["BqbSXMVQbC",2035],["C-85jsRYA6",1582],["sTv0p3J7gI",850],["eGtFlxKwCU",1226],["BEDM2E2RE3",2023],["DTOihJ-QJx",1698],["C_nmofUGTB",43777],["C9rfleiyK9",4836],["Cqm5PVrCwO",26275],["BuUbdggIkN",1394],["C-eKqrJvR9",950],["DVpephimj3",341],["CE6lS_uYNf",6887],["DT9MvQ6Ayl",895],["BDS78oNR5w",1070],["C95BsM0fz1",2454],["Dcd0kwOGzC",4265],["COxsr1l_Z5",2796],["DInR2TBoTf",5279],["BmUPgjpoqy",1001],["Dxqx9SA3dN",122198],["Cu9CX-6gaV",6133],["CEBIJlADa1",19203],["VeZvoKCJCD",284529],["m8khMz1onr",793],["P7XVxRzmpr",89201],["2hG3R5jT41",2738],["DshC3BkHdF",369],["CyhB7pv8FI",4242],["BOrUtA9q5p",98059],["CL6kluvJ9O",16609],["ZIACW0PG6i",1641],["BH1sfM7F55",1116],["CtznvWyHqx",694],["cWAWNDNrGD",502],["yswAl7pKep",2128],["CHU-dc4frQ",911],["NQScmoH6vt",25722],["Dz4prjZKX2",515],["jxerVWkmwO",11333],["D4DQ541lA6",696],["po5DIc3k0Y",537],["BpLaX9dgwg",473],["CCBN9gX9Nf",13073],["CnhEXg2dLX",801],["D6pOWjBZjs",1255],["CjdaZYLjda",664],["R-oDBA2u2X",622],["DGaLpkGD-J",1051],["CLZqGNlodX",4629],["3qPKGSV6jg",1303],["6F5eXxVroc",5151],["Cq07SK00F4",6080],["BNXd2Ebkzt",1816],["Ccbw11ZqJ7",5608],["DRjmJ2uW-t",1029],["DY7kHuMsvl",707],["CpsFXRAxyc",1305],["3Fottk4qDR",3468],["BHWgbEwVrK",4000],["Csk2kgwdms",3082],["BsKnGre223",504],["CqX0tAKXlI",1598],["sJbnWwJIGS",723]], 'en-US/', 'auto');
+   236→SML.load([["Ct5GexaUju",9375],["CiOUsjK1ND",7718],["BT0RiTQuTS",1823],["BOUTAIpqnJ",7749],["Cm2u2QKR9m",8414],["DjbGepogHh",2993],["BuDWDcwxKD",551881],["DB-wlNiEFy",4520],["VYIDsvpl0m",1043],["CWpihLHktV",11240],["DKu6uvhxrf",3397],["xApcOk8NNQ",1240],["Bqw32gXESX",2914],["DnJYoAzqNW",13862],["zC19jJnQkp",1751],["yj11UXDxPn",885],["Dj-rylp1NK",1418],["QtJC9NfTCJ",2338],["C465NrMjTt",1387],["cPRULn7SHU",5211],["Cg-GcJsjPO",57752],["DvDR6yrHgY",6484],["DIy6tF3EKA",2515],["BPTARri-8n",9446],["DioH1BFgzB",9389],["mMSvnGo1SU",2600],["DTCNEW58Pc",1110],["DdlNuq_sTV",3116],["4UkdSCeoZc",14776],["P3JMTM3Hiy",22471],["PxEQmnluRx",5768],["SDxedoO7Mq",9404],["Vl65hgaerb",4813],["CJxCex7bDG",10260],["j4DkTomd5a",2490],["CPlPIjCxdU",2461],["CBlMA_BUGX",2514],["6gXW4svLAM",2501],["CGTMIGYAP9",20551],["D5wxYW5YXa",9972],["CjatcgjhoI",9226],["DIsDvPwzfs",58548],["B1Q5ZfhaQf",7104],["38nVErxvpQ",23861],["B6OCktlJZr",2168],["c5J6LJucZz",418],["DN3Ozoig7J",567],["CZfnd27o1v",581],["BOEVjpOuzE",6871],["BY1TNllptO",7331],["ChDwhTVoQL",26096],["Br0wzN7IO4",7448],["DMnxUNxAsB",3219],["CF6qLnEDkU",3318],["C5kiFLM_aO",1047],["Cf92bq96Ef",719],["BRlkI75RAE",906],["BizeoVe8PJ",4467],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["BuNwlUTQr7",1572],["3MdTcj5ylo",1697],["CW4dSjY4LP",626],["DL50lUYD8b",290],["9xi0exUoj5",3167],["CE9VoVkKvo",465],["DrIpR4VtGN",1305],["BxmAsOsKOy",516],["T3T9moq-BW",549],["e6Y0pYC30E",853],["Cu9RMwlubB",1772],["pTX0pBXDXM",3398],["BqbSXMVQbC",2035],["C-85jsRYA6",1582],["sTv0p3J7gI",850],["eGtFlxKwCU",1226],["BEDM2E2RE3",2023],["DTOihJ-QJx",1698],["C_nmofUGTB",43777],["C9rfleiyK9",4836],["Cqm5PVrCwO",26275],["BuUbdggIkN",1394],["C-eKqrJvR9",950],["DVpephimj3",341],["CE6lS_uYNf",6887],["DT9MvQ6Ayl",895],["BDS78oNR5w",1070],["C95BsM0fz1",2454],["Dcd0kwOGzC",4265],["COxsr1l_Z5",2796],["DInR2TBoTf",5279],["BmUPgjpoqy",1001],["Dxqx9SA3dN",122198],["Cu9CX-6gaV",6133],["CEBIJlADa1",19203],["VeZvoKCJCD",284529],["m8khMz1onr",793],["P7XVxRzmpr",89201],["2hG3R5jT41",2738],["DshC3BkHdF",369],["CyhB7pv8FI",4242],["BOrUtA9q5p",98059],["CL6kluvJ9O",16609],["ZIACW0PG6i",1641],["BH1sfM7F55",1116],["CtznvWyHqx",694],["cWAWNDNrGD",502],["yswAl7pKep",2128],["CHU-dc4frQ",911],["NQScmoH6vt",25722],["Dz4prjZKX2",515],["jxerVWkmwO",11333],["D4DQ541lA6",696],["po5DIc3k0Y",537],["BpLaX9dgwg",473],["CCBN9gX9Nf",13073],["CnhEXg2dLX",801],["D6pOWjBZjs",1255],["CjdaZYLjda",664],["R-oDBA2u2X",622],["DGaLpkGD-J",1051],["CLZqGNlodX",4629],["3qPKGSV6jg",1303],["6F5eXxVroc",5151],["Cq07SK00F4",6080],["BNXd2Ebkzt",1816],["Ccbw11ZqJ7",5608],["DRjmJ2uW-t",1029],["DY7kHuMsvl",707],["CpsFXRAxyc",1305],["3Fottk4qDR",3468],["BHWgbEwVrK",4000],["Csk2kgwdms",3082],["BsKnGre223",504],["CqX0tAKXlI",1598],["sJbnWwJIGS",723]], 'en-US/', 'auto');
+   237→OpenAI
+   238→Promoted
+   239→Hit a Claude limit mid-build? Move your code to Codex and pick up where you left off.
+   240→Sign Up
+   241→chatgpt.com
+   242→SML.load([["oZkWtkjF_U",12400],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551]], 'en-US/', 'auto');
+   243→SML.load([["Cuwdy4ysD4",16659],["DjbGepogHh",2993],["Bnay_edbli",11841],["DB-wlNiEFy",4520],["CWpihLHktV",11240],["Bqw32gXESX",2914],["DnJYoAzqNW",13862],["BuDWDcwxKD",551881],["CEuxWVJcJt",13495],["cPRULn7SHU",5211],["CGTMIGYAP9",20551],["DN3Ozoig7J",567],["3qPKGSV6jg",1303],["4gtrzeKP9f",7695],["sJbnWwJIGS",723],["Cq07SK00F4",6080],["B1Q5ZfhaQf",7104],["BPTARri-8n",9446],["Cu9RMwlubB",1772],["BxmAsOsKOy",516],["P3JMTM3Hiy",22471],["Borg0Nt59E",14974],["CPlPIjCxdU",2461],["ChZzoYl2lH",3429],["DIsDvPwzfs",58548],["DzRLvlIFrT",319],["CvV6Ag8W_3",360],["38nVErxvpQ",23861],["B6OCktlJZr",2168],["c5J6LJucZz",418],["CZfnd27o1v",581],["BOEVjpOuzE",6871],["D5wxYW5YXa",9972],["C5kiFLM_aO",1047],["C9rfleiyK9",4836],["BEDM2E2RE3",2023],["C95BsM0fz1",2454],["ChDwhTVoQL",26096],["BY1TNllptO",7331],["Dcd0kwOGzC",4265],["COxsr1l_Z5",2796],["DInR2TBoTf",5279],["Cm2u2QKR9m",8414],["BmUPgjpoqy",1001],["Dxqx9SA3dN",122198],["Cu9CX-6gaV",6133],["CEBIJlADa1",19203],["VeZvoKCJCD",284529],["m8khMz1onr",793],["P7XVxRzmpr",89201],["2hG3R5jT41",2738],["DshC3BkHdF",369],["CyhB7pv8FI",4242],["BOrUtA9q5p",98059],["CL6kluvJ9O",16609],["ZIACW0PG6i",1641],["BH1sfM7F55",1116],["CtznvWyHqx",694],["cWAWNDNrGD",502],["yswAl7pKep",2128],["CHU-dc4frQ",911],["NQScmoH6vt",25722],["Dz4prjZKX2",515],["jxerVWkmwO",11333],["j4DkTomd5a",2490],["D4DQ541lA6",696],["po5DIc3k0Y",537],["DKu6uvhxrf",3397],["DrIpR4VtGN",1305],["BpLaX9dgwg",473],["CCBN9gX9Nf",13073],["CnhEXg2dLX",801],["D6pOWjBZjs",1255],["CjdaZYLjda",664],["R-oDBA2u2X",622],["DGaLpkGD-J",1051],["CLZqGNlodX",4629],["6F5eXxVroc",5151],["CjatcgjhoI",9226],["sTv0p3J7gI",850],["BNXd2Ebkzt",1816],["Ccbw11ZqJ7",5608],["DRjmJ2uW-t",1029],["DY7kHuMsvl",707],["CpsFXRAxyc",1305],["3Fottk4qDR",3468],["eGtFlxKwCU",1226],["D9-aE5pNP3",9699],["e6Y0pYC30E",853],["C6ZckyPBru",582],["DCYhaD8gOs",3570],["BqbSXMVQbC",2035],["CbBDsEHC6s",525],["BizeoVe8PJ",4467],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["CF6qLnEDkU",3318],["BuNwlUTQr7",1572],["BHWgbEwVrK",4000],["Csk2kgwdms",3082],["BsKnGre223",504]], 'en-US/', 'auto');
+   244→Sort by:
+   245→New (Default)
+   246→Open comment sort options
+   247→Best
+   248→New (Default)
+   249→Controversial
+   250→Q&amp;A
+   251→Present_Dig_5527
+   252→4y ago
+   253→SML.load([["DJBFq3FCLQ",3844],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["9Os4Ig4NEx",517],["D6d_Rfj86L",576],["DTOihJ-QJx",1698],["CzGQQzQ4gA",602],["COxsr1l_Z5",2796],["BEDM2E2RE3",2023],["DInR2TBoTf",5279],["DIsDvPwzfs",58548],["ChDwhTVoQL",26096]], 'en-US/', 'auto');
+   254→The Code:
+   255→github.com/Prabesh01/nepalstock-api
+   256→SML.load([["B7zzM_rO7_",2366],["6F5eXxVroc",5151],["DKu6uvhxrf",3397],["oSonoHcF03",32950],["BPTARri-8n",9446],["C4s153kXAx",18780],["kjwsRkfDyF",3647],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["CjatcgjhoI",9226],["DIsDvPwzfs",58548],["BS25ywstu5",1736],["SuO7qYHnq_",2351],["po5DIc3k0Y",537],["x3xcFb9G8_",963],["9xi0exUoj5",3167],["CE9VoVkKvo",465],["CwIeJp019c",2595],["Cc6ZaMId5v",607],["DB-wlNiEFy",4520],["38nVErxvpQ",23861],["B6OCktlJZr",2168],["c5J6LJucZz",418],["DN3Ozoig7J",567],["CZfnd27o1v",581],["BOEVjpOuzE",6871],["eGtFlxKwCU",1226],["C5kiFLM_aO",1047],["Dk3HwRWelP",3225],["DTOihJ-QJx",1698],["BEDM2E2RE3",2023],["CF6qLnEDkU",3318],["Bn3TwjvsVr",25851],["D3OgpCJMQ3",989],["T3T9moq-BW",549],["CJbKv0PDfr",1836],["AU8Y7MKo4w",469],["DCYhaD8gOs",3570],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["DtZjxaQdzD",638],["CV_eT3NcB4",824]], 'en-US/', 'auto');
+   257→Reply
+   258→Share
+   259→SML.load([["BCF7htkqmU",26737],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["SuO7qYHnq_",2351],["DrIpR4VtGN",1305],["9xi0exUoj5",3167],["DIsDvPwzfs",58548],["DCYhaD8gOs",3570],["DTOihJ-QJx",1698],["DXgQnBH7n7",1030],["CiOUsjK1ND",7718],["C95BsM0fz1",2454],["D9-aE5pNP3",9699],["kjwsRkfDyF",3647],["x3xcFb9G8_",963],["CwIeJp019c",2595],["CE9VoVkKvo",465],["C9rfleiyK9",4836],["BzWuKC3EsI",1518],["C4ouwfsBsX",1021],["CyhB7pv8FI",4242],["dZCGJFrm8l",786],["BzUWSxoamM",1057],["Dz4prjZKX2",515],["Dk3HwRWelP",3225],["BxmAsOsKOy",516],["BS3NFARbFV",864],["MHc2k_bdeR",676],["BRlkI75RAE",906],["Cf92bq96Ef",719],["BizeoVe8PJ",4467],["C74qULDMst",1338],["QIknhS47TV",142],["CZ1mAGuJDx",478],["CGErJ5n4hW",460],["DS91JpNsGF",468],["CXZeA_X1CT",1896],["DtZjxaQdzD",638],["C5kiFLM_aO",1047],["BEDM2E2RE3",2023],["D5wxYW5YXa",9972],["ChDwhTVoQL",26096],["BY1TNllptO",7331],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["6F5eXxVroc",5151],["CjatcgjhoI",9226],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["CF6qLnEDkU",3318],["BuNwlUTQr7",1572],["CV_eT3NcB4",824]], 'en-US/', 'auto');
+   260→Expensive-Emu-9676
+   261→4y ago
+   262→SML.load([["DJBFq3FCLQ",3844],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["9Os4Ig4NEx",517],["D6d_Rfj86L",576],["DTOihJ-QJx",1698],["CzGQQzQ4gA",602],["COxsr1l_Z5",2796],["BEDM2E2RE3",2023],["DInR2TBoTf",5279],["DIsDvPwzfs",58548],["ChDwhTVoQL",26096]], 'en-US/', 'auto');
+   263→Edited
+   264→4y ago
+   265→Nicely Done... Thanks.. timro tyo server ph#t#s###t nepal ma host cha... careful..
+   266→SML.load([["B7zzM_rO7_",2366],["6F5eXxVroc",5151],["DKu6uvhxrf",3397],["oSonoHcF03",32950],["BPTARri-8n",9446],["C4s153kXAx",18780],["kjwsRkfDyF",3647],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["CjatcgjhoI",9226],["DIsDvPwzfs",58548],["BS25ywstu5",1736],["SuO7qYHnq_",2351],["po5DIc3k0Y",537],["x3xcFb9G8_",963],["9xi0exUoj5",3167],["CE9VoVkKvo",465],["CwIeJp019c",2595],["Cc6ZaMId5v",607],["DB-wlNiEFy",4520],["38nVErxvpQ",23861],["B6OCktlJZr",2168],["c5J6LJucZz",418],["DN3Ozoig7J",567],["CZfnd27o1v",581],["BOEVjpOuzE",6871],["eGtFlxKwCU",1226],["C5kiFLM_aO",1047],["Dk3HwRWelP",3225],["DTOihJ-QJx",1698],["BEDM2E2RE3",2023],["CF6qLnEDkU",3318],["Bn3TwjvsVr",25851],["D3OgpCJMQ3",989],["T3T9moq-BW",549],["CJbKv0PDfr",1836],["AU8Y7MKo4w",469],["DCYhaD8gOs",3570],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["DtZjxaQdzD",638],["CV_eT3NcB4",824]], 'en-US/', 'auto');
+   267→Reply
+   268→Share
+   269→SML.load([["BCF7htkqmU",26737],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["SuO7qYHnq_",2351],["DrIpR4VtGN",1305],["9xi0exUoj5",3167],["DIsDvPwzfs",58548],["DCYhaD8gOs",3570],["DTOihJ-QJx",1698],["DXgQnBH7n7",1030],["CiOUsjK1ND",7718],["C95BsM0fz1",2454],["D9-aE5pNP3",9699],["kjwsRkfDyF",3647],["x3xcFb9G8_",963],["CwIeJp019c",2595],["CE9VoVkKvo",465],["C9rfleiyK9",4836],["BzWuKC3EsI",1518],["C4ouwfsBsX",1021],["CyhB7pv8FI",4242],["dZCGJFrm8l",786],["BzUWSxoamM",1057],["Dz4prjZKX2",515],["Dk3HwRWelP",3225],["BxmAsOsKOy",516],["BS3NFARbFV",864],["MHc2k_bdeR",676],["BRlkI75RAE",906],["Cf92bq96Ef",719],["BizeoVe8PJ",4467],["C74qULDMst",1338],["QIknhS47TV",142],["CZ1mAGuJDx",478],["CGErJ5n4hW",460],["DS91JpNsGF",468],["CXZeA_X1CT",1896],["DtZjxaQdzD",638],["C5kiFLM_aO",1047],["BEDM2E2RE3",2023],["D5wxYW5YXa",9972],["ChDwhTVoQL",26096],["BY1TNllptO",7331],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["6F5eXxVroc",5151],["CjatcgjhoI",9226],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["CF6qLnEDkU",3318],["BuNwlUTQr7",1572],["CV_eT3NcB4",824]], 'en-US/', 'auto');
+   270→Present_Dig_5527
+   271→4y ago
+   272→SML.load([["DJBFq3FCLQ",3844],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["9Os4Ig4NEx",517],["D6d_Rfj86L",576],["DTOihJ-QJx",1698],["CzGQQzQ4gA",602],["COxsr1l_Z5",2796],["BEDM2E2RE3",2023],["DInR2TBoTf",5279],["DIsDvPwzfs",58548],["ChDwhTVoQL",26096]], 'en-US/', 'auto');
+   273→ahh dont worry. thats just a test web. just a random fb page for practice.
+   274→SML.load([["B7zzM_rO7_",2366],["6F5eXxVroc",5151],["DKu6uvhxrf",3397],["oSonoHcF03",32950],["BPTARri-8n",9446],["C4s153kXAx",18780],["kjwsRkfDyF",3647],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["CjatcgjhoI",9226],["DIsDvPwzfs",58548],["BS25ywstu5",1736],["SuO7qYHnq_",2351],["po5DIc3k0Y",537],["x3xcFb9G8_",963],["9xi0exUoj5",3167],["CE9VoVkKvo",465],["CwIeJp019c",2595],["Cc6ZaMId5v",607],["DB-wlNiEFy",4520],["38nVErxvpQ",23861],["B6OCktlJZr",2168],["c5J6LJucZz",418],["DN3Ozoig7J",567],["CZfnd27o1v",581],["BOEVjpOuzE",6871],["eGtFlxKwCU",1226],["C5kiFLM_aO",1047],["Dk3HwRWelP",3225],["DTOihJ-QJx",1698],["BEDM2E2RE3",2023],["CF6qLnEDkU",3318],["Bn3TwjvsVr",25851],["D3OgpCJMQ3",989],["T3T9moq-BW",549],["CJbKv0PDfr",1836],["AU8Y7MKo4w",469],["DCYhaD8gOs",3570],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["DtZjxaQdzD",638],["CV_eT3NcB4",824]], 'en-US/', 'auto');
+   275→Reply
+   276→Share
+   277→SML.load([["BCF7htkqmU",26737],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["SuO7qYHnq_",2351],["DrIpR4VtGN",1305],["9xi0exUoj5",3167],["DIsDvPwzfs",58548],["DCYhaD8gOs",3570],["DTOihJ-QJx",1698],["DXgQnBH7n7",1030],["CiOUsjK1ND",7718],["C95BsM0fz1",2454],["D9-aE5pNP3",9699],["kjwsRkfDyF",3647],["x3xcFb9G8_",963],["CwIeJp019c",2595],["CE9VoVkKvo",465],["C9rfleiyK9",4836],["BzWuKC3EsI",1518],["C4ouwfsBsX",1021],["CyhB7pv8FI",4242],["dZCGJFrm8l",786],["BzUWSxoamM",1057],["Dz4prjZKX2",515],["Dk3HwRWelP",3225],["BxmAsOsKOy",516],["BS3NFARbFV",864],["MHc2k_bdeR",676],["BRlkI75RAE",906],["Cf92bq96Ef",719],["BizeoVe8PJ",4467],["C74qULDMst",1338],["QIknhS47TV",142],["CZ1mAGuJDx",478],["CGErJ5n4hW",460],["DS91JpNsGF",468],["CXZeA_X1CT",1896],["DtZjxaQdzD",638],["C5kiFLM_aO",1047],["BEDM2E2RE3",2023],["D5wxYW5YXa",9972],["ChDwhTVoQL",26096],["BY1TNllptO",7331],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["6F5eXxVroc",5151],["CjatcgjhoI",9226],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["CF6qLnEDkU",3318],["BuNwlUTQr7",1572],["CV_eT3NcB4",824]], 'en-US/', 'auto');
+   278→rsh2045
+   279→4y ago
+   280→SML.load([["DJBFq3FCLQ",3844],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["9Os4Ig4NEx",517],["D6d_Rfj86L",576],["DTOihJ-QJx",1698],["CzGQQzQ4gA",602],["COxsr1l_Z5",2796],["BEDM2E2RE3",2023],["DInR2TBoTf",5279],["DIsDvPwzfs",58548],["ChDwhTVoQL",26096]], 'en-US/', 'auto');
+   281→128.199.137.175:8501
+   282→curious what that means.
+   283→SML.load([["B7zzM_rO7_",2366],["6F5eXxVroc",5151],["DKu6uvhxrf",3397],["oSonoHcF03",32950],["BPTARri-8n",9446],["C4s153kXAx",18780],["kjwsRkfDyF",3647],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["CjatcgjhoI",9226],["DIsDvPwzfs",58548],["BS25ywstu5",1736],["SuO7qYHnq_",2351],["po5DIc3k0Y",537],["x3xcFb9G8_",963],["9xi0exUoj5",3167],["CE9VoVkKvo",465],["CwIeJp019c",2595],["Cc6ZaMId5v",607],["DB-wlNiEFy",4520],["38nVErxvpQ",23861],["B6OCktlJZr",2168],["c5J6LJucZz",418],["DN3Ozoig7J",567],["CZfnd27o1v",581],["BOEVjpOuzE",6871],["eGtFlxKwCU",1226],["C5kiFLM_aO",1047],["Dk3HwRWelP",3225],["DTOihJ-QJx",1698],["BEDM2E2RE3",2023],["CF6qLnEDkU",3318],["Bn3TwjvsVr",25851],["D3OgpCJMQ3",989],["T3T9moq-BW",549],["CJbKv0PDfr",1836],["AU8Y7MKo4w",469],["DCYhaD8gOs",3570],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["DtZjxaQdzD",638],["CV_eT3NcB4",824]], 'en-US/', 'auto');
+   284→Reply
+   285→Share
+   286→SML.load([["BCF7htkqmU",26737],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["SuO7qYHnq_",2351],["DrIpR4VtGN",1305],["9xi0exUoj5",3167],["DIsDvPwzfs",58548],["DCYhaD8gOs",3570],["DTOihJ-QJx",1698],["DXgQnBH7n7",1030],["CiOUsjK1ND",7718],["C95BsM0fz1",2454],["D9-aE5pNP3",9699],["kjwsRkfDyF",3647],["x3xcFb9G8_",963],["CwIeJp019c",2595],["CE9VoVkKvo",465],["C9rfleiyK9",4836],["BzWuKC3EsI",1518],["C4ouwfsBsX",1021],["CyhB7pv8FI",4242],["dZCGJFrm8l",786],["BzUWSxoamM",1057],["Dz4prjZKX2",515],["Dk3HwRWelP",3225],["BxmAsOsKOy",516],["BS3NFARbFV",864],["MHc2k_bdeR",676],["BRlkI75RAE",906],["Cf92bq96Ef",719],["BizeoVe8PJ",4467],["C74qULDMst",1338],["QIknhS47TV",142],["CZ1mAGuJDx",478],["CGErJ5n4hW",460],["DS91JpNsGF",468],["CXZeA_X1CT",1896],["DtZjxaQdzD",638],["C5kiFLM_aO",1047],["BEDM2E2RE3",2023],["D5wxYW5YXa",9972],["ChDwhTVoQL",26096],["BY1TNllptO",7331],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["6F5eXxVroc",5151],["CjatcgjhoI",9226],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["CF6qLnEDkU",3318],["BuNwlUTQr7",1572],["CV_eT3NcB4",824]], 'en-US/', 'auto');
+   287→Expensive-Emu-9676
+   288→4y ago
+   289→SML.load([["DJBFq3FCLQ",3844],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["9Os4Ig4NEx",517],["D6d_Rfj86L",576],["DTOihJ-QJx",1698],["CzGQQzQ4gA",602],["COxsr1l_Z5",2796],["BEDM2E2RE3",2023],["DInR2TBoTf",5279],["DIsDvPwzfs",58548],["ChDwhTVoQL",26096]], 'en-US/', 'auto');
+   290→Server.
+   291→SML.load([["B7zzM_rO7_",2366],["6F5eXxVroc",5151],["DKu6uvhxrf",3397],["oSonoHcF03",32950],["BPTARri-8n",9446],["C4s153kXAx",18780],["kjwsRkfDyF",3647],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["CjatcgjhoI",9226],["DIsDvPwzfs",58548],["BS25ywstu5",1736],["SuO7qYHnq_",2351],["po5DIc3k0Y",537],["x3xcFb9G8_",963],["9xi0exUoj5",3167],["CE9VoVkKvo",465],["CwIeJp019c",2595],["Cc6ZaMId5v",607],["DB-wlNiEFy",4520],["38nVErxvpQ",23861],["B6OCktlJZr",2168],["c5J6LJucZz",418],["DN3Ozoig7J",567],["CZfnd27o1v",581],["BOEVjpOuzE",6871],["eGtFlxKwCU",1226],["C5kiFLM_aO",1047],["Dk3HwRWelP",3225],["DTOihJ-QJx",1698],["BEDM2E2RE3",2023],["CF6qLnEDkU",3318],["Bn3TwjvsVr",25851],["D3OgpCJMQ3",989],["T3T9moq-BW",549],["CJbKv0PDfr",1836],["AU8Y7MKo4w",469],["DCYhaD8gOs",3570],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["DtZjxaQdzD",638],["CV_eT3NcB4",824]], 'en-US/', 'auto');
+   292→Reply
+   293→Share
+   294→SML.load([["BCF7htkqmU",26737],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["SuO7qYHnq_",2351],["DrIpR4VtGN",1305],["9xi0exUoj5",3167],["DIsDvPwzfs",58548],["DCYhaD8gOs",3570],["DTOihJ-QJx",1698],["DXgQnBH7n7",1030],["CiOUsjK1ND",7718],["C95BsM0fz1",2454],["D9-aE5pNP3",9699],["kjwsRkfDyF",3647],["x3xcFb9G8_",963],["CwIeJp019c",2595],["CE9VoVkKvo",465],["C9rfleiyK9",4836],["BzWuKC3EsI",1518],["C4ouwfsBsX",1021],["CyhB7pv8FI",4242],["dZCGJFrm8l",786],["BzUWSxoamM",1057],["Dz4prjZKX2",515],["Dk3HwRWelP",3225],["BxmAsOsKOy",516],["BS3NFARbFV",864],["MHc2k_bdeR",676],["BRlkI75RAE",906],["Cf92bq96Ef",719],["BizeoVe8PJ",4467],["C74qULDMst",1338],["QIknhS47TV",142],["CZ1mAGuJDx",478],["CGErJ5n4hW",460],["DS91JpNsGF",468],["CXZeA_X1CT",1896],["DtZjxaQdzD",638],["C5kiFLM_aO",1047],["BEDM2E2RE3",2023],["D5wxYW5YXa",9972],["ChDwhTVoQL",26096],["BY1TNllptO",7331],["JaYpfg94dc",15140],["DRjmJ2uW-t",1029],["DeymSnQ6gP",603],["C_2MYBGa54",514],["6F5eXxVroc",5151],["CjatcgjhoI",9226],["DtbJc-L-5a",7543],["DSSlt_Drhu",1483],["DOd8MnhkjG",367],["CF6qLnEDkU",3318],["BuNwlUTQr7",1572],["CV_eT3NcB4",824]], 'en-US/', 'auto');
+   295→more replies
+   296→more replies
+   297→more replies
+   298→More replies
+   299→More replies
+   300→berojgar_keto
+   301→4y ago
+   302→SML.load([["DJBFq3FCLQ",3844],["BuDWDcwxKD",551881],["CGTMIGYAP9",20551],["9Os4Ig4NEx",517],["D6d_Rfj86L",576],["DTOihJ-QJx",1698],["CzGQQzQ4gA",602],["COxsr1l_Z5",2796],["BEDM2E2RE3",2023],["DInR2TBoTf",5279],["DIsDvPwzfs",58548],["ChDwhTVoQL",26096]], 'en-US/', 'auto');
+   303→Since Nepse is cracking down on unauthorized use of its data it would be wise to not post these things publicly

@@ -20,11 +20,16 @@ import {
   Database,
   Trash2,
   Eye,
+  Download,
   Sun,
   Moon,
   ChevronLeft,
   ChevronRight,
   Sprout,
+  Image as ImageIcon,
+  Type,
+  Loader2,
+  LogOut,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -61,6 +66,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+
+import { generateImagesInBrowser } from '@/lib/client-image-generator';
+import { generateGainersLosers } from '@/lib/nepse-stocks';
 
 // ---- Types ----
 interface MarketData {
@@ -205,6 +213,9 @@ export default function HomePage() {
   const [latestData, setLatestData] = useState<MarketData | null>(null);
   const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
   const [isLoadingPipeline, setIsLoadingPipeline] = useState(false);
+  const [previewData, setPreviewData] = useState<{ marketData: MarketData; message: string; source: string; isMock?: boolean } | null>(null);
+  const [isFetchingPreview, setIsFetchingPreview] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
 
   // Market data state
   const [marketDataList, setMarketDataList] = useState<MarketData[]>([]);
@@ -228,6 +239,11 @@ export default function HomePage() {
   const [logsTypeFilter, setLogsTypeFilter] = useState('all');
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
+  // Error detail dialog
+  const [errorDialogTitle, setErrorDialogTitle] = useState('');
+  const [errorDetailText, setErrorDetailText] = useState('');
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+
   // Settings state
   const [settings, setSettings] = useState<Record<string, string>>({
     facebook_app_id: '',
@@ -244,6 +260,15 @@ export default function HomePage() {
     testing: false,
     result: null,
   });
+
+  // Image post state
+  const [postMode, setPostMode] = useState<'text' | 'image'>('image');
+  const [imagePreview, setImagePreview] = useState<{
+    marketSummary: string;
+    topGainers: string;
+    topLosers: string;
+  } | null>(null);
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
 
   // Loading states
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
@@ -360,29 +385,67 @@ export default function HomePage() {
   }, [fetchSystemStatus, fetchLatestData, fetchRecentEvents, fetchMarketData, fetchPosts, fetchLogs, fetchSettings]);
 
   // ---- Actions ----
-  const handleFetchAndPost = async () => {
-    setIsLoadingPipeline(true);
+  const handleFetchPreview = async () => {
+    setPreviewData(null);
+    setIsFetchingPreview(true);
+    try {
+      const res = await fetch('/api/posts/preview', { method: 'POST' });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPreviewData({
+          marketData: json.marketData,
+          message: json.previewMessage,
+          source: json.source,
+          isMock: json.isMock,
+        });
+        if (json.isMock) {
+          toast.warning('WARNING: Using MOCK data! Real NEPSE data could not be fetched.');
+        } else {
+          toast.success('Real NEPSE data fetched! Review the preview below.');
+        }
+        fetchSystemStatus();
+        fetchLatestData();
+        fetchMarketData(1);
+      } else {
+        toast.error(json.error || 'Failed to fetch data');
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsFetchingPreview(false);
+    }
+  };
+
+  const handleConfirmPost = async () => {
+    if (!previewData) return;
+    setIsPosting(true);
     try {
       const res = await fetch('/api/posts/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ date: previewData.marketData.tradingDate, mode: 'text' }),
       });
       const json = await res.json();
       if (res.ok && json.success) {
-        toast.success(json.message || 'Posted successfully!');
+        toast.success('Posted to Facebook successfully!');
+        setPreviewData(null);
         fetchSystemStatus();
         fetchLatestData();
         fetchRecentEvents();
         fetchPosts(1, 'all');
       } else {
-        toast.error(json.error || json.message || 'Pipeline failed');
+        toast.error(json.error || json.message || 'Failed to post');
       }
     } catch {
       toast.error('Network error. Please try again.');
     } finally {
-      setIsLoadingPipeline(false);
+      setIsPosting(false);
     }
+  };
+
+  const handleCancelPreview = () => {
+    setPreviewData(null);
+    setImagePreview(null);
   };
 
   const handleFetchLatest = async () => {
@@ -523,6 +586,167 @@ export default function HomePage() {
     }
   };
 
+  // ---- Image Actions ----
+  const handleGenerateImages = async () => {
+    if (!previewData) return;
+    setImagePreview(null);
+    setIsGeneratingImages(true);
+    try {
+      // Generate images entirely in the browser — no server-side WASM/native deps
+      const { gainers, losers } = generateGainersLosers();
+      const images = await generateImagesInBrowser(
+        {
+          tradingDate: previewData.marketData.tradingDate,
+          nepseIndex: previewData.marketData.nepseIndex,
+          change: previewData.marketData.change,
+          changePercentage: previewData.marketData.changePercentage,
+          turnover: previewData.marketData.turnover,
+          volume: previewData.marketData.volume,
+          trades: previewData.marketData.trades,
+          gainers: previewData.marketData.gainers,
+          losers: previewData.marketData.losers,
+          unchanged: previewData.marketData.unchanged,
+          rawData: previewData.marketData.rawData,
+        },
+        gainers,
+        losers,
+      );
+      setImagePreview(images);
+      toast.success('3 post images generated! Review them below.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to generate images');
+    } finally {
+      setIsGeneratingImages(false);
+    }
+  };
+
+  const handlePostImages = async () => {
+    if (!imagePreview) return;
+    setIsPosting(true);
+    try {
+      // Send client-generated images + date to the server for Facebook posting
+      const dateToUse = previewData?.marketData?.tradingDate;
+      const body: Record<string, unknown> = {
+        mode: 'image',
+        images: imagePreview, // base64 data URIs from browser
+      };
+      if (dateToUse) body.date = dateToUse;
+
+      const res = await fetch('/api/posts/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      let json: Record<string, unknown>;
+      try {
+        json = await res.json();
+      } catch {
+        toast.error('Received non-JSON response from server');
+        return;
+      }
+
+      // If HTTP error or API returned success=false, show full error detail
+      if (!res.ok || !json.success) {
+        const failedPosts = (json.posts as Array<Record<string, unknown>>)?.filter((p) => !p.success) || [];
+        if (failedPosts.length > 0) {
+          // Build detailed error report
+          const lines = failedPosts.map((p, i) => {
+            const debug = p.debug as Record<string, unknown> | undefined;
+            const lines = [
+              `--- Post ${i + 1}: ${p.label || 'Unknown'} ---`,
+              `Status: FAILED`,
+              `Error: ${p.error || 'No error message'}`,
+              debug ? `Image Size: ${((debug.imageBufferSize as number) || 0)} bytes` : '',
+              debug ? `Caption Length: ${debug.captionLength || 0} chars` : '',
+              debug ? `Caption Preview: ${debug.captionPreview || 'N/A'}` : '',
+            ].filter(Boolean).join('\n');
+            return lines;
+          });
+          setErrorDialogTitle(`Facebook Posting Failed (${failedPosts.length} post${failedPosts.length > 1 ? 's' : ''})`);
+          setErrorDetailText(lines.join('\n\n'));
+          setShowErrorDialog(true);
+        } else {
+          // No per-post errors — show the top-level error
+          setErrorDialogTitle('Posting Failed');
+          setErrorDetailText(`HTTP Status: ${res.status}\n\nFull Response:\n${JSON.stringify(json, null, 2)}`);
+          setShowErrorDialog(true);
+        }
+        return;
+      }
+
+      // Success path
+      const posts = json.posts as Array<{ success: boolean; label: string; postId?: string; error?: string; debug?: Record<string, unknown> }>;
+      const postCount = posts?.length || 3;
+      const successCount = posts?.filter((p) => p.success).length || 0;
+      const failedPosts = posts?.filter((p) => !p.success) || [];
+
+      if (successCount === postCount) {
+        toast.success(`All ${postCount} images posted to Facebook!`);
+      } else {
+        // Show error dialog with full details for each failed post
+        const lines = failedPosts.map((p, i) => {
+          const debug = p.debug;
+          return [
+            `--- Post ${i + 1}: ${p.label || 'Unknown'} ---`,
+            `Status: FAILED`,
+            `Error: ${p.error || 'No error message'}`,
+            debug ? `Image Size: ${debug.imageBufferSize || 0} bytes` : '',
+            debug ? `Caption Length: ${debug.captionLength || 0} chars` : '',
+            debug ? `Caption Preview: ${debug.captionPreview || 'N/A'}` : '',
+          ].filter(Boolean).join('\n');
+        });
+        setErrorDialogTitle(`Partial Failure (${successCount}/${postCount} posted)`);
+        setErrorDetailText(lines.join('\n\n'));
+        setShowErrorDialog(true);
+
+        if (successCount > 0) {
+          toast.success(`${successCount}/${postCount} posted successfully`);
+        }
+      }
+        // Refresh data on any response (success or partial)
+      setImagePreview(null);
+      fetchSystemStatus();
+      fetchLatestData();
+      fetchRecentEvents();
+      fetchPosts(1, 'all');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setErrorDialogTitle('Network Error');
+      setErrorDetailText(msg);
+      setShowErrorDialog(true);
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  const handlePostTextMode = async () => {
+    if (!previewData) return;
+    setIsPosting(true);
+    try {
+      const res = await fetch('/api/posts/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: previewData.marketData.tradingDate, mode: 'text' }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        toast.success('Posted to Facebook successfully!');
+        setPreviewData(null);
+        fetchSystemStatus();
+        fetchLatestData();
+        fetchRecentEvents();
+        fetchPosts(1, 'all');
+      } else {
+        toast.error(json.error || json.message || 'Failed to post');
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
   // ---- Render helpers ----
   const renderSkeletonCards = () => (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -547,20 +771,182 @@ export default function HomePage() {
           <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
           <p className="text-muted-foreground text-sm">NEPSE market automation overview</p>
         </div>
-        <Button
-          onClick={handleFetchAndPost}
-          disabled={isLoadingPipeline}
-          size="lg"
-          className="gap-2"
-        >
-          {isLoadingPipeline ? (
-            <RefreshCw className="h-4 w-4 animate-spin" />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Post Mode Selector */}
+          <div className="flex rounded-lg border border-border overflow-hidden">
+            <button
+              onClick={() => setPostMode('image')}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                postMode === 'image'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <ImageIcon className="h-3.5 w-3.5" />
+              Image
+            </button>
+            <button
+              onClick={() => setPostMode('text')}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                postMode === 'text'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <Type className="h-3.5 w-3.5" />
+              Text
+            </button>
+          </div>
+
+          {/* Fetch & Preview - always visible when no data yet */}
+          {!previewData ? (
+            <Button
+              onClick={handleFetchPreview}
+              disabled={isFetchingPreview}
+              size="lg"
+              className="gap-2"
+            >
+              {isFetchingPreview ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {isFetchingPreview ? 'Fetching...' : 'Fetch & Preview'}
+            </Button>
           ) : (
-            <Send className="h-4 w-4" />
+            <>
+              {postMode === 'image' && !imagePreview && (
+                <Button
+                  onClick={handleGenerateImages}
+                  disabled={isGeneratingImages}
+                  size="lg"
+                  className="gap-2"
+                >
+                  {isGeneratingImages ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4" />
+                  )}
+                  {isGeneratingImages ? 'Generating...' : 'Generate Images'}
+                </Button>
+              )}
+              {postMode === 'image' && imagePreview && (
+                <Button
+                  onClick={handlePostImages}
+                  disabled={isPosting}
+                  size="lg"
+                  className="gap-2"
+                >
+                  {isPosting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  {isPosting ? 'Posting 3 Images...' : 'Post 3 Images'}
+                </Button>
+              )}
+              {postMode === 'text' && (
+                <Button
+                  onClick={handlePostTextMode}
+                  disabled={isPosting}
+                  size="lg"
+                  className="gap-2"
+                >
+                  {isPosting ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  {isPosting ? 'Posting...' : 'Confirm & Post'}
+                </Button>
+              )}
+              <Button
+                onClick={handleCancelPreview}
+                variant="outline"
+                size="lg"
+                className="gap-2"
+              >
+                Cancel
+              </Button>
+            </>
           )}
-          {isLoadingPipeline ? 'Processing...' : 'Fetch & Post Now'}
-        </Button>
+        </div>
       </div>
+
+      {/* Image Preview Grid */}
+      {imagePreview && (
+        <div className="space-y-4">
+          <Card className="border-emerald-500/50 bg-emerald-500/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-emerald-500" />
+                Image Post Preview
+              </CardTitle>
+              <CardDescription>3 images will be posted to Facebook: Market Summary, Top 10 Gainers, Top 10 Losers</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">1. Market Summary</p>
+                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={imagePreview.marketSummary} alt="Market Summary" className="w-full h-auto" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">2. Top 10 Gainers</p>
+                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={imagePreview.topGainers} alt="Top 10 Gainers" className="w-full h-auto" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">3. Top 10 Losers</p>
+                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={imagePreview.topLosers} alt="Top 10 Losers" className="w-full h-auto" />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Preview Card - shown for both modes after fetch */}
+      {previewData && (
+        <Card className="border-blue-500/50 bg-blue-500/5">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Eye className="h-4 w-4 text-blue-500" />
+                  Post Preview
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Data source: <span className={previewData.isMock ? 'text-red-500 font-semibold' : 'text-emerald-500 font-medium'}>{previewData.source}</span> | Date: {previewData.marketData.tradingDate}
+                </CardDescription>
+              </div>
+              <div className="text-right text-sm">
+                <div className={`font-bold text-lg ${previewData.marketData.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                  {previewData.marketData.change >= 0 ? '+' : ''}{previewData.marketData.nepseIndex.toFixed(2)}
+                </div>
+                <div className={`text-xs ${previewData.marketData.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                  {previewData.marketData.change >= 0 ? '▲' : '▼'} {previewData.marketData.change >= 0 ? '+' : ''}{previewData.marketData.changePercentage.toFixed(2)}%
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {previewData.isMock && (
+              <div className="mb-3 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-500 flex items-center gap-2">
+                <WifiOff className="h-4 w-4 shrink-0" />
+                This is <strong>MOCK data</strong>, not real NEPSE data. The website scraping failed. Do NOT post this.
+              </div>
+            )}
+            <div className="rounded-lg bg-muted p-4 text-sm whitespace-pre-line font-mono leading-relaxed">
+              {previewData.message}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoadingStatus ? (
         renderSkeletonCards()
@@ -1353,6 +1739,34 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Error Detail Dialog */}
+      <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-red-500">{errorDialogTitle}</DialogTitle>
+            <DialogDescription>Full error details below. You can copy this to share for debugging.</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            <pre className="bg-muted p-4 rounded-md text-xs font-mono whitespace-pre-wrap break-all text-foreground">{errorDetailText}</pre>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(errorDetailText);
+                toast.success('Error details copied to clipboard');
+              }}
+            >
+              Copy to Clipboard
+            </Button>
+            <Button size="sm" onClick={() => setShowErrorDialog(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
@@ -1367,14 +1781,28 @@ export default function HomePage() {
               <p className="text-[10px] text-muted-foreground leading-none">NEPSE Market Automation</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={async () => {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/auth/login';
+              }}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 
