@@ -80,9 +80,23 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < historicalData.length; i++) {
       const d = historicalData[i];
 
-      // Create market data
-      const marketData = await db.marketData.create({
-        data: {
+      // Create market data (use upsert for safety)
+      const marketData = await db.marketData.upsert({
+        where: { tradingDate: d.tradingDate },
+        update: {
+          nepseIndex: d.nepseIndex,
+          change: d.change,
+          changePercentage: d.changePercentage,
+          turnover: d.turnover,
+          volume: d.volume,
+          trades: d.trades,
+          gainers: d.gainers,
+          losers: d.losers,
+          unchanged: d.unchanged,
+          rawData: JSON.stringify({ source: 'seed', generated: true }),
+          status: 'completed',
+        },
+        create: {
           ...d,
           rawData: JSON.stringify({ source: 'seed', generated: true }),
           status: 'completed',

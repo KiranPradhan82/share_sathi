@@ -47,6 +47,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (!auth.authorized) return auth.response;
+
   try {
     const body = await request.json();
 
@@ -59,36 +62,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for existing entry
-    const existing = await db.marketData.findUnique({
+    const createData = {
+      tradingDate,
+      nepseIndex: parseFloat(nepseIndex),
+      change: parseFloat(change || 0),
+      changePercentage: parseFloat(changePercentage || 0),
+      turnover: parseFloat(turnover || 0),
+      volume: parseFloat(volume || 0),
+      trades: parseInt(trades || 0, 10),
+      gainers: parseInt(gainers || 0, 10),
+      losers: parseInt(losers || 0, 10),
+      unchanged: parseInt(unchanged || 0, 10),
+      rawData: rawData || '{}',
+      status: status || 'completed',
+    };
+
+    // Use upsert to handle duplicate gracefully
+    const data = await db.marketData.upsert({
       where: { tradingDate },
+      update: createData,
+      create: createData,
     });
 
-    if (existing) {
-      return NextResponse.json(
-        { error: 'Data for this date already exists', data: existing },
-        { status: 409 },
-      );
-    }
-
-    const data = await db.marketData.create({
-      data: {
-        tradingDate,
-        nepseIndex: parseFloat(nepseIndex),
-        change: parseFloat(change || 0),
-        changePercentage: parseFloat(changePercentage || 0),
-        turnover: parseFloat(turnover || 0),
-        volume: parseFloat(volume || 0),
-        trades: parseInt(trades || 0, 10),
-        gainers: parseInt(gainers || 0, 10),
-        losers: parseInt(losers || 0, 10),
-        unchanged: parseInt(unchanged || 0, 10),
-        rawData: rawData || '{}',
-        status: status || 'completed',
-      },
-    });
-
-    return NextResponse.json({ data }, { status: 201 });
+    return NextResponse.json({ data }, { status: data.createdAt === data.updatedAt ? 201 : 200 });
   } catch (error) {
     console.error('Error creating market data:', error);
     return NextResponse.json(

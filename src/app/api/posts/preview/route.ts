@@ -4,6 +4,13 @@ import { fetchNepseData } from '@/lib/nepse';
 import { formatMarketUpdate } from '@/lib/content-formatter';
 import { requireAuth } from '@/lib/require-auth';
 
+const marketDataFields = {
+  nepseIndex: true, change: true, changePercentage: true,
+  turnover: true, volume: true, trades: true,
+  gainers: true, losers: true, unchanged: true,
+  rawData: true, status: true,
+} as const;
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (!auth.authorized) return auth.response;
@@ -18,7 +25,6 @@ export async function POST(request: NextRequest) {
       try {
         const raw = JSON.parse(existing.rawData);
         if (raw.source === 'mock') {
-          console.log('Existing data is MOCK, re-fetching with real data...');
           forceRefresh = true;
         }
       } catch { /* keep existing */ }
@@ -41,27 +47,35 @@ export async function POST(request: NextRequest) {
         source = 'parsed-data';
       }
 
-      if (forceRefresh && existing) {
-        // Delete old record and create fresh
-        await db.marketData.delete({ where: { id: existing.id } });
-      }
+      const upsertData = {
+        tradingDate: nepseData.tradingDate,
+        nepseIndex: nepseData.nepseIndex,
+        change: nepseData.change,
+        changePercentage: nepseData.changePercentage,
+        turnover: nepseData.turnover,
+        volume: nepseData.volume,
+        trades: nepseData.trades,
+        gainers: nepseData.gainers,
+        losers: nepseData.losers,
+        unchanged: nepseData.unchanged,
+        rawData: nepseData.rawData,
+        status: 'completed' as const,
+      };
 
-      existing = await db.marketData.create({
-        data: {
-          tradingDate: nepseData.tradingDate,
-          nepseIndex: nepseData.nepseIndex,
-          change: nepseData.change,
-          changePercentage: nepseData.changePercentage,
-          turnover: nepseData.turnover,
-          volume: nepseData.volume,
-          trades: nepseData.trades,
-          gainers: nepseData.gainers,
-          losers: nepseData.losers,
-          unchanged: nepseData.unchanged,
-          rawData: nepseData.rawData,
-          status: 'completed',
-        },
-      });
+      if (existing && forceRefresh) {
+        // Update existing record
+        existing = await db.marketData.update({
+          where: { id: existing.id },
+          data: upsertData,
+        });
+      } else {
+        // Use upsert — handles race conditions where data was created between findUnique and now
+        existing = await db.marketData.upsert({
+          where: { tradingDate: nepseData.tradingDate },
+          update: upsertData,
+          create: upsertData,
+        });
+      }
 
       await db.systemEvent.create({
         data: {
