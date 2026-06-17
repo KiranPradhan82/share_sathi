@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { fetchNepseData } from '@/lib/nepse';
-import { formatMarketUpdate, formatImageCaption, formatGainersCaption, formatLosersCaption } from '@/lib/content-formatter';
+import { formatMarketUpdate, formatImageCaption, formatGainersCaption, formatLosersCaption, formatStockCardCaption } from '@/lib/content-formatter';
 import { postToFacebook } from '@/lib/facebook';
 import { postPhotoToFacebook } from '@/lib/facebook-photo';
-import { parseTopStocksFromRawData } from '@/lib/nepse';
+import { parseTopStocksFromRawData, parseStockDataFromRawData } from '@/lib/nepse';
 import { requireAuth } from '@/lib/require-auth';
 
 async function delay(ms: number): Promise<void> {
@@ -30,12 +30,14 @@ export async function POST(request: NextRequest) {
     let date: string | undefined;
     let mode = 'image';
     let clientImages: Record<string, string> | null = null;
+    let clientStockCards: Array<{ type: string; rank: number; symbol: string; name: string; image: string }> | null = null;
 
     try {
       const body = await request.json();
       date = body.date || undefined;
       mode = body.mode || 'image';
       clientImages = body.images || null;
+      clientStockCards = body.stockCards || null;
     } catch {
       date = undefined;
     }
@@ -196,6 +198,7 @@ export async function POST(request: NextRequest) {
 
       // Get real gainers/losers from stored rawData
       const { gainers, losers } = parseTopStocksFromRawData(marketData.rawData);
+      const fullStockData = parseStockDataFromRawData(marketData.rawData);
 
       const summaryCaption = formatImageCaption(nepseDataForFormat);
       const gainersCaption = formatGainersCaption(marketData.tradingDate, gainers);
@@ -206,6 +209,36 @@ export async function POST(request: NextRequest) {
         { buffer: imageBuffers.topGainers, caption: gainersCaption, label: 'Top Gainers' },
         { buffer: imageBuffers.topLosers, caption: losersCaption, label: 'Top Losers' },
       ];
+
+      // Add individual stock card posts if provided
+      if (clientStockCards && clientStockCards.length > 0) {
+        for (const card of clientStockCards) {
+          const cardBuffer = dataUriToBuffer(card.image);
+          // Validate PNG header
+          if (cardBuffer.length >= 8 && !cardBuffer.slice(0, 8).equals(pngSignature)) {
+            // Skip invalid stock card images
+            continue;
+          }
+
+          // Find the full stock data for this card to generate a proper caption
+          const allStocks = [
+            ...fullStockData.gainers.map(s => ({ ...s, _type: 'gainer' as const })),
+            ...fullStockData.losers.map(s => ({ ...s, _type: 'loser' as const })),
+          ];
+          const match = allStocks.find(s => s.symbol === card.symbol);
+          const stockType = (card.type === 'gainer' ? 'gainer' : 'loser') as 'gainer' | 'loser';
+
+          const caption = match
+            ? formatStockCardCaption(match, stockType)
+            : `${card.name} (${card.symbol}) ${stockType === 'gainer' ? 'Positive' : 'Negative'} Circuit Today\n\n#NEPSE #ShareSathi #NepalStockExchange #StockMarket #${card.symbol}`;
+
+          postsToMake.push({
+            buffer: cardBuffer,
+            caption,
+            label: `${stockType === 'gainer' ? 'Gainer' : 'Loser'}: ${card.symbol}`,
+          });
+        }
+      }
 
       const results: Array<{
         label: string;
@@ -233,7 +266,7 @@ export async function POST(request: NextRequest) {
             entityType: 'facebook_post',
             entityId: fbPost.id,
             facebookPostId: fbPost.id,
-            description: `Posting ${post.label} image (${Math.round(post.buffer.length / 1024)}KB) for ${marketData.tradingDate}...`,
+            description: `Posting ${post.label} image (${Math.round(post.buffer.length / 1024)}KB) for ${marketData.tradingDate} [${i + 1}/${postsToMake.length}]...`,
             severity: 'info',
           },
         });
@@ -294,14 +327,15 @@ export async function POST(request: NextRequest) {
       }
 
       const allSuccess = results.every((r) => r.success);
+      const successCount = results.filter(r => r.success).length;
       return NextResponse.json({
         success: allSuccess,
         mode: 'image',
         marketData,
         posts: results,
         message: allSuccess
-          ? `All 3 image posts published for ${marketData.tradingDate}`
-          : `Some posts failed for ${marketData.tradingDate}`,
+          ? `All ${results.length} image posts published for ${marketData.tradingDate}`
+          : `${successCount}/${results.length} posts succeeded for ${marketData.tradingDate}`,
       });
     }
 

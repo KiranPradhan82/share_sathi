@@ -98,7 +98,6 @@ function footerBar(theme: 'dark' | 'green' | 'red') {
       },
       children: [
         { type: 'div', props: { style: { fontSize: 20, fontWeight: 800, color: '#ffffff', letterSpacing: '0.08em' }, children: 'SHARE SATHI' } },
-        { type: 'div', props: { style: { fontSize: 13, color: '#ffffff88', letterSpacing: '0.05em' }, children: '#NEPSE #ShareSathi #NepalStockExchange #StockMarket' } },
       ],
     },
   };
@@ -351,11 +350,189 @@ async function renderLosersSvg(losers: StockData[], dateStr: string, fonts: Arra
   );
 }
 
+// ---- Template 4: Individual Stock Card ----
+async function renderStockCardSvg(
+  stock: StockData,
+  dateStr: string,
+  type: 'gainer' | 'loser',
+  rank: number,
+  fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>,
+): Promise<string> {
+  const isGainer = type === 'gainer';
+  const accentColor = isGainer ? '#22C55E' : '#EF4444';
+  const accentBg = isGainer ? '#166534' : '#991B1B';
+  const accentBgLight = isGainer ? '#22C55E22' : '#EF444422';
+  const accentBgSolid = isGainer ? '#052E16' : '#450A0A';
+  const gradientEnd = isGainer ? '#14532D' : '#7F1D1D';
+  const label = isGainer ? 'TOP GAINER' : 'TOP LOSER';
+  const pillEmoji = isGainer ? '\u25B2' : '\u25BC';
+  const pillText = isGainer ? 'Positive Circuit' : 'Negative Circuit';
+
+  const formattedDate = formatDateForPost(dateStr);
+  const sign = isGainer ? '+' : '';
+  const changeAbs = Math.abs(stock.change);
+  const changePercentAbs = Math.abs(stock.changePercent);
+
+  return satori(
+    {
+      type: 'div',
+      props: {
+        style: { width: WIDTH, height: HEIGHT, display: 'flex', flexDirection: 'column' as const, background: `linear-gradient(160deg, ${accentBgSolid} 0%, ${gradientEnd} 50%, ${accentBgSolid} 100%)`, position: 'relative', overflow: 'hidden' },
+        children: [
+          // Watermark
+          {
+            type: 'div',
+            props: {
+              style: {
+                position: 'absolute', top: '50%', left: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transform: 'translate(-50%, -50%) scale(3)', opacity: 0.03,
+              },
+              children: {
+                type: 'div',
+                props: { style: { fontSize: 200, fontWeight: 900, color: '#ffffff', letterSpacing: '0.05em' }, children: stock.symbol },
+              },
+            },
+          },
+          // Top accent bar
+          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 5, backgroundColor: accentColor } } },
+          // Header section
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 55, paddingBottom: 10 },
+              children: [
+                { type: 'div', props: { style: { fontSize: 18, fontWeight: 600, color: accentColor, letterSpacing: '0.12em', textTransform: 'uppercase' as const, opacity: 0.9 }, children: `AS OF ${formattedDate.toUpperCase()} SHARE PRICE` } },
+              ],
+            },
+          },
+          // Badge pill
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 10, marginBottom: 25 },
+              children: {
+                type: 'div',
+                props: {
+                  style: { display: 'flex', alignItems: 'center', gap: 10, backgroundColor: accentBgLight, padding: '10px 28px', borderRadius: 30, border: `1px solid ${accentColor}44` },
+                  children: [
+                    { type: 'div', props: { style: { fontSize: 20, color: accentColor, fontWeight: 700 }, children: pillEmoji } },
+                    { type: 'div', props: { style: { fontSize: 20, color: accentColor, fontWeight: 600 }, children: `${label} - ${pillText}` } },
+                  ],
+                },
+              },
+            },
+          },
+          // Company name
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', width: WIDTH, padding: '0px 60px' },
+              children: [
+                { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff', letterSpacing: '0.05em', textTransform: 'uppercase' as const, textAlign: 'center' as const, lineHeight: 1.3 }, children: stock.name } },
+                { type: 'div', props: { style: { fontSize: 24, fontWeight: 600, color: accentColor, marginTop: 8, letterSpacing: '0.08em' }, children: `(${stock.symbol})` } },
+              ],
+            },
+          },
+          // LTP price display
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', marginTop: 30, marginBottom: 5 },
+              children: [
+                { type: 'div', props: { style: { fontSize: 16, fontWeight: 600, color: '#ffffffaa', letterSpacing: '0.08em', textTransform: 'uppercase' as const }, children: 'Last Traded Price' } },
+                {
+                  type: 'div',
+                  props: {
+                    style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'baseline', gap: 8, marginTop: 6 },
+                    children: [
+                      { type: 'div', props: { style: { fontSize: 22, fontWeight: 600, color: '#ffffffaa' }, children: 'Rs.' } },
+                      { type: 'div', props: { style: { fontSize: 52, fontWeight: 900, color: '#ffffff', lineHeight: 1 }, children: stock.closePrice.toFixed(2) } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          // Metrics row 1: % Change + Point Change
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'row' as const, width: WIDTH, padding: '0px 60px', gap: 16, marginTop: 25 },
+              children: [
+                {
+                  type: 'div',
+                  props: {
+                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: accentBg, borderRadius: 14, padding: '18px 20px', borderLeft: `4px solid ${accentColor}` },
+                    children: [
+                      { type: 'div', props: { style: { fontSize: 14, fontWeight: 600, color: '#ffffff99', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }, children: '% Change' } },
+                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff', marginTop: 6 }, children: `${sign}${changePercentAbs.toFixed(2)}%` } },
+                    ],
+                  },
+                },
+                {
+                  type: 'div',
+                  props: {
+                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: accentBg, borderRadius: 14, padding: '18px 20px', borderLeft: `4px solid ${accentColor}` },
+                    children: [
+                      { type: 'div', props: { style: { fontSize: 14, fontWeight: 600, color: '#ffffff99', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }, children: 'Point Change' } },
+                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff', marginTop: 6 }, children: `Rs. ${sign}${changeAbs.toFixed(2)}` } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          // Metrics row 2: Previous Day Close + Rank
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'row' as const, width: WIDTH, padding: '0px 60px', gap: 16, marginTop: 16 },
+              children: [
+                {
+                  type: 'div',
+                  props: {
+                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: accentBg, borderRadius: 14, padding: '18px 20px', borderLeft: '4px solid #3B82F6' },
+                    children: [
+                      { type: 'div', props: { style: { fontSize: 14, fontWeight: 600, color: '#ffffff99', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }, children: 'Previous Day Close' } },
+                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff', marginTop: 6 }, children: `Rs. ${stock.previousClose.toFixed(2)}` } },
+                    ],
+                  },
+                },
+                {
+                  type: 'div',
+                  props: {
+                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: accentBg, borderRadius: 14, padding: '18px 20px', borderLeft: '4px solid #F59E0B' },
+                    children: [
+                      { type: 'div', props: { style: { fontSize: 14, fontWeight: 600, color: '#ffffff99', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }, children: `${label} Rank` } },
+                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff', marginTop: 6 }, children: `#${rank}` } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          // Footer
+          footerBar(isGainer ? 'green' : 'red'),
+        ],
+      },
+    },
+    { width: WIDTH, height: HEIGHT, fonts },
+  );
+}
+
 // ---- Public API ----
 export interface ClientGeneratedImages {
   marketSummary: string; // data:image/png;base64,...
   topGainers: string;
   topLosers: string;
+  stockCards: Array<{
+    type: 'gainer' | 'loser';
+    rank: number;
+    symbol: string;
+    name: string;
+    image: string; // base64 data URI
+  }>;
 }
 
 export async function generateImagesInBrowser(
@@ -377,9 +554,32 @@ export async function generateImagesInBrowser(
     svgToPngBase64(svgLosers),
   ]);
 
+  // Generate individual stock cards for each gainer and loser
+  const stockCardPromises = [
+    ...gainers.map((g, i) => renderStockCardSvg(g, nepseData.tradingDate, 'gainer', i + 1, fonts)),
+    ...losers.map((l, i) => renderStockCardSvg(l, nepseData.tradingDate, 'loser', i + 1, fonts)),
+  ];
+
+  const stockCardSvgs = await Promise.all(stockCardPromises);
+  const stockCardPngs = await Promise.all(stockCardSvgs.map(svg => svgToPngBase64(svg)));
+
+  const stockCards = stockCardPngs.map((png, idx) => {
+    const isGainer = idx < gainers.length;
+    const stock = isGainer ? gainers[idx] : losers[idx - gainers.length];
+    const rank = isGainer ? idx + 1 : idx - gainers.length + 1;
+    return {
+      type: (isGainer ? 'gainer' : 'loser') as 'gainer' | 'loser',
+      rank,
+      symbol: stock.symbol,
+      name: stock.name,
+      image: png,
+    };
+  });
+
   return {
     marketSummary: pngSummary,
     topGainers: pngGainers,
     topLosers: pngLosers,
+    stockCards,
   };
 }

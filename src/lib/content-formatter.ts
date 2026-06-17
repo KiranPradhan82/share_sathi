@@ -91,6 +91,22 @@ export function formatLosersCaption(date: string, losers: Array<{ symbol: string
   return `Today's Top Losers - ${date}\n\n${rows}\n\n#NEPSE #ShareSathi #TopLosers #NepalStockMarket`;
 }
 
+export function formatStockCardCaption(stock: { name: string; symbol: string; closePrice: number; change: number; changePercent: number; previousClose: number }, type: 'gainer' | 'loser'): string {
+  const isGainer = type === 'gainer';
+  const emoji = isGainer ? '\uD83D\uDC9A' : '\uD83D\uDD34'; // 💚 or 🔴
+  const circuitType = isGainer ? 'positive circuit' : 'negative circuit';
+  const sign = isGainer ? '+' : '';
+
+  return `${stock.name} (${stock.symbol}) hits another ${circuitType} today ${emoji}\n\n` +
+    `Last Traded Price: Rs. ${stock.closePrice.toFixed(2)}\n` +
+    `Previous Day Close: Rs. ${stock.previousClose.toFixed(2)}\n` +
+    `Point Change: Rs. ${sign}${stock.change.toFixed(2)}\n` +
+    `% Change: ${sign}${stock.changePercent.toFixed(2)}%\n\n` +
+    `#NEPSE #ShareSathi #NepalStockExchange #StockMarket #NepalStockMarket` +
+    (isGainer ? ' #TopGainers' : ' #TopLosers') +
+    ` #${stock.symbol}`;
+}
+
 export function getPostTemplate(): string {
   return `📈 NEPSE Daily Market Update
 📅 Date: {tradingDate}

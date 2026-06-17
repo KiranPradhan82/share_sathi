@@ -267,6 +267,13 @@ export default function HomePage() {
     marketSummary: string;
     topGainers: string;
     topLosers: string;
+    stockCards?: Array<{
+      type: 'gainer' | 'loser';
+      rank: number;
+      symbol: string;
+      name: string;
+      image: string;
+    }>;
   } | null>(null);
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
 
@@ -590,7 +597,8 @@ export default function HomePage() {
         losers,
       );
       setImagePreview(images);
-      toast.success('3 post images generated! Review them below.');
+      const cardCount = images.stockCards?.length || 0;
+      toast.success(`3 summary images + ${cardCount} individual stock cards generated! Review them below.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to generate images');
     } finally {
@@ -606,8 +614,15 @@ export default function HomePage() {
       const dateToUse = previewData?.marketData?.tradingDate;
       const body: Record<string, unknown> = {
         mode: 'image',
-        images: imagePreview, // base64 data URIs from browser
+        images: {
+          marketSummary: imagePreview.marketSummary,
+          topGainers: imagePreview.topGainers,
+          topLosers: imagePreview.topLosers,
+        },
       };
+      if (imagePreview.stockCards && imagePreview.stockCards.length > 0) {
+        body.stockCards = imagePreview.stockCards;
+      }
       if (dateToUse) body.date = dateToUse;
 
       const res = await fetch('/api/posts/manual', {
@@ -820,7 +835,7 @@ export default function HomePage() {
                   ) : (
                     <Send className="h-4 w-4" />
                   )}
-                  {isPosting ? 'Posting 3 Images...' : 'Post 3 Images'}
+                  {isPosting ? 'Posting...' : `Post ${imagePreview.stockCards ? (3 + imagePreview.stockCards.length) : 3} Images`}
                 </Button>
               )}
               {postMode === 'text' && (
@@ -860,7 +875,11 @@ export default function HomePage() {
                 <ImageIcon className="h-4 w-4 text-emerald-500" />
                 Image Post Preview
               </CardTitle>
-              <CardDescription>3 images will be posted to Facebook: Market Summary, Top 10 Gainers, Top 10 Losers</CardDescription>
+              <CardDescription>
+                {imagePreview.stockCards && imagePreview.stockCards.length > 0
+                  ? `3 summary images + ${imagePreview.stockCards.length} individual stock cards = ${3 + imagePreview.stockCards.length} total posts`
+                  : '3 images will be posted to Facebook: Market Summary, Top 10 Gainers, Top 10 Losers'}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -883,6 +902,63 @@ export default function HomePage() {
                   </div>
                 </div>
               </div>
+
+              {/* Individual Stock Cards */}
+              {imagePreview.stockCards && imagePreview.stockCards.length > 0 && (
+                <div className="mt-8 space-y-6">
+                  <div className="flex items-center gap-2 border-t border-border pt-6">
+                    <TrendingUp className="h-4 w-4 text-emerald-500" />
+                    <h3 className="text-base font-semibold">Individual Stock Cards</h3>
+                    <span className="text-sm text-muted-foreground">({imagePreview.stockCards.length} posts — each stock gets its own image + text caption)</span>
+                  </div>
+
+                  {(() => {
+                    const gainers = imagePreview.stockCards.filter(c => c.type === 'gainer');
+                    const losers = imagePreview.stockCards.filter(c => c.type === 'loser');
+
+                    return (
+                      <>
+                        {gainers.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-semibold text-emerald-500 flex items-center gap-1.5">
+                              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                              Top Gainers ({gainers.length})
+                            </h4>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                              {gainers.map((card) => (
+                                <div key={`gainer-${card.symbol}`} className="space-y-1.5">
+                                  <div className="rounded-lg overflow-hidden border border-emerald-500/30 bg-muted">
+                                    <img src={card.image} alt={`${card.name} (${card.symbol})`} className="w-full h-auto" />
+                                  </div>
+                                  <p className="text-xs text-center text-muted-foreground">#{card.rank} {card.symbol}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {losers.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-semibold text-red-500 flex items-center gap-1.5">
+                              <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                              Top Losers ({losers.length})
+                            </h4>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                              {losers.map((card) => (
+                                <div key={`loser-${card.symbol}`} className="space-y-1.5">
+                                  <div className="rounded-lg overflow-hidden border border-red-500/30 bg-muted">
+                                    <img src={card.image} alt={`${card.name} (${card.symbol})`} className="w-full h-auto" />
+                                  </div>
+                                  <p className="text-xs text-center text-muted-foreground">#{card.rank} {card.symbol}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
