@@ -1,5 +1,5 @@
 // Client-side image generation using Satori + browser Canvas API
-// No WASM, no native addons — works everywhere
+// Bright, engaging, Facebook-optimized designs
 
 import satori from 'satori';
 import type { NepseData } from './nepse';
@@ -24,7 +24,6 @@ async function loadFonts(): Promise<Array<{ name: string; data: ArrayBuffer; wei
   return fontsCache;
 }
 
-// SVG string → PNG base64 using browser Canvas
 function svgToPngBase64(svg: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
@@ -50,7 +49,7 @@ function svgToPngBase64(svg: string): Promise<string> {
   });
 }
 
-// ---- Date/Number formatting (client-side copies) ----
+// ---- Helpers ----
 function formatDateForPost(dateStr: string): string {
   if (!dateStr) return '';
   try {
@@ -67,114 +66,160 @@ function formatNepaliAmount(amount: number): string {
   return amount.toLocaleString('en-US');
 }
 
-// ---- Shared Satori Elements ----
-function logoWatermark() {
+function formatDateShort(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
+// Bright branded footer
+function brandedFooter(accentColor: string) {
   return {
     type: 'div',
     props: {
       style: {
-        position: 'absolute', top: '50%', left: '50%',
+        position: 'absolute', bottom: 0, left: 0, right: 0, height: 70,
+        background: `linear-gradient(90deg, ${accentColor}, ${accentColor}dd)`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transform: 'translate(-50%, -50%) scale(2.5)', opacity: 0.04,
       },
       children: {
         type: 'div',
-        props: { style: { fontSize: 140, fontWeight: 900, color: '#ffffff', letterSpacing: '0.05em', textTransform: 'uppercase' as const }, children: 'SS' },
+        props: { style: { fontSize: 22, fontWeight: 900, color: '#ffffff', letterSpacing: '0.15em' }, children: 'SHARE SATHI' },
       },
     },
   };
 }
 
-function footerBar(theme: 'dark' | 'green' | 'red') {
-  const bgColor = theme === 'green' ? '#166534' : theme === 'red' ? '#991B1B' : '#0F172A';
-  return {
-    type: 'div',
-    props: {
-      style: {
-        position: 'absolute', bottom: 0, left: 0, right: 0, height: 90,
-        backgroundColor: bgColor, display: 'flex', flexDirection: 'column' as const,
-        alignItems: 'center', justifyContent: 'center', gap: 4,
-        borderTop: `1px solid ${theme === 'green' ? '#22C55E33' : theme === 'red' ? '#EF444433' : '#33415566'}`,
-      },
-      children: [
-        { type: 'div', props: { style: { fontSize: 20, fontWeight: 800, color: '#ffffff', letterSpacing: '0.08em' }, children: 'SHARE SATHI' } },
-      ],
-    },
-  };
-}
-
-// ---- Template 1: Market Summary ----
+// ---- Template 1: BRIGHT Market Summary ----
 async function renderMarketSummarySvg(data: NepseData, fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>): Promise<string> {
   const isUp = data.change >= 0;
+  const accentColor = isUp ? '#059669' : '#DC2626';
+  const accentLight = isUp ? '#D1FAE5' : '#FEE2E2';
+  const accentBg = isUp ? '#ECFDF5' : '#FEF2F2';
   const arrow = isUp ? '\u25B2' : '\u25BC';
   const sign = isUp ? '+' : '';
-  const color = isUp ? '#22C55E' : '#EF4444';
   const dateStr = formatDateForPost(data.tradingDate);
   const turnoverFormatted = formatNepaliAmount(data.turnover);
   const volumeFormatted = formatNepaliAmount(data.volume);
 
   const metrics = [
-    { label: 'Turnover', value: `Rs. ${turnoverFormatted}`, color: '#3B82F6' },
-    { label: 'Traded Shares', value: volumeFormatted, color: '#8B5CF6' },
-    { label: 'Trades', value: data.trades.toLocaleString(), color: '#F59E0B' },
-    { label: 'Advanced', value: data.gainers.toString(), color: '#22C55E' },
-    { label: 'Declined', value: data.losers.toString(), color: '#EF4444' },
-    { label: 'Unchanged', value: data.unchanged.toString(), color: '#3B82F6' },
+    { label: 'TURNOVER', value: `Rs. ${turnoverFormatted}`, color: '#2563EB', bg: '#EFF6FF', icon: '\uD83D\uDCB0' },
+    { label: 'TRADED SHARES', value: volumeFormatted, color: '#7C3AED', bg: '#F5F3FF', icon: '\uD83D\uDCE6' },
+    { label: 'TRANSACTIONS', value: data.trades.toLocaleString(), color: '#EA580C', bg: '#FFF7ED', icon: '\uD83D\uDCCA' },
+    { label: 'ADVANCED', value: data.gainers.toString(), color: '#059669', bg: '#ECFDF5', icon: '\uD83D\uDFE2' },
+    { label: 'DECLINED', value: data.losers.toString(), color: '#DC2626', bg: '#FEF2F2', icon: '\uD83D\uDFE1' },
+    { label: 'UNCHANGED', value: data.unchanged.toString(), color: '#2563EB', bg: '#EFF6FF', icon: '\u26AA' },
   ];
 
   return satori(
     {
       type: 'div',
       props: {
-        style: { width: WIDTH, height: HEIGHT, display: 'flex', flexDirection: 'column' as const, background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%)', position: 'relative', overflow: 'hidden' },
+        style: {
+          width: WIDTH, height: HEIGHT,
+          background: 'linear-gradient(180deg, #ffffff 0%, #F8FAFC 40%, #F1F5F9 100%)',
+          position: 'relative', overflow: 'hidden',
+        },
         children: [
-          logoWatermark(),
-          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, backgroundColor: color } } },
+          // Top colored band
+          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 6, backgroundColor: accentColor } } },
+          // Decorative circle top-right
+          { type: 'div', props: { style: { position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: accentLight, opacity: 0.5 } } },
+          // Decorative circle bottom-left
+          { type: 'div', props: { style: { position: 'absolute', bottom: 50, left: -40, width: 120, height: 120, borderRadius: 60, backgroundColor: accentLight, opacity: 0.3 } } },
+
+          // Header
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 55, paddingBottom: 10 },
+              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 45, paddingBottom: 5 },
               children: [
-                { type: 'div', props: { style: { fontSize: 44, fontWeight: 900, color: '#ffffff', letterSpacing: '0.12em', textTransform: 'uppercase' as const }, children: 'NEPSE TODAY' } },
-                { type: 'div', props: { style: { fontSize: 22, color: '#ffffff99', marginTop: 8, fontWeight: 500 }, children: dateStr } },
+                { type: 'div', props: { style: { fontSize: 16, fontWeight: 700, color: accentColor, letterSpacing: '0.2em', textTransform: 'uppercase' as const }, children: '\uD83D\uDCC8 DAILY MARKET UPDATE' } },
+                { type: 'div', props: { style: { fontSize: 15, color: '#64748B', marginTop: 4, fontWeight: 500 }, children: dateStr } },
               ],
             },
           },
+
+          // Index display card
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 30, paddingBottom: 20 },
+              style: {
+                display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
+                margin: '18px 50px 0px', padding: '28px 30px',
+                backgroundColor: '#ffffff', borderRadius: 24,
+                boxShadow: '0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04)',
+                border: `2px solid ${accentLight}`,
+              },
               children: [
-                { type: 'div', props: { style: { fontSize: 96, fontWeight: 900, color: '#ffffff', lineHeight: 1 }, children: data.nepseIndex.toFixed(2) } },
+                { type: 'div', props: { style: { fontSize: 14, fontWeight: 700, color: '#64748B', letterSpacing: '0.15em', textTransform: 'uppercase' as const }, children: 'NEPSE INDEX' } },
+                { type: 'div', props: { style: { fontSize: 88, fontWeight: 900, color: '#0F172A', lineHeight: 1, marginTop: 4 }, children: data.nepseIndex.toFixed(2) } },
                 {
                   type: 'div',
                   props: {
-                    style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'center', gap: 16, marginTop: 16 },
+                    style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'center', gap: 14, marginTop: 12, backgroundColor: accentBg, padding: '10px 28px', borderRadius: 40 },
                     children: [
-                      { type: 'div', props: { style: { fontSize: 36, fontWeight: 700, color }, children: `${arrow} ${sign}${data.change.toFixed(2)}` } },
-                      { type: 'div', props: { style: { fontSize: 30, fontWeight: 600, color, opacity: 0.85 }, children: `(${sign}${data.changePercentage.toFixed(2)}%)` } },
+                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: accentColor }, children: arrow } },
+                      { type: 'div', props: { style: { fontSize: 30, fontWeight: 800, color: accentColor }, children: `${sign}${data.change.toFixed(2)}` } },
+                      { type: 'div', props: { style: { fontSize: 26, fontWeight: 700, color: accentColor, opacity: 0.8 }, children: `(${sign}${data.changePercentage.toFixed(2)}%)` } },
                     ],
                   },
                 },
-                { type: 'div', props: { style: { width: 300, height: 2, backgroundColor: '#334155', marginTop: 25, borderRadius: 1 } } },
+                // Visual percentage bar
+                {
+                  type: 'div',
+                  props: {
+                    style: { display: 'flex', alignItems: 'center', width: '100%', height: 8, backgroundColor: '#E2E8F0', borderRadius: 4, marginTop: 16, overflow: 'hidden' },
+                    children: {
+                      type: 'div',
+                      props: {
+                        style: {
+                          width: `${Math.min(Math.abs(data.changePercentage) * 8, 100)}%`, height: '100%',
+                          backgroundColor: accentColor, borderRadius: 4,
+                        },
+                        children: [],
+                      },
+                    },
+                  },
+                },
               ],
             },
           },
+
+          // Metrics grid
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', width: WIDTH, padding: '0px 50px', gap: 12 },
+              style: { display: 'flex', flexDirection: 'column' as const, width: WIDTH, padding: '0px 50px', gap: 10, marginTop: 22 },
               children: [0, 1, 2].map((row) => ({
                 type: 'div',
                 props: {
-                  style: { display: 'flex', flexDirection: 'row' as const, width: '100%', gap: 12 },
+                  style: { display: 'flex', flexDirection: 'row' as const, width: '100%', gap: 10 },
                   children: metrics.slice(row * 2, row * 2 + 2).map((m) => ({
                     type: 'div',
                     props: {
-                      style: { flex: 1, display: 'flex', flexDirection: 'row' as const, alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1E293B99', borderRadius: 12, padding: '16px 22px', borderLeft: `4px solid ${m.color}` },
+                      style: {
+                        flex: 1, display: 'flex', flexDirection: 'row' as const, alignItems: 'center', gap: 12,
+                        backgroundColor: '#ffffff', borderRadius: 16, padding: '14px 18px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        borderLeft: `5px solid ${m.color}`,
+                      },
                       children: [
-                        { type: 'div', props: { style: { fontSize: 20, color: '#ffffff99', fontWeight: 500 }, children: m.label } },
-                        { type: 'div', props: { style: { fontSize: 24, color: '#ffffff', fontWeight: 700 }, children: m.value } },
+                        { type: 'div', props: { style: { fontSize: 24 }, children: m.icon } },
+                        {
+                          type: 'div',
+                          props: {
+                            style: { display: 'flex', flexDirection: 'column' as const, flex: 1 },
+                            children: [
+                              { type: 'div', props: { style: { fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.1em', textTransform: 'uppercase' as const }, children: m.label } },
+                              { type: 'div', props: { style: { fontSize: 20, fontWeight: 800, color: '#1E293B', marginTop: 1 }, children: m.value } },
+                            ],
+                          },
+                        },
                       ],
                     },
                   })),
@@ -182,7 +227,7 @@ async function renderMarketSummarySvg(data: NepseData, fonts: Array<{ name: stri
               })),
             },
           },
-          footerBar('dark'),
+          brandedFooter(accentColor),
         ],
       },
     },
@@ -190,79 +235,103 @@ async function renderMarketSummarySvg(data: NepseData, fonts: Array<{ name: stri
   );
 }
 
-// ---- Template 2: Top 10 Gainers ----
+// ---- Template 2: BRIGHT Top 10 Gainers ----
 async function renderGainersSvg(gainers: StockData[], dateStr: string, fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>): Promise<string> {
-  const formattedDate = formatDateForPost(dateStr);
+  const formattedDate = formatDateShort(dateStr);
+  const accent = '#059669';
+  const accentLight = '#D1FAE5';
+
   const headerRow = {
     type: 'div',
     props: {
-      style: { display: 'flex', flexDirection: 'row' as const, width: '100%', backgroundColor: '#166534', padding: '14px 20px', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
+      style: { display: 'flex', flexDirection: 'row' as const, width: '100%', backgroundColor: '#059669', padding: '12px 16px', borderTopLeftRadius: 16, borderTopRightRadius: 16, alignItems: 'center' },
       children: [
-        { type: 'div', props: { style: { width: 50, fontSize: 18, fontWeight: 700, color: '#ffffff' }, children: 'SN' } },
-        { type: 'div', props: { style: { flex: 1, fontSize: 18, fontWeight: 700, color: '#ffffff' }, children: 'Symbol' } },
-        { type: 'div', props: { style: { width: 140, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'Close' } },
-        { type: 'div', props: { style: { width: 120, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'Change' } },
-        { type: 'div', props: { style: { width: 120, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: '% Chg' } },
+        { type: 'div', props: { style: { width: 40, fontSize: 15, fontWeight: 700, color: '#ffffff' }, children: '#' } },
+        { type: 'div', props: { style: { flex: 1, fontSize: 15, fontWeight: 700, color: '#ffffff' }, children: 'STOCK' } },
+        { type: 'div', props: { style: { width: 110, fontSize: 15, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'LTP' } },
+        { type: 'div', props: { style: { width: 100, fontSize: 15, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'CHANGE' } },
+        { type: 'div', props: { style: { width: 90, fontSize: 15, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: '% CHG' } },
       ],
     },
   };
 
-  const dataRows = gainers.map((stock, idx) => ({
-    type: 'div',
-    props: {
-      style: { display: 'flex', flexDirection: 'row' as const, width: '100%', backgroundColor: idx % 2 === 0 ? '#F0FDF4' : '#ffffff', padding: '13px 20px' },
-      children: [
-        { type: 'div', props: { style: { width: 50, fontSize: 17, fontWeight: 600, color: '#374151' }, children: (idx + 1).toString() } },
-        { type: 'div', props: { style: { flex: 1, fontSize: 17, fontWeight: 700, color: '#166534' }, children: stock.symbol } },
-        { type: 'div', props: { style: { width: 140, fontSize: 17, fontWeight: 500, color: '#374151', textAlign: 'right' as const }, children: stock.closePrice.toFixed(2) } },
-        { type: 'div', props: { style: { width: 120, fontSize: 17, fontWeight: 700, color: '#166534', textAlign: 'right' as const }, children: `+${stock.change.toFixed(2)}` } },
-        { type: 'div', props: { style: { width: 120, fontSize: 17, fontWeight: 700, color: '#166534', textAlign: 'right' as const }, children: `+${stock.changePercent.toFixed(2)}%` } },
-      ],
-    },
-  }));
+  const dataRows = gainers.map((stock, idx) => {
+    const barWidth = Math.min(Math.abs(stock.changePercent) * 6, 100);
+    return {
+      type: 'div',
+      props: {
+        style: { display: 'flex', flexDirection: 'row' as const, width: '100%', backgroundColor: idx % 2 === 0 ? '#F0FDF4' : '#ffffff', padding: '10px 16px', alignItems: 'center', position: 'relative' as const, overflow: 'hidden' },
+        children: [
+          // Background bar showing relative % change
+          {
+            type: 'div',
+            props: {
+              style: { position: 'absolute' as const, right: 0, top: 0, bottom: 0, width: `${barWidth}%`, backgroundColor: '#BBF7D0', opacity: 0.5 },
+              children: [],
+            },
+          },
+          { type: 'div', props: { style: { width: 40, fontSize: 15, fontWeight: 700, color: '#6B7280', zIndex: 1 }, children: `${idx + 1}` } },
+          {
+            type: 'div',
+            props: {
+              style: { flex: 1, display: 'flex', flexDirection: 'column' as const, zIndex: 1 },
+              children: [
+                { type: 'div', props: { style: { fontSize: 15, fontWeight: 800, color: '#065F46' }, children: stock.symbol } },
+              ],
+            },
+          },
+          { type: 'div', props: { style: { width: 110, fontSize: 14, fontWeight: 600, color: '#374151', textAlign: 'right' as const, zIndex: 1 }, children: stock.closePrice.toFixed(2) } },
+          { type: 'div', props: { style: { width: 100, fontSize: 14, fontWeight: 800, color: '#059669', textAlign: 'right' as const, zIndex: 1 }, children: `+${stock.change.toFixed(2)}` } },
+          {
+            type: 'div',
+            props: {
+              style: { width: 90, display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', zIndex: 1, gap: 2 },
+              children: [
+                { type: 'div', props: { style: { fontSize: 14, fontWeight: 800, color: '#059669' }, children: `+${stock.changePercent.toFixed(2)}%` } },
+                { type: 'div', props: { style: { width: 50, height: 4, backgroundColor: '#D1FAE5', borderRadius: 2, overflow: 'hidden' }, children: [
+                  { type: 'div', props: { style: { width: `${barWidth}%`, height: '100%', backgroundColor: '#059669', borderRadius: 2 }, children: [] } },
+                ] } },
+              ],
+            },
+          },
+        ],
+      },
+    };
+  });
 
   return satori(
     {
       type: 'div',
       props: {
-        style: { width: WIDTH, height: HEIGHT, display: 'flex', flexDirection: 'column' as const, background: 'linear-gradient(135deg, #052E16 0%, #14532D 40%, #052E16 100%)', position: 'relative', overflow: 'hidden' },
+        style: {
+          width: WIDTH, height: HEIGHT,
+          background: 'linear-gradient(180deg, #ECFDF5 0%, #F8FAFC 30%, #ffffff 100%)',
+          position: 'relative', overflow: 'hidden',
+        },
         children: [
-          logoWatermark(),
-          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, backgroundColor: '#22C55E' } } },
+          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 6, backgroundColor: '#059669' } } },
+          { type: 'div', props: { style: { position: 'absolute', top: -40, right: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: '#D1FAE5', opacity: 0.4 } } },
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 50, paddingBottom: 10 },
+              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 42, paddingBottom: 5 },
               children: [
-                { type: 'div', props: { style: { fontSize: 38, fontWeight: 900, color: '#ffffff', letterSpacing: '0.08em', textTransform: 'uppercase' as const }, children: "TODAY'S TOP 10 GAINERS" } },
-                { type: 'div', props: { style: { fontSize: 22, color: '#ffffff88', marginTop: 8, fontWeight: 500 }, children: formattedDate } },
+                { type: 'div', props: { style: { fontSize: 36, fontWeight: 900, color: '#065F46', letterSpacing: '0.08em' }, children: 'TOP 10 GAINERS' } },
+                { type: 'div', props: { style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, backgroundColor: '#059669', padding: '6px 20px', borderRadius: 20 }, children: [
+                  { type: 'div', props: { style: { fontSize: 16, color: '#ffffff', fontWeight: 700 }, children: '\u25B2 Bullish Session' } },
+                ] } },
+                { type: 'div', props: { style: { fontSize: 14, color: '#64748B', marginTop: 6, fontWeight: 500 }, children: formattedDate } },
               ],
             },
           },
           {
             type: 'div',
             props: {
-              style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 15, marginBottom: 20 },
-              children: {
-                type: 'div',
-                props: {
-                  style: { display: 'flex', alignItems: 'center', gap: 10, backgroundColor: '#22C55E22', padding: '8px 24px', borderRadius: 30, border: '1px solid #22C55E44' },
-                  children: [
-                    { type: 'div', props: { style: { fontSize: 26, color: '#22C55E', fontWeight: 700 }, children: '\u25B2' } },
-                    { type: 'div', props: { style: { fontSize: 20, color: '#22C55E', fontWeight: 600 }, children: 'Bullish Session' } },
-                  ],
-                },
-              },
-            },
-          },
-          {
-            type: 'div',
-            props: {
-              style: { display: 'flex', flexDirection: 'column' as const, width: WIDTH, padding: '0px 35px', gap: 0, borderRadius: 12, overflow: 'hidden', border: '1px solid #22C55E33' },
+              style: { display: 'flex', flexDirection: 'column' as const, width: WIDTH, padding: '0px 40px', gap: 0, marginTop: 16, borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', border: '1px solid #BBF7D0' },
               children: [headerRow, ...dataRows],
             },
           },
-          footerBar('green'),
+          brandedFooter('#059669'),
         ],
       },
     },
@@ -270,79 +339,102 @@ async function renderGainersSvg(gainers: StockData[], dateStr: string, fonts: Ar
   );
 }
 
-// ---- Template 3: Top 10 Losers ----
+// ---- Template 3: BRIGHT Top 10 Losers ----
 async function renderLosersSvg(losers: StockData[], dateStr: string, fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>): Promise<string> {
-  const formattedDate = formatDateForPost(dateStr);
+  const formattedDate = formatDateShort(dateStr);
+  const accent = '#DC2626';
+  const accentLight = '#FEE2E2';
+
   const headerRow = {
     type: 'div',
     props: {
-      style: { display: 'flex', flexDirection: 'row' as const, width: '100%', backgroundColor: '#991B1B', padding: '14px 20px', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
+      style: { display: 'flex', flexDirection: 'row' as const, width: '100%', backgroundColor: '#DC2626', padding: '12px 16px', borderTopLeftRadius: 16, borderTopRightRadius: 16, alignItems: 'center' },
       children: [
-        { type: 'div', props: { style: { width: 50, fontSize: 18, fontWeight: 700, color: '#ffffff' }, children: 'SN' } },
-        { type: 'div', props: { style: { flex: 1, fontSize: 18, fontWeight: 700, color: '#ffffff' }, children: 'Symbol' } },
-        { type: 'div', props: { style: { width: 140, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'Close' } },
-        { type: 'div', props: { style: { width: 120, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'Change' } },
-        { type: 'div', props: { style: { width: 120, fontSize: 18, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: '% Chg' } },
+        { type: 'div', props: { style: { width: 40, fontSize: 15, fontWeight: 700, color: '#ffffff' }, children: '#' } },
+        { type: 'div', props: { style: { flex: 1, fontSize: 15, fontWeight: 700, color: '#ffffff' }, children: 'STOCK' } },
+        { type: 'div', props: { style: { width: 110, fontSize: 15, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'LTP' } },
+        { type: 'div', props: { style: { width: 100, fontSize: 15, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: 'CHANGE' } },
+        { type: 'div', props: { style: { width: 90, fontSize: 15, fontWeight: 700, color: '#ffffff', textAlign: 'right' as const }, children: '% CHG' } },
       ],
     },
   };
 
-  const dataRows = losers.map((stock, idx) => ({
-    type: 'div',
-    props: {
-      style: { display: 'flex', flexDirection: 'row' as const, width: '100%', backgroundColor: idx % 2 === 0 ? '#FEF2F2' : '#ffffff', padding: '13px 20px' },
-      children: [
-        { type: 'div', props: { style: { width: 50, fontSize: 17, fontWeight: 600, color: '#374151' }, children: (idx + 1).toString() } },
-        { type: 'div', props: { style: { flex: 1, fontSize: 17, fontWeight: 700, color: '#991B1B' }, children: stock.symbol } },
-        { type: 'div', props: { style: { width: 140, fontSize: 17, fontWeight: 500, color: '#374151', textAlign: 'right' as const }, children: stock.closePrice.toFixed(2) } },
-        { type: 'div', props: { style: { width: 120, fontSize: 17, fontWeight: 700, color: '#991B1B', textAlign: 'right' as const }, children: stock.change.toFixed(2) } },
-        { type: 'div', props: { style: { width: 120, fontSize: 17, fontWeight: 700, color: '#991B1B', textAlign: 'right' as const }, children: `${stock.changePercent.toFixed(2)}%` } },
-      ],
-    },
-  }));
+  const dataRows = losers.map((stock, idx) => {
+    const barWidth = Math.min(Math.abs(stock.changePercent) * 6, 100);
+    return {
+      type: 'div',
+      props: {
+        style: { display: 'flex', flexDirection: 'row' as const, width: '100%', backgroundColor: idx % 2 === 0 ? '#FEF2F2' : '#ffffff', padding: '10px 16px', alignItems: 'center', position: 'relative' as const, overflow: 'hidden' },
+        children: [
+          {
+            type: 'div',
+            props: {
+              style: { position: 'absolute' as const, right: 0, top: 0, bottom: 0, width: `${barWidth}%`, backgroundColor: '#FECACA', opacity: 0.5 },
+              children: [],
+            },
+          },
+          { type: 'div', props: { style: { width: 40, fontSize: 15, fontWeight: 700, color: '#6B7280', zIndex: 1 }, children: `${idx + 1}` } },
+          {
+            type: 'div',
+            props: {
+              style: { flex: 1, display: 'flex', flexDirection: 'column' as const, zIndex: 1 },
+              children: [
+                { type: 'div', props: { style: { fontSize: 15, fontWeight: 800, color: '#991B1B' }, children: stock.symbol } },
+              ],
+            },
+          },
+          { type: 'div', props: { style: { width: 110, fontSize: 14, fontWeight: 600, color: '#374151', textAlign: 'right' as const, zIndex: 1 }, children: stock.closePrice.toFixed(2) } },
+          { type: 'div', props: { style: { width: 100, fontSize: 14, fontWeight: 800, color: '#DC2626', textAlign: 'right' as const, zIndex: 1 }, children: stock.change.toFixed(2) } },
+          {
+            type: 'div',
+            props: {
+              style: { width: 90, display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', zIndex: 1, gap: 2 },
+              children: [
+                { type: 'div', props: { style: { fontSize: 14, fontWeight: 800, color: '#DC2626' }, children: `${stock.changePercent.toFixed(2)}%` } },
+                { type: 'div', props: { style: { width: 50, height: 4, backgroundColor: '#FEE2E2', borderRadius: 2, overflow: 'hidden' }, children: [
+                  { type: 'div', props: { style: { width: `${barWidth}%`, height: '100%', backgroundColor: '#DC2626', borderRadius: 2 }, children: [] } },
+                ] } },
+              ],
+            },
+          },
+        ],
+      },
+    };
+  });
 
   return satori(
     {
       type: 'div',
       props: {
-        style: { width: WIDTH, height: HEIGHT, display: 'flex', flexDirection: 'column' as const, background: 'linear-gradient(135deg, #450A0A 0%, #7F1D1D 40%, #450A0A 100%)', position: 'relative', overflow: 'hidden' },
+        style: {
+          width: WIDTH, height: HEIGHT,
+          background: 'linear-gradient(180deg, #FEF2F2 0%, #F8FAFC 30%, #ffffff 100%)',
+          position: 'relative', overflow: 'hidden',
+        },
         children: [
-          logoWatermark(),
-          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 4, backgroundColor: '#EF4444' } } },
+          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 6, backgroundColor: '#DC2626' } } },
+          { type: 'div', props: { style: { position: 'absolute', top: -40, right: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: '#FEE2E2', opacity: 0.4 } } },
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 50, paddingBottom: 10 },
+              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 42, paddingBottom: 5 },
               children: [
-                { type: 'div', props: { style: { fontSize: 38, fontWeight: 900, color: '#ffffff', letterSpacing: '0.08em', textTransform: 'uppercase' as const }, children: "TODAY'S TOP 10 LOSERS" } },
-                { type: 'div', props: { style: { fontSize: 22, color: '#ffffff88', marginTop: 8, fontWeight: 500 }, children: formattedDate } },
+                { type: 'div', props: { style: { fontSize: 36, fontWeight: 900, color: '#991B1B', letterSpacing: '0.08em' }, children: 'TOP 10 LOSERS' } },
+                { type: 'div', props: { style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, backgroundColor: '#DC2626', padding: '6px 20px', borderRadius: 20 }, children: [
+                  { type: 'div', props: { style: { fontSize: 16, color: '#ffffff', fontWeight: 700 }, children: '\u25BC Bearish Session' } },
+                ] } },
+                { type: 'div', props: { style: { fontSize: 14, color: '#64748B', marginTop: 6, fontWeight: 500 }, children: formattedDate } },
               ],
             },
           },
           {
             type: 'div',
             props: {
-              style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 15, marginBottom: 20 },
-              children: {
-                type: 'div',
-                props: {
-                  style: { display: 'flex', alignItems: 'center', gap: 10, backgroundColor: '#EF444422', padding: '8px 24px', borderRadius: 30, border: '1px solid #EF444444' },
-                  children: [
-                    { type: 'div', props: { style: { fontSize: 26, color: '#EF4444', fontWeight: 700 }, children: '\u25BC' } },
-                    { type: 'div', props: { style: { fontSize: 20, color: '#EF4444', fontWeight: 600 }, children: 'Bearish Session' } },
-                  ],
-                },
-              },
-            },
-          },
-          {
-            type: 'div',
-            props: {
-              style: { display: 'flex', flexDirection: 'column' as const, width: WIDTH, padding: '0px 35px', gap: 0, borderRadius: 12, overflow: 'hidden', border: '1px solid #EF444433' },
+              style: { display: 'flex', flexDirection: 'column' as const, width: WIDTH, padding: '0px 40px', gap: 0, marginTop: 16, borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', border: '1px solid #FECACA' },
               children: [headerRow, ...dataRows],
             },
           },
-          footerBar('red'),
+          brandedFooter('#DC2626'),
         ],
       },
     },
@@ -350,7 +442,7 @@ async function renderLosersSvg(losers: StockData[], dateStr: string, fonts: Arra
   );
 }
 
-// ---- Template 4: Individual Stock Card ----
+// ---- Template 4: BRIGHT Individual Stock Card ----
 async function renderStockCardSvg(
   stock: StockData,
   dateStr: string,
@@ -359,161 +451,170 @@ async function renderStockCardSvg(
   fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>,
 ): Promise<string> {
   const isGainer = type === 'gainer';
-  const accentColor = isGainer ? '#22C55E' : '#EF4444';
-  const accentBg = isGainer ? '#166534' : '#991B1B';
-  const accentBgLight = isGainer ? '#22C55E22' : '#EF444422';
-  const accentBgSolid = isGainer ? '#052E16' : '#450A0A';
-  const gradientEnd = isGainer ? '#14532D' : '#7F1D1D';
+  const accent = isGainer ? '#059669' : '#DC2626';
+  const accentDark = isGainer ? '#065F46' : '#991B1B';
+  const accentLight = isGainer ? '#D1FAE5' : '#FEE2E2';
+  const accentBg = isGainer ? '#ECFDF5' : '#FEF2F2';
+  const gradientFrom = isGainer ? '#ECFDF5' : '#FEF2F2';
+  const gradientTo = isGainer ? '#D1FAE5' : '#FECACA';
+  const pillEmoji = isGainer ? '\uD83D\uDC9A' : '\uD83D\uDD34';
+  const pillText = isGainer ? 'POSITIVE CIRCUIT' : 'NEGATIVE CIRCUIT';
   const label = isGainer ? 'TOP GAINER' : 'TOP LOSER';
-  const pillEmoji = isGainer ? '\u25B2' : '\u25BC';
-  const pillText = isGainer ? 'Positive Circuit' : 'Negative Circuit';
 
-  const formattedDate = formatDateForPost(dateStr);
+  const formattedDate = formatDateShort(dateStr);
   const sign = isGainer ? '+' : '';
   const changeAbs = Math.abs(stock.change);
   const changePercentAbs = Math.abs(stock.changePercent);
+  const pctBar = Math.min(changePercentAbs * 5, 100);
 
   return satori(
     {
       type: 'div',
       props: {
-        style: { width: WIDTH, height: HEIGHT, display: 'flex', flexDirection: 'column' as const, background: `linear-gradient(160deg, ${accentBgSolid} 0%, ${gradientEnd} 50%, ${accentBgSolid} 100%)`, position: 'relative', overflow: 'hidden' },
+        style: {
+          width: WIDTH, height: HEIGHT,
+          background: `linear-gradient(170deg, #ffffff 0%, ${gradientFrom} 40%, ${gradientTo} 100%)`,
+          position: 'relative', overflow: 'hidden',
+        },
         children: [
-          // Watermark
-          {
-            type: 'div',
-            props: {
-              style: {
-                position: 'absolute', top: '50%', left: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transform: 'translate(-50%, -50%) scale(3)', opacity: 0.03,
-              },
-              children: {
-                type: 'div',
-                props: { style: { fontSize: 200, fontWeight: 900, color: '#ffffff', letterSpacing: '0.05em' }, children: stock.symbol },
-              },
-            },
-          },
           // Top accent bar
-          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 5, backgroundColor: accentColor } } },
-          // Header section
+          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 6, backgroundColor: accent } } },
+          // Decorative circles
+          { type: 'div', props: { style: { position: 'absolute', top: -80, right: -80, width: 250, height: 250, borderRadius: 125, backgroundColor: accentLight, opacity: 0.35 } } },
+          { type: 'div', props: { style: { position: 'absolute', bottom: 80, left: -50, width: 140, height: 140, borderRadius: 70, backgroundColor: accentLight, opacity: 0.25 } } },
+          // Big rank number background
+          { type: 'div', props: { style: { position: 'absolute', bottom: 60, right: 30, fontSize: 220, fontWeight: 900, color: accentLight, opacity: 0.35, lineHeight: 1 }, children: `#${rank}` } },
+
+          // Header
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 55, paddingBottom: 10 },
+              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 40, paddingBottom: 5 },
               children: [
-                { type: 'div', props: { style: { fontSize: 18, fontWeight: 600, color: accentColor, letterSpacing: '0.12em', textTransform: 'uppercase' as const, opacity: 0.9 }, children: `AS OF ${formattedDate.toUpperCase()} SHARE PRICE` } },
+                { type: 'div', props: { style: { fontSize: 14, fontWeight: 700, color: accent, letterSpacing: '0.15em' }, children: `AS OF ${formattedDate.toUpperCase()} SHARE PRICE` } },
               ],
             },
           },
-          // Badge pill
+          // Badge
           {
             type: 'div',
             props: {
-              style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 10, marginBottom: 25 },
+              style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 8, marginBottom: 18 },
               children: {
                 type: 'div',
                 props: {
-                  style: { display: 'flex', alignItems: 'center', gap: 10, backgroundColor: accentBgLight, padding: '10px 28px', borderRadius: 30, border: `1px solid ${accentColor}44` },
+                  style: { display: 'flex', alignItems: 'center', gap: 8, backgroundColor: accent, padding: '8px 24px', borderRadius: 30 },
                   children: [
-                    { type: 'div', props: { style: { fontSize: 20, color: accentColor, fontWeight: 700 }, children: pillEmoji } },
-                    { type: 'div', props: { style: { fontSize: 20, color: accentColor, fontWeight: 600 }, children: `${label} - ${pillText}` } },
+                    { type: 'div', props: { style: { fontSize: 16, color: '#ffffff' }, children: pillEmoji } },
+                    { type: 'div', props: { style: { fontSize: 16, color: '#ffffff', fontWeight: 700, letterSpacing: '0.08em' }, children: `${label} #${rank}` } },
                   ],
                 },
               },
             },
           },
-          // Company name
+          // Company name card
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', width: WIDTH, padding: '0px 60px' },
+              style: {
+                display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
+                margin: '0px 55px', padding: '20px 24px',
+                backgroundColor: '#ffffff', borderRadius: 20,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                border: `2px solid ${accentLight}`,
+              },
               children: [
-                { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff', letterSpacing: '0.05em', textTransform: 'uppercase' as const, textAlign: 'center' as const, lineHeight: 1.3 }, children: stock.name } },
-                { type: 'div', props: { style: { fontSize: 24, fontWeight: 600, color: accentColor, marginTop: 8, letterSpacing: '0.08em' }, children: `(${stock.symbol})` } },
+                { type: 'div', props: { style: { fontSize: 11, fontWeight: 700, color: accent, letterSpacing: '0.12em' }, children: pillText } },
+                { type: 'div', props: { style: { fontSize: 24, fontWeight: 800, color: '#0F172A', letterSpacing: '0.03em', textTransform: 'uppercase' as const, textAlign: 'center' as const, lineHeight: 1.3, marginTop: 6 }, children: stock.name } },
+                { type: 'div', props: { style: { fontSize: 22, fontWeight: 700, color: accent, marginTop: 4 }, children: `(${stock.symbol})` } },
               ],
             },
           },
-          // LTP price display
+          // LTP display
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', marginTop: 30, marginBottom: 5 },
+              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', marginTop: 22 },
               children: [
-                { type: 'div', props: { style: { fontSize: 16, fontWeight: 600, color: '#ffffffaa', letterSpacing: '0.08em', textTransform: 'uppercase' as const }, children: 'Last Traded Price' } },
+                { type: 'div', props: { style: { fontSize: 13, fontWeight: 600, color: '#94A3B8', letterSpacing: '0.1em', textTransform: 'uppercase' as const }, children: 'LAST TRADED PRICE' } },
                 {
                   type: 'div',
                   props: {
-                    style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'baseline', gap: 8, marginTop: 6 },
+                    style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'baseline', gap: 6, marginTop: 4 },
                     children: [
-                      { type: 'div', props: { style: { fontSize: 22, fontWeight: 600, color: '#ffffffaa' }, children: 'Rs.' } },
-                      { type: 'div', props: { style: { fontSize: 52, fontWeight: 900, color: '#ffffff', lineHeight: 1 }, children: stock.closePrice.toFixed(2) } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          // Metrics row 1: % Change + Point Change
-          {
-            type: 'div',
-            props: {
-              style: { display: 'flex', flexDirection: 'row' as const, width: WIDTH, padding: '0px 60px', gap: 16, marginTop: 25 },
-              children: [
-                {
-                  type: 'div',
-                  props: {
-                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: accentBg, borderRadius: 14, padding: '18px 20px', borderLeft: `4px solid ${accentColor}` },
-                    children: [
-                      { type: 'div', props: { style: { fontSize: 14, fontWeight: 600, color: '#ffffff99', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }, children: '% Change' } },
-                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff', marginTop: 6 }, children: `${sign}${changePercentAbs.toFixed(2)}%` } },
-                    ],
-                  },
-                },
-                {
-                  type: 'div',
-                  props: {
-                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: accentBg, borderRadius: 14, padding: '18px 20px', borderLeft: `4px solid ${accentColor}` },
-                    children: [
-                      { type: 'div', props: { style: { fontSize: 14, fontWeight: 600, color: '#ffffff99', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }, children: 'Point Change' } },
-                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff', marginTop: 6 }, children: `Rs. ${sign}${changeAbs.toFixed(2)}` } },
+                      { type: 'div', props: { style: { fontSize: 24, fontWeight: 600, color: '#64748B' }, children: 'Rs.' } },
+                      { type: 'div', props: { style: { fontSize: 56, fontWeight: 900, color: accentDark, lineHeight: 1 }, children: stock.closePrice.toFixed(2) } },
                     ],
                   },
                 },
               ],
             },
           },
-          // Metrics row 2: Previous Day Close + Rank
+          // 4 metric cards
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'row' as const, width: WIDTH, padding: '0px 60px', gap: 16, marginTop: 16 },
+              style: { display: 'flex', flexDirection: 'row' as const, width: WIDTH, padding: '0px 55px', gap: 12, marginTop: 22 },
               children: [
+                // % Change
                 {
                   type: 'div',
                   props: {
-                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: accentBg, borderRadius: 14, padding: '18px 20px', borderLeft: '4px solid #3B82F6' },
+                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: '#ffffff', borderRadius: 16, padding: '14px 14px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', borderLeft: `4px solid ${accent}` },
                     children: [
-                      { type: 'div', props: { style: { fontSize: 14, fontWeight: 600, color: '#ffffff99', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }, children: 'Previous Day Close' } },
-                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff', marginTop: 6 }, children: `Rs. ${stock.previousClose.toFixed(2)}` } },
+                      { type: 'div', props: { style: { fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.1em' }, children: '% CHANGE' } },
+                      { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: accent, marginTop: 4 }, children: `${sign}${changePercentAbs.toFixed(2)}%` } },
+                      { type: 'div', props: { style: { width: '100%', height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, marginTop: 6, overflow: 'hidden' }, children: [
+                        { type: 'div', props: { style: { width: `${pctBar}%`, height: '100%', backgroundColor: accent, borderRadius: 2 }, children: [] } },
+                      ] } },
                     ],
                   },
                 },
+                // Point Change
                 {
                   type: 'div',
                   props: {
-                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: accentBg, borderRadius: 14, padding: '18px 20px', borderLeft: '4px solid #F59E0B' },
+                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: '#ffffff', borderRadius: 16, padding: '14px 14px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', borderLeft: '4px solid #2563EB' },
                     children: [
-                      { type: 'div', props: { style: { fontSize: 14, fontWeight: 600, color: '#ffffff99', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }, children: `${label} Rank` } },
-                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff', marginTop: 6 }, children: `#${rank}` } },
+                      { type: 'div', props: { style: { fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.1em' }, children: 'POINT CHANGE' } },
+                      { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: '#1E40AF', marginTop: 4 }, children: `Rs. ${sign}${changeAbs.toFixed(2)}` } },
                     ],
                   },
                 },
               ],
             },
           },
-          // Footer
-          footerBar(isGainer ? 'green' : 'red'),
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'row' as const, width: WIDTH, padding: '0px 55px', gap: 12, marginTop: 12 },
+              children: [
+                // Previous Close
+                {
+                  type: 'div',
+                  props: {
+                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: '#ffffff', borderRadius: 16, padding: '14px 14px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', borderLeft: '4px solid #F59E0B' },
+                    children: [
+                      { type: 'div', props: { style: { fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.1em' }, children: 'PREV. DAY CLOSE' } },
+                      { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: '#92400E', marginTop: 4 }, children: `Rs. ${stock.previousClose.toFixed(2)}` } },
+                    ],
+                  },
+                },
+                // Rank
+                {
+                  type: 'div',
+                  props: {
+                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: accent, borderRadius: 16, padding: '14px 14px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' },
+                    children: [
+                      { type: 'div', props: { style: { fontSize: 10, fontWeight: 700, color: '#ffffffaa', letterSpacing: '0.1em' }, children: `${label} RANK` } },
+                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 900, color: '#ffffff', marginTop: 4 }, children: `#${rank}` } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          brandedFooter(accent),
         ],
       },
     },
@@ -523,7 +624,7 @@ async function renderStockCardSvg(
 
 // ---- Public API ----
 export interface ClientGeneratedImages {
-  marketSummary: string; // data:image/png;base64,...
+  marketSummary: string;
   topGainers: string;
   topLosers: string;
   stockCards: Array<{
@@ -531,7 +632,7 @@ export interface ClientGeneratedImages {
     rank: number;
     symbol: string;
     name: string;
-    image: string; // base64 data URI
+    image: string;
   }>;
 }
 
@@ -554,7 +655,6 @@ export async function generateImagesInBrowser(
     svgToPngBase64(svgLosers),
   ]);
 
-  // Generate individual stock cards for each gainer and loser
   const stockCardPromises = [
     ...gainers.map((g, i) => renderStockCardSvg(g, nepseData.tradingDate, 'gainer', i + 1, fonts)),
     ...losers.map((l, i) => renderStockCardSvg(l, nepseData.tradingDate, 'loser', i + 1, fonts)),
