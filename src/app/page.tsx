@@ -29,7 +29,6 @@ import {
   Type,
   Loader2,
   LogOut,
-  Check,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -217,8 +216,6 @@ export default function HomePage() {
   const [previewData, setPreviewData] = useState<{ marketData: MarketData; message: string; source: string } | null>(null);
   const [isFetchingPreview, setIsFetchingPreview] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
-  const [postingSingle, setPostingSingle] = useState<string | null>(null); // tracks which image is being posted
-  const [postedImages, setPostedImages] = useState<Set<string>>(new Set()); // tracks successfully posted images
 
   // Market data state
   const [marketDataList, setMarketDataList] = useState<MarketData[]>([]);
@@ -270,7 +267,7 @@ export default function HomePage() {
     marketSummary: string;
     topGainers: string;
     topLosers: string;
-    stockCards?: Array<{
+    stockCards: Array<{
       type: 'gainer' | 'loser';
       rank: number;
       symbol: string;
@@ -279,6 +276,7 @@ export default function HomePage() {
     }>;
   } | null>(null);
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+  const [postingCardIndex, setPostingCardIndex] = useState<number | null>(null);
 
   // Loading states
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
@@ -600,192 +598,159 @@ export default function HomePage() {
         losers,
       );
       setImagePreview(images);
-      const cardCount = images.stockCards?.length || 0;
-      toast.success(`3 summary images + ${cardCount} individual stock cards generated! Review them below.`);
+      toast.success(`${3 + images.stockCards.length} images generated! Review them below.`);
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'Failed to generate images';
-      // Check if our validator found issues before Satori threw
-      const validationDetail = (window as any).__satoriErrors as string | undefined;
-      const fullMsg = validationDetail
-        ? `${errMsg}\n\n--- Satori Tree Validation ---\n${validationDetail}`
-        : errMsg;
-      console.error('Image generation failed:', fullMsg);
-      // Show the error in a way that's easy to see and copy
-      toast.error(errMsg, { duration: 10000 });
-      if (validationDetail) {
-        // Also alert so it's very visible
-        alert(`SATORI VALIDATION ERROR (copy this):\n\n${validationDetail}`);
-      }
+      toast.error(err instanceof Error ? err.message : 'Failed to generate images');
     } finally {
       setIsGeneratingImages(false);
+    }
+  };
+
+  const handlePostSingleCard = async (cardIndex: number) => {
+    if (!imagePreview) return;
+    const card = imagePreview.stockCards[cardIndex];
+    if (!card) return;
+
+    setPostingCardIndex(cardIndex);
+    try {
+      // Get stock data for caption
+      const { gainers, losers } = parseStockDataFromRawData(previewData!.marketData.rawData);
+      const allStocks = [...gainers, ...losers];
+      const stockData = allStocks.find((s) => s.symbol === card.symbol);
+      if (!stockData) {
+        toast.error(`Stock data not found for ${card.symbol}`);
+        return;
+      }
+
+      const res = await fetch('/api/posts/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'stock_card',
+          date: previewData?.marketData?.tradingDate,
+          images: {
+            stockCardImage: card.image,
+            cardInfo: {
+              symbol: stockData.symbol,
+              change: stockData.change,
+              changePercent: stockData.changePercent,
+              closePrice: stockData.closePrice,
+              type: card.type,
+            },
+          },
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`${card.symbol} posted to Facebook!`);
+      } else {
+        toast.error(`Failed: ${json.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to post');
+    } finally {
+      setPostingCardIndex(null);
     }
   };
 
   const handlePostImages = async () => {
     if (!imagePreview) return;
     setIsPosting(true);
-
-    const dateToUse = previewData?.marketData?.tradingDate;
-    const allResults: Array<{ success: boolean; label: string; postId?: string; error?: string; debug?: Record<string, unknown> }> = [];
-    let totalSent = 0;
-    let totalSuccess = 0;
-
-    // Helper: call the API with a batch of images, collect results
-    const postBatch = async (body: Record<string, unknown>, batchLabel: string): Promise<boolean> => {
-      try {
-        const res = await fetch('/api/posts/manual', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(180000), // 3 min — server posts to FB with delays
-        });
-
-        let json: Record<string, unknown>;
-        try {
-          json = await res.json();
-        } catch {
-          const text = await res.text().catch(() => '');
-          const sizeKB = Math.round(new Blob([JSON.stringify(body)]).size / 1024);
-          const detail = `HTTP ${res.status} | Request: ${sizeKB}KB | Response: ${text.substring(0, 300)}`;
-          console.error(`[${batchLabel}] Non-JSON response:`, detail);
-          toast.error(`${batchLabel}: Server error (HTTP ${res.status}). Check console for details.`, { duration: 15000 });
-          setErrorDialogTitle(`Server Error: ${batchLabel}`);
-          setErrorDetailText(detail);
-          setShowErrorDialog(true);
-          return false;
-        }
-
-        if (!res.ok || !json.success) {
-          const errMsg = json.error || `HTTP ${res.status}`;
-          toast.error(`${batchLabel}: ${errMsg}`);
-          // Collect per-post errors if available
-          const posts = (json.posts as Array<Record<string, unknown>>) || [];
-          for (const p of posts) {
-            allResults.push({ success: !!(p.success), label: (p.label as string) || batchLabel, postId: p.postId as string | undefined, error: p.error as string | undefined, debug: p.debug as Record<string, unknown> | undefined });
-            if (p.success) totalSuccess++;
-          }
-          return false;
-        }
-
-        const posts = (json.posts as Array<Record<string, unknown>>) || [];
-        for (const p of posts) {
-          allResults.push({ success: !!(p.success), label: (p.label as string) || batchLabel, postId: p.postId as string | undefined, error: p.error as string | undefined, debug: p.debug as Record<string, unknown> | undefined });
-          if (p.success) totalSuccess++;
-        }
-        return true;
-      } catch (err) {
-        toast.error(`${batchLabel}: ${err instanceof Error ? err.message : 'Network error'}`);
-        return false;
-      }
-    };
-
     try {
-      // ---- Batch 1: 3 summary images (~1MB base64 — safe for body limit) ----
-      toast.loading('Posting 3 summary images...', { id: 'post-progress' });
-      const summaryOk = await postBatch(
-        { mode: 'image', images: { marketSummary: imagePreview.marketSummary, topGainers: imagePreview.topGainers, topLosers: imagePreview.topLosers }, date: dateToUse },
-        'Summary Images',
-      );
-      totalSent += 3;
+      // Send client-generated images + date to the server for Facebook posting
+      const dateToUse = previewData?.marketData?.tradingDate;
+      const body: Record<string, unknown> = {
+        mode: 'image',
+        images: imagePreview, // base64 data URIs from browser
+      };
+      if (dateToUse) body.date = dateToUse;
 
-      // ---- Batch 2+: Stock cards in groups of 5 (~1.5MB per batch) ----
-      const cards = imagePreview.stockCards || [];
-      if (cards.length > 0) {
-        const BATCH_SIZE = 5;
-        for (let i = 0; i < cards.length; i += BATCH_SIZE) {
-          const batch = cards.slice(i, i + BATCH_SIZE);
-          const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-          const totalBatches = Math.ceil(cards.length / BATCH_SIZE);
-          toast.loading(`Posting stock cards batch ${batchNum}/${totalBatches}...`, { id: 'post-progress' });
-
-          await postBatch(
-            { mode: 'image', images: {}, stockCards: batch, date: dateToUse },
-            `Stock Cards ${i + 1}-${Math.min(i + BATCH_SIZE, cards.length)}`,
-          );
-          totalSent += batch.length;
-
-          // Delay between batches to avoid rate limits
-          if (i + BATCH_SIZE < cards.length) {
-            await new Promise(r => setTimeout(r, 3000));
-          }
-        }
-      }
-
-      toast.dismiss('post-progress');
-
-      // Final result
-      if (totalSuccess === totalSent) {
-        toast.success(`All ${totalSent} images posted to Facebook!`);
-      } else if (totalSuccess > 0) {
-        toast.success(`${totalSuccess}/${totalSent} posted — some failed`);
-        const failed = allResults.filter(r => !r.success);
-        const lines = failed.map((p, i) => {
-          const debug = p.debug;
-          return [
-            `--- ${p.label} ---`,
-            `Error: ${p.error || 'Unknown'}`,
-            debug ? `Image: ${((debug.imageBufferSize as number) || 0) / 1024}KB, Caption: ${debug.captionLength || 0} chars` : '',
-          ].filter(Boolean).join('\n');
-        });
-        setErrorDialogTitle(`Partial Failure (${totalSuccess}/${totalSent})`);
-        setErrorDetailText(lines.join('\n\n'));
-        setShowErrorDialog(true);
-      } else {
-        setErrorDialogTitle('All Posts Failed');
-        setErrorDetailText(allResults.map(r => `${r.label}: ${r.error || 'Unknown error'}`).join('\n'));
-        setShowErrorDialog(true);
-      }
-
-      // Refresh data
-      setImagePreview(null);
-      fetchSystemStatus();
-      fetchLatestData();
-      fetchRecentEvents();
-      fetchPosts(1, 'all');
-    } catch (err) {
-      toast.dismiss('post-progress');
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      setErrorDialogTitle('Network Error');
-      setErrorDetailText(msg);
-      setShowErrorDialog(true);
-    } finally {
-      setIsPosting(false);
-    }
-  };
-
-  // Post a single image to Facebook
-  const handlePostSingleImage = async (imageKey: string, image: string, type: string, symbol?: string, name?: string, rank?: number) => {
-    const dateToUse = previewData?.marketData?.tradingDate;
-    if (!dateToUse) { toast.error('No trading date available'); return; }
-
-    setPostingSingle(imageKey);
-    try {
-      const res = await fetch('/api/posts/single-photo', {
+      const res = await fetch('/api/posts/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image, date: dateToUse, type, symbol, name, rank }),
-        signal: AbortSignal.timeout(60000),
+        body: JSON.stringify(body),
       });
 
       let json: Record<string, unknown>;
       try {
         json = await res.json();
       } catch {
-        const text = await res.text().catch(() => '');
-        toast.error(`HTTP ${res.status}: ${text.substring(0, 150)}`, { duration: 10000 });
+        toast.error('Received non-JSON response from server');
         return;
       }
 
-      if (json.success) {
-        toast.success(`Posted! ${json.label || type} — FB ID: ${json.postId || 'ok'}`);
-        setPostedImages(prev => new Set(prev).add(imageKey));
-      } else {
-        toast.error(`Failed: ${json.error || 'Unknown error'}`, { duration: 10000 });
+      // If HTTP error or API returned success=false, show full error detail
+      if (!res.ok || !json.success) {
+        const failedPosts = (json.posts as Array<Record<string, unknown>>)?.filter((p) => !p.success) || [];
+        if (failedPosts.length > 0) {
+          // Build detailed error report
+          const lines = failedPosts.map((p, i) => {
+            const debug = p.debug as Record<string, unknown> | undefined;
+            const lines = [
+              `--- Post ${i + 1}: ${p.label || 'Unknown'} ---`,
+              `Status: FAILED`,
+              `Error: ${p.error || 'No error message'}`,
+              debug ? `Image Size: ${((debug.imageBufferSize as number) || 0)} bytes` : '',
+              debug ? `Caption Length: ${debug.captionLength || 0} chars` : '',
+              debug ? `Caption Preview: ${debug.captionPreview || 'N/A'}` : '',
+            ].filter(Boolean).join('\n');
+            return lines;
+          });
+          setErrorDialogTitle(`Facebook Posting Failed (${failedPosts.length} post${failedPosts.length > 1 ? 's' : ''})`);
+          setErrorDetailText(lines.join('\n\n'));
+          setShowErrorDialog(true);
+        } else {
+          // No per-post errors — show the top-level error
+          setErrorDialogTitle('Posting Failed');
+          setErrorDetailText(`HTTP Status: ${res.status}\n\nFull Response:\n${JSON.stringify(json, null, 2)}`);
+          setShowErrorDialog(true);
+        }
+        return;
       }
+
+      // Success path
+      const posts = json.posts as Array<{ success: boolean; label: string; postId?: string; error?: string; debug?: Record<string, unknown> }>;
+      const postCount = posts?.length || 3;
+      const successCount = posts?.filter((p) => p.success).length || 0;
+      const failedPosts = posts?.filter((p) => !p.success) || [];
+
+      if (successCount === postCount) {
+        toast.success(`All ${postCount} images posted to Facebook!`);
+      } else {
+        // Show error dialog with full details for each failed post
+        const lines = failedPosts.map((p, i) => {
+          const debug = p.debug;
+          return [
+            `--- Post ${i + 1}: ${p.label || 'Unknown'} ---`,
+            `Status: FAILED`,
+            `Error: ${p.error || 'No error message'}`,
+            debug ? `Image Size: ${debug.imageBufferSize || 0} bytes` : '',
+            debug ? `Caption Length: ${debug.captionLength || 0} chars` : '',
+            debug ? `Caption Preview: ${debug.captionPreview || 'N/A'}` : '',
+          ].filter(Boolean).join('\n');
+        });
+        setErrorDialogTitle(`Partial Failure (${successCount}/${postCount} posted)`);
+        setErrorDetailText(lines.join('\n\n'));
+        setShowErrorDialog(true);
+
+        if (successCount > 0) {
+          toast.success(`${successCount}/${postCount} posted successfully`);
+        }
+      }
+        // Refresh data on any response (success or partial)
+      setImagePreview(null);
+      fetchSystemStatus();
+      fetchLatestData();
+      fetchRecentEvents();
+      fetchPosts(1, 'all');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Network error');
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setErrorDialogTitle('Network Error');
+      setErrorDetailText(msg);
+      setShowErrorDialog(true);
     } finally {
-      setPostingSingle(null);
+      setIsPosting(false);
     }
   };
 
@@ -911,7 +876,7 @@ export default function HomePage() {
                   ) : (
                     <Send className="h-4 w-4" />
                   )}
-                  {isPosting ? 'Posting...' : `Post ${imagePreview.stockCards ? (3 + imagePreview.stockCards.length) : 3} Images`}
+                  {isPosting ? 'Posting 3 Images...' : 'Post 3 Images'}
                 </Button>
               )}
               {postMode === 'text' && (
@@ -951,138 +916,76 @@ export default function HomePage() {
                 <ImageIcon className="h-4 w-4 text-emerald-500" />
                 Image Post Preview
               </CardTitle>
-              <CardDescription>
-                {imagePreview.stockCards && imagePreview.stockCards.length > 0
-                  ? `3 summary images + ${imagePreview.stockCards.length} individual stock cards = ${3 + imagePreview.stockCards.length} total posts`
-                  : '3 images will be posted to Facebook: Market Summary, Top 10 Gainers, Top 10 Losers'}
-              </CardDescription>
+              <CardDescription>3 summary images + {imagePreview.stockCards.length} individual stock cards</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  { key: 'summary', label: '1. Market Summary', img: imagePreview.marketSummary, type: 'summary' },
-                  { key: 'gainers', label: '2. Top 10 Gainers', img: imagePreview.topGainers, type: 'gainers' },
-                  { key: 'losers', label: '3. Top 10 Losers', img: imagePreview.topLosers, type: 'losers' },
-                ].map(({ key, label, img, type }) => {
-                  const isPosted = postedImages.has(key);
-                  const isLoading = postingSingle === key;
-                  return (
-                    <div key={key} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">1. Market Summary</p>
+                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={imagePreview.marketSummary} alt="Market Summary" className="w-full h-auto" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">2. Top 10 Gainers</p>
+                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={imagePreview.topGainers} alt="Top 10 Gainers" className="w-full h-auto" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">3. Top 10 Losers</p>
+                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={imagePreview.topLosers} alt="Top 10 Losers" className="w-full h-auto" />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Individual Stock Cards */}
+          {imagePreview.stockCards.length > 0 && (
+            <Card className="border-blue-500/50 bg-blue-500/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4 text-blue-500" />
+                  Individual Stock Cards
+                </CardTitle>
+                <CardDescription>Click "Post" below any card to post it individually to Facebook</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {imagePreview.stockCards.map((card, idx) => (
+                    <div key={`${card.type}-${card.rank}`} className="space-y-2">
+                      <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                        <img src={card.image} alt={card.symbol} className="w-full h-auto" />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate">{card.symbol}</p>
+                          <p className={`text-xs ${card.type === 'gainer' ? 'text-emerald-500' : 'text-red-500'}`}>
+                            {card.type === 'gainer' ? 'Gainer' : 'Loser'} #{card.rank}
+                          </p>
+                        </div>
                         <Button
                           size="sm"
-                          variant={isPosted ? 'outline' : 'default'}
-                          disabled={isLoading}
-                          onClick={() => handlePostSingleImage(key, img, type)}
-                          className={isPosted ? 'text-emerald-600 border-emerald-300 bg-emerald-50' : ''}
+                          variant="outline"
+                          disabled={postingCardIndex === idx}
+                          onClick={() => handlePostSingleCard(idx)}
+                          className="shrink-0"
                         >
-                          {isLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                          {isPosted ? (
-                            <><Check className="h-3 w-3 mr-1" />Posted</>
+                          {postingCardIndex === idx ? (
+                            <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Posting</>
                           ) : (
-                            <><Send className="h-3 w-3 mr-1" />Post</>
+                            'Post'
                           )}
                         </Button>
                       </div>
-                      <div className="rounded-lg overflow-hidden border border-border bg-muted">
-                        <img src={img} alt={label} className="w-full h-auto" />
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Individual Stock Cards */}
-              {imagePreview.stockCards && imagePreview.stockCards.length > 0 && (
-                <div className="mt-8 space-y-6">
-                  <div className="flex items-center gap-2 border-t border-border pt-6">
-                    <TrendingUp className="h-4 w-4 text-emerald-500" />
-                    <h3 className="text-base font-semibold">Individual Stock Cards</h3>
-                    <span className="text-sm text-muted-foreground">({imagePreview.stockCards.length} posts — each stock gets its own image + text caption)</span>
-                  </div>
-
-                  {(() => {
-                    const gainers = imagePreview.stockCards.filter(c => c.type === 'gainer');
-                    const losers = imagePreview.stockCards.filter(c => c.type === 'loser');
-
-                    return (
-                      <>
-                        {gainers.length > 0 && (
-                          <div className="space-y-3">
-                            <h4 className="text-sm font-semibold text-emerald-500 flex items-center gap-1.5">
-                              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
-                              Top Gainers ({gainers.length})
-                            </h4>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                              {gainers.map((card) => {
-                                const cardKey = `gainer-${card.symbol}`;
-                                const isPosted = postedImages.has(cardKey);
-                                const isLoading = postingSingle === cardKey;
-                                return (
-                                  <div key={cardKey} className="space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                      <p className="text-xs text-muted-foreground">#{card.rank} {card.symbol}</p>
-                                      <Button
-                                        size="sm"
-                                        variant={isPosted ? 'outline' : 'default'}
-                                        disabled={isLoading}
-                                        onClick={() => handlePostSingleImage(cardKey, card.image, 'gainer', card.symbol, card.name, card.rank)}
-                                        className={`h-6 px-2 text-xs ${isPosted ? 'text-emerald-600 border-emerald-300 bg-emerald-50' : ''}`}
-                                      >
-                                        {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : isPosted ? <Check className="h-3 w-3" /> : <Send className="h-3 w-3" />}
-                                      </Button>
-                                    </div>
-                                    <div className="rounded-lg overflow-hidden border border-emerald-500/30 bg-muted">
-                                      <img src={card.image} alt={`${card.name} (${card.symbol})`} className="w-full h-auto" />
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                        {losers.length > 0 && (
-                          <div className="space-y-3">
-                            <h4 className="text-sm font-semibold text-red-500 flex items-center gap-1.5">
-                              <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
-                              Top Losers ({losers.length})
-                            </h4>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                              {losers.map((card) => {
-                                const cardKey = `loser-${card.symbol}`;
-                                const isPosted = postedImages.has(cardKey);
-                                const isLoading = postingSingle === cardKey;
-                                return (
-                                  <div key={cardKey} className="space-y-1.5">
-                                    <div className="flex items-center justify-between">
-                                      <p className="text-xs text-muted-foreground">#{card.rank} {card.symbol}</p>
-                                      <Button
-                                        size="sm"
-                                        variant={isPosted ? 'outline' : 'default'}
-                                        disabled={isLoading}
-                                        onClick={() => handlePostSingleImage(cardKey, card.image, 'loser', card.symbol, card.name, card.rank)}
-                                        className={`h-6 px-2 text-xs ${isPosted ? 'text-red-600 border-red-300 bg-red-50' : ''}`}
-                                      >
-                                        {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : isPosted ? <Check className="h-3 w-3" /> : <Send className="h-3 w-3" />}
-                                      </Button>
-                                    </div>
-                                    <div className="rounded-lg overflow-hidden border border-red-500/30 bg-muted">
-                                      <img src={card.image} alt={`${card.name} (${card.symbol})`} className="w-full h-auto" />
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
+                  ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

@@ -351,6 +351,78 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // ---- SINGLE STOCK CARD MODE ----
+    if (mode === 'stock_card' && clientImages && clientImages.stockCardImage) {
+      const cardInfo = clientImages.cardInfo as { symbol: string; change: number; changePercent: number; closePrice: number; type: 'gainer' | 'loser' } | undefined;
+      if (!cardInfo) {
+        return NextResponse.json({ error: 'Missing cardInfo for stock card post' }, { status: 400 });
+      }
+
+      let imageBuffer: Buffer;
+      try {
+        imageBuffer = dataUriToBuffer(clientImages.stockCardImage);
+      } catch (convErr) {
+        return NextResponse.json({ error: `Failed to decode base64 image: ${convErr instanceof Error ? convErr.message : 'Unknown'}` }, { status: 400 });
+      }
+
+      const caption = formatStockCardCaption(cardInfo, cardInfo.type);
+
+      const fbPost = await db.facebookPost.create({
+        data: {
+          marketDataId: marketData.id,
+          message: `[STOCK CARD] ${cardInfo.symbol}: ${caption.substring(0, 100)}...`,
+          status: 'posting',
+          attemptCount: 1,
+        },
+      });
+
+      await db.systemEvent.create({
+        data: {
+          eventType: 'post',
+          entityType: 'facebook_post',
+          entityId: fbPost.id,
+          facebookPostId: fbPost.id,
+          description: `Posting stock card for ${cardInfo.symbol} (${Math.round(imageBuffer.length / 1024)}KB)...`,
+          severity: 'info',
+        },
+      });
+
+      const result = await postPhotoToFacebook(imageBuffer, caption, pageAccessToken, pageId);
+
+      if (result.success) {
+        await db.facebookPost.update({
+          where: { id: fbPost.id },
+          data: { status: 'success', facebookPostId: result.postId || null, postedTime: new Date() },
+        });
+        await db.systemEvent.create({
+          data: {
+            eventType: 'post', entityType: 'facebook_post', entityId: fbPost.id, facebookPostId: fbPost.id,
+            description: `Successfully posted ${cardInfo.symbol} stock card. Facebook Post ID: ${result.postId}`,
+            severity: 'success',
+          },
+        });
+      } else {
+        await db.facebookPost.update({
+          where: { id: fbPost.id },
+          data: { status: 'failed', attemptCount: 1, errorMessage: result.error || 'Unknown error' },
+        });
+        await db.systemEvent.create({
+          data: {
+            eventType: 'post', entityType: 'facebook_post', entityId: fbPost.id, facebookPostId: fbPost.id,
+            description: `Failed to post ${cardInfo.symbol} stock card: ${result.error}`,
+            severity: 'error',
+          },
+        });
+      }
+
+      return NextResponse.json({
+        success: result.success,
+        mode: 'stock_card',
+        postId: result.postId,
+        error: result.error,
+      });
+    }
+
     // ---- TEXT MODE ----
     const message = formatMarketUpdate(nepseDataForFormat);
 
