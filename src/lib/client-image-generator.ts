@@ -289,7 +289,7 @@ async function renderGainersSvg(gainers: StockData[], dateStr: string, fonts: Ar
               style: { width: 90, display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', zIndex: 1, gap: 2 },
               children: [
                 { type: 'div', props: { style: { fontSize: 14, fontWeight: 800, color: '#059669' }, children: `+${stock.changePercent.toFixed(2)}%` } },
-                { type: 'div', props: { style: { width: 50, height: 4, backgroundColor: '#D1FAE5', borderRadius: 2, overflow: 'hidden' }, children: [
+                { type: 'div', props: { style: { display: 'flex', width: 50, height: 4, backgroundColor: '#D1FAE5', borderRadius: 2, overflow: 'hidden' }, children: [
                   { type: 'div', props: { style: { width: `${barWidth}%`, height: '100%', backgroundColor: '#059669', borderRadius: 2 }, children: [] } },
                 ] } },
               ],
@@ -393,7 +393,7 @@ async function renderLosersSvg(losers: StockData[], dateStr: string, fonts: Arra
               style: { width: 90, display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', zIndex: 1, gap: 2 },
               children: [
                 { type: 'div', props: { style: { fontSize: 14, fontWeight: 800, color: '#DC2626' }, children: `${stock.changePercent.toFixed(2)}%` } },
-                { type: 'div', props: { style: { width: 50, height: 4, backgroundColor: '#FEE2E2', borderRadius: 2, overflow: 'hidden' }, children: [
+                { type: 'div', props: { style: { display: 'flex', width: 50, height: 4, backgroundColor: '#FEE2E2', borderRadius: 2, overflow: 'hidden' }, children: [
                   { type: 'div', props: { style: { width: `${barWidth}%`, height: '100%', backgroundColor: '#DC2626', borderRadius: 2 }, children: [] } },
                 ] } },
               ],
@@ -568,7 +568,7 @@ async function renderStockCardSvg(
                     children: [
                       { type: 'div', props: { style: { fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.1em' }, children: '% CHANGE' } },
                       { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: accent, marginTop: 4 }, children: `${sign}${changePercentAbs.toFixed(2)}%` } },
-                      { type: 'div', props: { style: { width: '100%', height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, marginTop: 6, overflow: 'hidden' }, children: [
+                      { type: 'div', props: { style: { display: 'flex', width: '100%', height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, marginTop: 6, overflow: 'hidden' }, children: [
                         { type: 'div', props: { style: { width: `${pctBar}%`, height: '100%', backgroundColor: accent, borderRadius: 2 }, children: [] } },
                       ] } },
                     ],
