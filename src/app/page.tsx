@@ -29,6 +29,7 @@ import {
   Type,
   Loader2,
   LogOut,
+  Check,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -216,6 +217,8 @@ export default function HomePage() {
   const [previewData, setPreviewData] = useState<{ marketData: MarketData; message: string; source: string } | null>(null);
   const [isFetchingPreview, setIsFetchingPreview] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [postingSingle, setPostingSingle] = useState<string | null>(null); // tracks which image is being posted
+  const [postedImages, setPostedImages] = useState<Set<string>>(new Set()); // tracks successfully posted images
 
   // Market data state
   const [marketDataList, setMarketDataList] = useState<MarketData[]>([]);
@@ -750,6 +753,42 @@ export default function HomePage() {
     }
   };
 
+  // Post a single image to Facebook
+  const handlePostSingleImage = async (imageKey: string, image: string, type: string, symbol?: string, name?: string, rank?: number) => {
+    const dateToUse = previewData?.marketData?.tradingDate;
+    if (!dateToUse) { toast.error('No trading date available'); return; }
+
+    setPostingSingle(imageKey);
+    try {
+      const res = await fetch('/api/posts/single-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image, date: dateToUse, type, symbol, name, rank }),
+        signal: AbortSignal.timeout(60000),
+      });
+
+      let json: Record<string, unknown>;
+      try {
+        json = await res.json();
+      } catch {
+        const text = await res.text().catch(() => '');
+        toast.error(`HTTP ${res.status}: ${text.substring(0, 150)}`, { duration: 10000 });
+        return;
+      }
+
+      if (json.success) {
+        toast.success(`Posted! ${json.label || type} — FB ID: ${json.postId || 'ok'}`);
+        setPostedImages(prev => new Set(prev).add(imageKey));
+      } else {
+        toast.error(`Failed: ${json.error || 'Unknown error'}`, { duration: 10000 });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setPostingSingle(null);
+    }
+  };
+
   const handlePostTextMode = async () => {
     if (!previewData) return;
     setIsPosting(true);
@@ -920,24 +959,38 @@ export default function HomePage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">1. Market Summary</p>
-                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
-                    <img src={imagePreview.marketSummary} alt="Market Summary" className="w-full h-auto" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">2. Top 10 Gainers</p>
-                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
-                    <img src={imagePreview.topGainers} alt="Top 10 Gainers" className="w-full h-auto" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">3. Top 10 Losers</p>
-                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
-                    <img src={imagePreview.topLosers} alt="Top 10 Losers" className="w-full h-auto" />
-                  </div>
-                </div>
+                {[
+                  { key: 'summary', label: '1. Market Summary', img: imagePreview.marketSummary, type: 'summary' },
+                  { key: 'gainers', label: '2. Top 10 Gainers', img: imagePreview.topGainers, type: 'gainers' },
+                  { key: 'losers', label: '3. Top 10 Losers', img: imagePreview.topLosers, type: 'losers' },
+                ].map(({ key, label, img, type }) => {
+                  const isPosted = postedImages.has(key);
+                  const isLoading = postingSingle === key;
+                  return (
+                    <div key={key} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                        <Button
+                          size="sm"
+                          variant={isPosted ? 'outline' : 'default'}
+                          disabled={isLoading}
+                          onClick={() => handlePostSingleImage(key, img, type)}
+                          className={isPosted ? 'text-emerald-600 border-emerald-300 bg-emerald-50' : ''}
+                        >
+                          {isLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                          {isPosted ? (
+                            <><Check className="h-3 w-3 mr-1" />Posted</>
+                          ) : (
+                            <><Send className="h-3 w-3 mr-1" />Post</>
+                          )}
+                        </Button>
+                      </div>
+                      <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                        <img src={img} alt={label} className="w-full h-auto" />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Individual Stock Cards */}
@@ -962,14 +1015,30 @@ export default function HomePage() {
                               Top Gainers ({gainers.length})
                             </h4>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                              {gainers.map((card) => (
-                                <div key={`gainer-${card.symbol}`} className="space-y-1.5">
-                                  <div className="rounded-lg overflow-hidden border border-emerald-500/30 bg-muted">
-                                    <img src={card.image} alt={`${card.name} (${card.symbol})`} className="w-full h-auto" />
+                              {gainers.map((card) => {
+                                const cardKey = `gainer-${card.symbol}`;
+                                const isPosted = postedImages.has(cardKey);
+                                const isLoading = postingSingle === cardKey;
+                                return (
+                                  <div key={cardKey} className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                      <p className="text-xs text-muted-foreground">#{card.rank} {card.symbol}</p>
+                                      <Button
+                                        size="sm"
+                                        variant={isPosted ? 'outline' : 'default'}
+                                        disabled={isLoading}
+                                        onClick={() => handlePostSingleImage(cardKey, card.image, 'gainer', card.symbol, card.name, card.rank)}
+                                        className={`h-6 px-2 text-xs ${isPosted ? 'text-emerald-600 border-emerald-300 bg-emerald-50' : ''}`}
+                                      >
+                                        {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : isPosted ? <Check className="h-3 w-3" /> : <Send className="h-3 w-3" />}
+                                      </Button>
+                                    </div>
+                                    <div className="rounded-lg overflow-hidden border border-emerald-500/30 bg-muted">
+                                      <img src={card.image} alt={`${card.name} (${card.symbol})`} className="w-full h-auto" />
+                                    </div>
                                   </div>
-                                  <p className="text-xs text-center text-muted-foreground">#{card.rank} {card.symbol}</p>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -980,14 +1049,30 @@ export default function HomePage() {
                               Top Losers ({losers.length})
                             </h4>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                              {losers.map((card) => (
-                                <div key={`loser-${card.symbol}`} className="space-y-1.5">
-                                  <div className="rounded-lg overflow-hidden border border-red-500/30 bg-muted">
-                                    <img src={card.image} alt={`${card.name} (${card.symbol})`} className="w-full h-auto" />
+                              {losers.map((card) => {
+                                const cardKey = `loser-${card.symbol}`;
+                                const isPosted = postedImages.has(cardKey);
+                                const isLoading = postingSingle === cardKey;
+                                return (
+                                  <div key={cardKey} className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                      <p className="text-xs text-muted-foreground">#{card.rank} {card.symbol}</p>
+                                      <Button
+                                        size="sm"
+                                        variant={isPosted ? 'outline' : 'default'}
+                                        disabled={isLoading}
+                                        onClick={() => handlePostSingleImage(cardKey, card.image, 'loser', card.symbol, card.name, card.rank)}
+                                        className={`h-6 px-2 text-xs ${isPosted ? 'text-red-600 border-red-300 bg-red-50' : ''}`}
+                                      >
+                                        {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : isPosted ? <Check className="h-3 w-3" /> : <Send className="h-3 w-3" />}
+                                      </Button>
+                                    </div>
+                                    <div className="rounded-lg overflow-hidden border border-red-500/30 bg-muted">
+                                      <img src={card.image} alt={`${card.name} (${card.symbol})`} className="w-full h-auto" />
+                                    </div>
                                   </div>
-                                  <p className="text-xs text-center text-muted-foreground">#{card.rank} {card.symbol}</p>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}
