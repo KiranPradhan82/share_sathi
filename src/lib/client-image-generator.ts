@@ -182,7 +182,6 @@ async function renderMarketSummarySvg(data: NepseData, fonts: Array<{ name: stri
                           width: `${Math.min(Math.abs(data.changePercentage) * 8, 100)}%`, height: '100%',
                           backgroundColor: accentColor, borderRadius: 4,
                         },
-                        children: [],
                       },
                     },
                   },
@@ -268,7 +267,6 @@ async function renderGainersSvg(gainers: StockData[], dateStr: string, fonts: Ar
             type: 'div',
             props: {
               style: { position: 'absolute' as const, right: 0, top: 0, bottom: 0, width: `${barWidth}%`, backgroundColor: '#BBF7D0', opacity: 0.5 },
-              children: [],
             },
           },
           { type: 'div', props: { style: { width: 40, fontSize: 15, fontWeight: 700, color: '#6B7280', zIndex: 1 }, children: `${idx + 1}` } },
@@ -290,7 +288,7 @@ async function renderGainersSvg(gainers: StockData[], dateStr: string, fonts: Ar
               children: [
                 { type: 'div', props: { style: { fontSize: 14, fontWeight: 800, color: '#059669' }, children: `+${stock.changePercent.toFixed(2)}%` } },
                 { type: 'div', props: { style: { display: 'flex', width: 50, height: 4, backgroundColor: '#D1FAE5', borderRadius: 2, overflow: 'hidden' }, children: [
-                  { type: 'div', props: { style: { width: `${barWidth}%`, height: '100%', backgroundColor: '#059669', borderRadius: 2 }, children: [] } },
+                  { type: 'div', props: { style: { width: `${barWidth}%`, height: '100%', backgroundColor: '#059669', borderRadius: 2 } } },
                 ] } },
               ],
             },
@@ -372,7 +370,6 @@ async function renderLosersSvg(losers: StockData[], dateStr: string, fonts: Arra
             type: 'div',
             props: {
               style: { position: 'absolute' as const, right: 0, top: 0, bottom: 0, width: `${barWidth}%`, backgroundColor: '#FECACA', opacity: 0.5 },
-              children: [],
             },
           },
           { type: 'div', props: { style: { width: 40, fontSize: 15, fontWeight: 700, color: '#6B7280', zIndex: 1 }, children: `${idx + 1}` } },
@@ -394,7 +391,7 @@ async function renderLosersSvg(losers: StockData[], dateStr: string, fonts: Arra
               children: [
                 { type: 'div', props: { style: { fontSize: 14, fontWeight: 800, color: '#DC2626' }, children: `${stock.changePercent.toFixed(2)}%` } },
                 { type: 'div', props: { style: { display: 'flex', width: 50, height: 4, backgroundColor: '#FEE2E2', borderRadius: 2, overflow: 'hidden' }, children: [
-                  { type: 'div', props: { style: { width: `${barWidth}%`, height: '100%', backgroundColor: '#DC2626', borderRadius: 2 }, children: [] } },
+                  { type: 'div', props: { style: { width: `${barWidth}%`, height: '100%', backgroundColor: '#DC2626', borderRadius: 2 } } },
                 ] } },
               ],
             },
@@ -569,7 +566,7 @@ async function renderStockCardSvg(
                       { type: 'div', props: { style: { fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.1em' }, children: '% CHANGE' } },
                       { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: accent, marginTop: 4 }, children: `${sign}${changePercentAbs.toFixed(2)}%` } },
                       { type: 'div', props: { style: { display: 'flex', width: '100%', height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, marginTop: 6, overflow: 'hidden' }, children: [
-                        { type: 'div', props: { style: { width: `${pctBar}%`, height: '100%', backgroundColor: accent, borderRadius: 2 }, children: [] } },
+                        { type: 'div', props: { style: { width: `${pctBar}%`, height: '100%', backgroundColor: accent, borderRadius: 2 } } },
                       ] } },
                     ],
                   },
@@ -627,15 +624,14 @@ async function renderStockCardSvg(
 }
 
 // ---- Satori Tree Validator (diagnostic) ----
+// Satori v0.26+ requires display on ANY div with non-string children
+// (empty array [], single-object, or multi-element array all need display:flex)
 function validateSatoriTree(node: any, path = 'root'): string[] {
   const errors: string[] = [];
   if (!node || typeof node !== 'object') return errors;
 
-  // Handle arrays of nodes
   if (Array.isArray(node)) {
-    node.forEach((child, i) => {
-      errors.push(...validateSatoriTree(child, `${path}[${i}]`));
-    });
+    node.forEach((child, i) => errors.push(...validateSatoriTree(child, `${path}[${i}]`)));
     return errors;
   }
 
@@ -643,41 +639,26 @@ function validateSatoriTree(node: any, path = 'root'): string[] {
   const children = node.props?.children;
   const style = node.props?.style || {};
   const hasDisplay = 'display' in style;
-  const displayVal = style.display;
 
-  // Get a label for this node (first text content or tag)
+  // Label for diagnostics
   let label = tag;
-  if (typeof children === 'string') {
-    label = `${tag} "${children.substring(0, 40)}"`;
-  } else if (Array.isArray(children) && children.length > 0 && typeof children[0]?.props?.children === 'string') {
-    label = `${tag} "${children[0].props.children.substring(0, 40)}"`;
-  }
+  if (typeof children === 'string') label = `${tag} "${children.substring(0, 40)}"`;
 
-  // Check: div with array children > 1 and no display
-  if (tag === 'div' && Array.isArray(children) && children.length > 1 && !hasDisplay) {
+  // Satori v0.26 rule: if children is anything other than undefined or a string,
+  // the parent div MUST have explicit display
+  if (tag === 'div' && children !== undefined && typeof children !== 'string' && !hasDisplay) {
+    const childDesc = Array.isArray(children)
+      ? `array[${children.length}]`
+      : 'object';
     errors.push(
-      `❌ ${path} → <${label}> has ${children.length} children but NO display property.\n` +
-      `   Style keys: [${Object.keys(style).join(', ')}]\n` +
-      `   Children: ${children.map((c: any, i: number) => {
-        const t = c?.type || '?';
-        const txt = typeof c?.props?.children === 'string' ? `"${c.props.children.substring(0, 30)}"` : '(element)';
-        return `[${i}]=<${t} ${txt}>`;
-      }).join(', ')}`
+      `❌ ${path} → <${label}> has ${childDesc} children but NO display.\n` +
+      `   Style: {${Object.keys(style).join(', ')}}`
     );
   }
 
-  // Check: div with array children > 1 and display: block (also invalid in Satori)
-  if (tag === 'div' && Array.isArray(children) && children.length > 1 && hasDisplay && displayVal === 'block') {
-    errors.push(
-      `⚠️ ${path} → <${label}> has ${children.length} children with display: 'block'. Satori requires flex/contents/none.`
-    );
-  }
-
-  // Recurse into children
+  // Recurse
   if (Array.isArray(children)) {
-    children.forEach((child, i) => {
-      errors.push(...validateSatoriTree(child, `${path}/${tag}[${i}]`));
-    });
+    children.forEach((child, i) => errors.push(...validateSatoriTree(child, `${path}/${tag}[${i}]`)));
   } else if (children && typeof children === 'object') {
     errors.push(...validateSatoriTree(children, `${path}/${tag}`));
   }
