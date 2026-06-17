@@ -600,7 +600,19 @@ export default function HomePage() {
       const cardCount = images.stockCards?.length || 0;
       toast.success(`3 summary images + ${cardCount} individual stock cards generated! Review them below.`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to generate images');
+      const errMsg = err instanceof Error ? err.message : 'Failed to generate images';
+      // Check if our validator found issues before Satori threw
+      const validationDetail = (window as any).__satoriErrors as string | undefined;
+      const fullMsg = validationDetail
+        ? `${errMsg}\n\n--- Satori Tree Validation ---\n${validationDetail}`
+        : errMsg;
+      console.error('Image generation failed:', fullMsg);
+      // Show the error in a way that's easy to see and copy
+      toast.error(errMsg, { duration: 10000 });
+      if (validationDetail) {
+        // Also alert so it's very visible
+        alert(`SATORI VALIDATION ERROR (copy this):\n\n${validationDetail}`);
+      }
     } finally {
       setIsGeneratingImages(false);
     }

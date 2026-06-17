@@ -115,7 +115,7 @@ async function renderMarketSummarySvg(data: NepseData, fonts: Array<{ name: stri
     { label: 'UNCHANGED', value: data.unchanged.toString(), color: '#2563EB', bg: '#EFF6FF', icon: '\u26AA' },
   ];
 
-  return satori(
+  return satoriWithValidation(
     {
       type: 'div',
       props: {
@@ -232,7 +232,7 @@ async function renderMarketSummarySvg(data: NepseData, fonts: Array<{ name: stri
         ],
       },
     },
-    { width: WIDTH, height: HEIGHT, fonts },
+    { width: WIDTH, height: HEIGHT, fonts }, 'MarketSummary',
   );
 }
 
@@ -300,7 +300,7 @@ async function renderGainersSvg(gainers: StockData[], dateStr: string, fonts: Ar
     };
   });
 
-  return satori(
+  return satoriWithValidation(
     {
       type: 'div',
       props: {
@@ -337,7 +337,7 @@ async function renderGainersSvg(gainers: StockData[], dateStr: string, fonts: Ar
         ],
       },
     },
-    { width: WIDTH, height: HEIGHT, fonts },
+    { width: WIDTH, height: HEIGHT, fonts }, 'TopGainers',
   );
 }
 
@@ -404,7 +404,7 @@ async function renderLosersSvg(losers: StockData[], dateStr: string, fonts: Arra
     };
   });
 
-  return satori(
+  return satoriWithValidation(
     {
       type: 'div',
       props: {
@@ -441,7 +441,7 @@ async function renderLosersSvg(losers: StockData[], dateStr: string, fonts: Arra
         ],
       },
     },
-    { width: WIDTH, height: HEIGHT, fonts },
+    { width: WIDTH, height: HEIGHT, fonts }, 'TopLosers',
   );
 }
 
@@ -470,7 +470,7 @@ async function renderStockCardSvg(
   const changePercentAbs = Math.abs(stock.changePercent);
   const pctBar = Math.min(changePercentAbs * 5, 100);
 
-  return satori(
+  return satoriWithValidation(
     {
       type: 'div',
       props: {
@@ -622,8 +622,86 @@ async function renderStockCardSvg(
         ],
       },
     },
-    { width: WIDTH, height: HEIGHT, fonts },
+    { width: WIDTH, height: HEIGHT, fonts }, 'StockCard',
   );
+}
+
+// ---- Satori Tree Validator (diagnostic) ----
+function validateSatoriTree(node: any, path = 'root'): string[] {
+  const errors: string[] = [];
+  if (!node || typeof node !== 'object') return errors;
+
+  // Handle arrays of nodes
+  if (Array.isArray(node)) {
+    node.forEach((child, i) => {
+      errors.push(...validateSatoriTree(child, `${path}[${i}]`));
+    });
+    return errors;
+  }
+
+  const tag = node.type || '?';
+  const children = node.props?.children;
+  const style = node.props?.style || {};
+  const hasDisplay = 'display' in style;
+  const displayVal = style.display;
+
+  // Get a label for this node (first text content or tag)
+  let label = tag;
+  if (typeof children === 'string') {
+    label = `${tag} "${children.substring(0, 40)}"`;
+  } else if (Array.isArray(children) && children.length > 0 && typeof children[0]?.props?.children === 'string') {
+    label = `${tag} "${children[0].props.children.substring(0, 40)}"`;
+  }
+
+  // Check: div with array children > 1 and no display
+  if (tag === 'div' && Array.isArray(children) && children.length > 1 && !hasDisplay) {
+    errors.push(
+      `❌ ${path} → <${label}> has ${children.length} children but NO display property.\n` +
+      `   Style keys: [${Object.keys(style).join(', ')}]\n` +
+      `   Children: ${children.map((c: any, i: number) => {
+        const t = c?.type || '?';
+        const txt = typeof c?.props?.children === 'string' ? `"${c.props.children.substring(0, 30)}"` : '(element)';
+        return `[${i}]=<${t} ${txt}>`;
+      }).join(', ')}`
+    );
+  }
+
+  // Check: div with array children > 1 and display: block (also invalid in Satori)
+  if (tag === 'div' && Array.isArray(children) && children.length > 1 && hasDisplay && displayVal === 'block') {
+    errors.push(
+      `⚠️ ${path} → <${label}> has ${children.length} children with display: 'block'. Satori requires flex/contents/none.`
+    );
+  }
+
+  // Recurse into children
+  if (Array.isArray(children)) {
+    children.forEach((child, i) => {
+      errors.push(...validateSatoriTree(child, `${path}/${tag}[${i}]`));
+    });
+  } else if (children && typeof children === 'object') {
+    errors.push(...validateSatoriTree(children, `${path}/${tag}`));
+  }
+
+  return errors;
+}
+
+function satoriWithValidation(
+  element: any,
+  options: { width: number; height: number; fonts: any[] },
+  templateName: string,
+): Promise<string> {
+  // Validate the tree first
+  const errors = validateSatoriTree(element);
+  if (errors.length > 0) {
+    const msg = `Satori Tree Validation Errors in "${templateName}":\n\n${errors.join('\n\n')}`;
+    console.error(msg);
+    // Also make it available globally for debugging
+    if (typeof window !== 'undefined') {
+      (window as any).__satoriErrors = msg;
+    }
+    // Still try to render - the error from Satori will be more specific
+  }
+  return satori(element, options);
 }
 
 // ---- Public API ----
