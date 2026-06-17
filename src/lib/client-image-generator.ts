@@ -451,21 +451,20 @@ async function renderStockCardSvg(
   fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>,
 ): Promise<string> {
   const isGainer = type === 'gainer';
-  const accent = isGainer ? '#059669' : '#DC2626';
-  const accentDark = isGainer ? '#065F46' : '#991B1B';
-  const accentLight = isGainer ? '#D1FAE5' : '#FEE2E2';
-  const accentBg = isGainer ? '#ECFDF5' : '#FEF2F2';
-  const gradientFrom = isGainer ? '#ECFDF5' : '#FEF2F2';
-  const gradientTo = isGainer ? '#D1FAE5' : '#FECACA';
-  const pillEmoji = isGainer ? '\uD83D\uDC9A' : '\uD83D\uDD34';
-  const pillText = isGainer ? 'POSITIVE CIRCUIT' : 'NEGATIVE CIRCUIT';
+  const primary = '#1E3A5F'; // Deep navy blue
+  const primaryLight = '#2B5797'; // Medium blue
+  const greenAccent = '#16A34A'; // Bright green for positive
+  const greenBg = '#ECFDF5';
+  const redAccent = '#DC2626'; // Bright red for negative
   const label = isGainer ? 'TOP GAINER' : 'TOP LOSER';
+  const sign = isGainer ? '+' : '';
+  const changeColor = isGainer ? greenAccent : redAccent;
+  const changeBg = isGainer ? greenBg : '#FEF2F2';
 
   const formattedDate = formatDateShort(dateStr);
-  const sign = isGainer ? '+' : '';
+  const d = formattedDate.toUpperCase();
   const changeAbs = Math.abs(stock.change);
   const changePercentAbs = Math.abs(stock.changePercent);
-  const pctBar = Math.min(changePercentAbs * 5, 100);
 
   return satoriWithValidation(
     {
@@ -473,149 +472,157 @@ async function renderStockCardSvg(
       props: {
         style: {
           width: WIDTH, height: HEIGHT,
-          background: `linear-gradient(170deg, #ffffff 0%, ${gradientFrom} 40%, ${gradientTo} 100%)`,
+          background: 'linear-gradient(180deg, #F8FAFC 0%, #EDF2F7 50%, #E2E8F0 100%)',
           position: 'relative', overflow: 'hidden',
           display: 'flex', flexDirection: 'column' as const,
         },
         children: [
-          // Top accent bar
-          { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 6, backgroundColor: accent } } },
-          // Decorative circles
-          { type: 'div', props: { style: { position: 'absolute', top: -80, right: -80, width: 250, height: 250, borderRadius: 125, backgroundColor: accentLight, opacity: 0.35 } } },
-          { type: 'div', props: { style: { position: 'absolute', bottom: 80, left: -50, width: 140, height: 140, borderRadius: 70, backgroundColor: accentLight, opacity: 0.25 } } },
-          // Big rank number background
-          { type: 'div', props: { style: { position: 'absolute', bottom: 60, right: 30, fontSize: 220, fontWeight: 900, color: accentLight, opacity: 0.35, lineHeight: 1 }, children: `#${rank}` } },
+          // Subtle upward arrow decoration in background
+          { type: 'div', props: { style: { position: 'absolute', top: 100, right: 40, width: 200, height: 200, borderRadius: 100, backgroundColor: '#CBD5E1', opacity: 0.15 } } },
+          { type: 'div', props: { style: { position: 'absolute', bottom: 120, left: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: '#CBD5E1', opacity: 0.12 } } },
 
-          // Header
+          // Blue header banner
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingTop: 40, paddingBottom: 5 },
+              style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'center', justifyContent: 'center', gap: 14, backgroundColor: primary, padding: '22px 30px' },
               children: [
-                { type: 'div', props: { style: { fontSize: 14, fontWeight: 700, color: accent, letterSpacing: '0.15em' }, children: `AS OF ${formattedDate.toUpperCase()} SHARE PRICE` } },
+                { type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#ffffff' }, children: '\uD83D\uDCC8' } },
+                { type: 'div', props: { style: { fontSize: 18, fontWeight: 900, color: '#ffffff', letterSpacing: '0.12em' }, children: `AS OF ${d}` } },
+                { type: 'div', props: { style: { width: 2, height: 22, backgroundColor: '#ffffff44' } } },
+                { type: 'div', props: { style: { fontSize: 18, fontWeight: 900, color: '#ffffff', letterSpacing: '0.12em' }, children: 'SHARE PRICE' } },
               ],
             },
           },
-          // Badge
+
+          // Rank badge
           {
             type: 'div',
             props: {
-              style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 8, marginBottom: 18 },
+              style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 24 },
               children: {
                 type: 'div',
                 props: {
-                  style: { display: 'flex', alignItems: 'center', gap: 8, backgroundColor: accent, padding: '8px 24px', borderRadius: 30 },
+                  style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'center', gap: 8, backgroundColor: primaryLight, padding: '8px 28px', borderRadius: 30 },
                   children: [
-                    { type: 'div', props: { style: { fontSize: 16, color: '#ffffff' }, children: pillEmoji } },
-                    { type: 'div', props: { style: { fontSize: 16, color: '#ffffff', fontWeight: 700, letterSpacing: '0.08em' }, children: `${label} #${rank}` } },
+                    { type: 'div', props: { style: { fontSize: 18, fontWeight: 900, color: '#ffffff', letterSpacing: '0.1em' }, children: `${label}  #${rank}` } },
                   ],
                 },
               },
             },
           },
+
           // Company name card
           {
             type: 'div',
             props: {
               style: {
                 display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
-                margin: '0px 55px', padding: '20px 24px',
+                margin: '22px 50px 0px', padding: '22px 28px',
                 backgroundColor: '#ffffff', borderRadius: 20,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-                border: `2px solid ${accentLight}`,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.07)',
+                border: `2px solid ${primaryLight}22`,
               },
               children: [
-                { type: 'div', props: { style: { fontSize: 11, fontWeight: 700, color: accent, letterSpacing: '0.12em' }, children: pillText } },
-                { type: 'div', props: { style: { fontSize: 24, fontWeight: 800, color: '#0F172A', letterSpacing: '0.03em', textTransform: 'uppercase' as const, textAlign: 'center' as const, lineHeight: 1.3, marginTop: 6 }, children: stock.name } },
-                { type: 'div', props: { style: { fontSize: 22, fontWeight: 700, color: accent, marginTop: 4 }, children: `(${stock.symbol})` } },
+                { type: 'div', props: { style: { fontSize: 26, fontWeight: 900, color: primary, letterSpacing: '0.04em', textTransform: 'uppercase' as const, textAlign: 'center' as const, lineHeight: 1.3 }, children: `${stock.name}` } },
+                { type: 'div', props: { style: { fontSize: 22, fontWeight: 800, color: primaryLight, marginTop: 6 }, children: `(${stock.symbol})` } },
               ],
             },
           },
+
           // LTP display
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', marginTop: 22 },
+              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', marginTop: 24 },
               children: [
-                { type: 'div', props: { style: { fontSize: 13, fontWeight: 600, color: '#94A3B8', letterSpacing: '0.1em', textTransform: 'uppercase' as const }, children: 'LAST TRADED PRICE' } },
+                { type: 'div', props: { style: { fontSize: 13, fontWeight: 700, color: '#64748B', letterSpacing: '0.12em', textTransform: 'uppercase' as const }, children: 'LAST TRADED PRICE' } },
                 {
                   type: 'div',
                   props: {
-                    style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'baseline', gap: 6, marginTop: 4 },
+                    style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'baseline', gap: 6, marginTop: 6 },
                     children: [
                       { type: 'div', props: { style: { fontSize: 24, fontWeight: 600, color: '#64748B' }, children: 'Rs.' } },
-                      { type: 'div', props: { style: { fontSize: 56, fontWeight: 900, color: accentDark, lineHeight: 1 }, children: stock.closePrice.toFixed(2) } },
+                      { type: 'div', props: { style: { fontSize: 54, fontWeight: 900, color: primary, lineHeight: 1 }, children: stock.closePrice.toFixed(2) } },
                     ],
                   },
                 },
               ],
             },
           },
-          // 4 metric cards
+
+          // 2x2 data metrics grid
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'row' as const, width: WIDTH, padding: '0px 55px', gap: 12, marginTop: 22 },
+              style: { display: 'flex', flexDirection: 'column' as const, width: WIDTH, padding: '0px 50px', gap: 14, marginTop: 24 },
               children: [
-                // % Change
+                // Row 1: % Change + Point Change
                 {
                   type: 'div',
                   props: {
-                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: '#ffffff', borderRadius: 16, padding: '14px 14px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', borderLeft: `4px solid ${accent}` },
+                    style: { display: 'flex', flexDirection: 'row' as const, width: '100%', gap: 14 },
                     children: [
-                      { type: 'div', props: { style: { fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.1em' }, children: '% CHANGE' } },
-                      { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: accent, marginTop: 4 }, children: `${sign}${changePercentAbs.toFixed(2)}%` } },
-                      { type: 'div', props: { style: { display: 'flex', width: '100%', height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, marginTop: 6, overflow: 'hidden' }, children: [
-                        { type: 'div', props: { style: { width: `${pctBar}%`, height: '100%', backgroundColor: accent, borderRadius: 2 } } },
-                      ] } },
+                      // % Change
+                      {
+                        type: 'div',
+                        props: {
+                          style: { flex: 1, display: 'flex', flexDirection: 'column' as const, borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' },
+                          children: [
+                            { type: 'div', props: { style: { fontSize: 11, fontWeight: 700, color: '#ffffff', backgroundColor: changeColor, padding: '8px 14px', letterSpacing: '0.1em' }, children: '% CHANGE' } },
+                            { type: 'div', props: { style: { fontSize: 26, fontWeight: 900, color: changeColor, backgroundColor: '#ffffff', padding: '14px 14px' }, children: `${sign}${changePercentAbs.toFixed(2)}%` } },
+                          ],
+                        },
+                      },
+                      // Point Change
+                      {
+                        type: 'div',
+                        props: {
+                          style: { flex: 1, display: 'flex', flexDirection: 'column' as const, borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' },
+                          children: [
+                            { type: 'div', props: { style: { fontSize: 11, fontWeight: 700, color: '#ffffff', backgroundColor: primaryLight, padding: '8px 14px', letterSpacing: '0.1em' }, children: 'POINT CHANGE' } },
+                            { type: 'div', props: { style: { fontSize: 26, fontWeight: 900, color: primary, backgroundColor: '#ffffff', padding: '14px 14px' }, children: `Rs. ${sign}${changeAbs.toFixed(2)}` } },
+                          ],
+                        },
+                      },
                     ],
                   },
                 },
-                // Point Change
+                // Row 2: Previous Close + Rank
                 {
                   type: 'div',
                   props: {
-                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: '#ffffff', borderRadius: 16, padding: '14px 14px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', borderLeft: '4px solid #2563EB' },
+                    style: { display: 'flex', flexDirection: 'row' as const, width: '100%', gap: 14 },
                     children: [
-                      { type: 'div', props: { style: { fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.1em' }, children: 'POINT CHANGE' } },
-                      { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: '#1E40AF', marginTop: 4 }, children: `Rs. ${sign}${changeAbs.toFixed(2)}` } },
+                      // Previous Close
+                      {
+                        type: 'div',
+                        props: {
+                          style: { flex: 1, display: 'flex', flexDirection: 'column' as const, borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' },
+                          children: [
+                            { type: 'div', props: { style: { fontSize: 11, fontWeight: 700, color: '#ffffff', backgroundColor: '#D97706', padding: '8px 14px', letterSpacing: '0.1em' }, children: 'PREV. DAY CLOSE' } },
+                            { type: 'div', props: { style: { fontSize: 26, fontWeight: 900, color: '#92400E', backgroundColor: '#ffffff', padding: '14px 14px' }, children: `Rs. ${stock.previousClose.toFixed(2)}` } },
+                          ],
+                        },
+                      },
+                      // Rank
+                      {
+                        type: 'div',
+                        props: {
+                          style: { flex: 1, display: 'flex', flexDirection: 'column' as const, borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' },
+                          children: [
+                            { type: 'div', props: { style: { fontSize: 11, fontWeight: 700, color: '#ffffff', backgroundColor: '#64748B', padding: '8px 14px', letterSpacing: '0.1em' }, children: `${label} RANK` } },
+                            { type: 'div', props: { style: { fontSize: 30, fontWeight: 900, color: primary, backgroundColor: '#ffffff', padding: '14px 14px' }, children: `#${rank}` } },
+                          ],
+                        },
+                      },
                     ],
                   },
                 },
               ],
             },
           },
-          {
-            type: 'div',
-            props: {
-              style: { display: 'flex', flexDirection: 'row' as const, width: WIDTH, padding: '0px 55px', gap: 12, marginTop: 12 },
-              children: [
-                // Previous Close
-                {
-                  type: 'div',
-                  props: {
-                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: '#ffffff', borderRadius: 16, padding: '14px 14px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', borderLeft: '4px solid #F59E0B' },
-                    children: [
-                      { type: 'div', props: { style: { fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.1em' }, children: 'PREV. DAY CLOSE' } },
-                      { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: '#92400E', marginTop: 4 }, children: `Rs. ${stock.previousClose.toFixed(2)}` } },
-                    ],
-                  },
-                },
-                // Rank
-                {
-                  type: 'div',
-                  props: {
-                    style: { flex: 1, display: 'flex', flexDirection: 'column' as const, backgroundColor: accent, borderRadius: 16, padding: '14px 14px', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' },
-                    children: [
-                      { type: 'div', props: { style: { fontSize: 10, fontWeight: 700, color: '#ffffffaa', letterSpacing: '0.1em' }, children: `${label} RANK` } },
-                      { type: 'div', props: { style: { fontSize: 28, fontWeight: 900, color: '#ffffff', marginTop: 4 }, children: `#${rank}` } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          brandedFooter(accent),
+          brandedFooter(primary),
         ],
       },
     },
