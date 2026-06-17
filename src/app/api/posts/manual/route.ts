@@ -145,70 +145,79 @@ export async function POST(request: NextRequest) {
 
     // ---- IMAGE MODE ----
     if (mode === 'image') {
-      if (!clientImages || !clientImages.marketSummary || !clientImages.topGainers || !clientImages.topLosers) {
+      const hasSummaryImages = clientImages?.marketSummary && clientImages?.topGainers && clientImages?.topLosers;
+      const hasStockCards = clientStockCards && clientStockCards.length > 0;
+
+      if (!hasSummaryImages && !hasStockCards) {
         return NextResponse.json(
           { error: 'No images provided. Generate images in the browser first.' },
           { status: 400 },
         );
       }
 
-      // Convert data URIs to buffers
-      let imageBuffers: Record<string, Buffer>;
-      try {
-        imageBuffers = {
-          marketSummary: dataUriToBuffer(clientImages.marketSummary),
-          topGainers: dataUriToBuffer(clientImages.topGainers),
-          topLosers: dataUriToBuffer(clientImages.topLosers),
-        };
-      } catch (convErr) {
-        const errMsg = convErr instanceof Error ? convErr.message : 'Unknown conversion error';
-        return NextResponse.json(
-          { error: `Failed to decode base64 images: ${errMsg}` },
-          { status: 400 },
-        );
-      }
-
-      // Validate buffers — check for PNG header
-      const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-      for (const [key, buf] of Object.entries(imageBuffers)) {
-        if (buf.length < 100) {
+      // Convert summary image data URIs to buffers (if provided in this batch)
+      let imageBuffers: Record<string, Buffer> | null = null;
+      if (hasSummaryImages) {
+        try {
+          imageBuffers = {
+            marketSummary: dataUriToBuffer(clientImages!.marketSummary),
+            topGainers: dataUriToBuffer(clientImages!.topGainers),
+            topLosers: dataUriToBuffer(clientImages!.topLosers),
+          };
+        } catch (convErr) {
+          const errMsg = convErr instanceof Error ? convErr.message : 'Unknown conversion error';
           return NextResponse.json(
-            { error: `Invalid ${key} image (${buf.length} bytes) — too small, likely corrupted` },
+            { error: `Failed to decode base64 images: ${errMsg}` },
             { status: 400 },
           );
         }
-        const hasValidHeader = buf.length >= 8 && buf.slice(0, 8).equals(pngSignature);
-        if (!hasValidHeader) {
-          const firstBytes = buf.slice(0, 16).toString('hex');
-          return NextResponse.json(
-            { error: `Invalid ${key} image — not a valid PNG. First bytes: ${firstBytes}` },
-            { status: 400 },
-          );
-        }
-      }
 
-      await db.systemEvent.create({
-        data: {
-          eventType: 'generate',
-          entityType: 'image',
-          description: `Received 3 client-generated images for ${marketData.tradingDate} (${Math.round(imageBuffers.marketSummary.length / 1024)}KB + ${Math.round(imageBuffers.topGainers.length / 1024)}KB + ${Math.round(imageBuffers.topLosers.length / 1024)}KB)`,
-          severity: 'info',
-        },
-      });
+        // Validate buffers — check for PNG header
+        const pngSignature = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        for (const [key, buf] of Object.entries(imageBuffers)) {
+          if (buf.length < 100) {
+            return NextResponse.json(
+              { error: `Invalid ${key} image (${buf.length} bytes) — too small, likely corrupted` },
+              { status: 400 },
+            );
+          }
+          const hasValidHeader = buf.length >= 8 && buf.slice(0, 8).equals(pngSignature);
+          if (!hasValidHeader) {
+            const firstBytes = buf.slice(0, 16).toString('hex');
+            return NextResponse.json(
+              { error: `Invalid ${key} image — not a valid PNG. First bytes: ${firstBytes}` },
+              { status: 400 },
+            );
+          }
+        }
+
+        await db.systemEvent.create({
+          data: {
+            eventType: 'generate',
+            entityType: 'image',
+            description: `Received 3 client-generated images for ${marketData.tradingDate} (${Math.round(imageBuffers.marketSummary.length / 1024)}KB + ${Math.round(imageBuffers.topGainers.length / 1024)}KB + ${Math.round(imageBuffers.topLosers.length / 1024)}KB)`,
+            severity: 'info',
+          },
+        });
+      }
 
       // Get real gainers/losers from stored rawData
       const { gainers, losers } = parseTopStocksFromRawData(marketData.rawData);
       const fullStockData = parseStockDataFromRawData(marketData.rawData);
 
-      const summaryCaption = formatImageCaption(nepseDataForFormat);
-      const gainersCaption = formatGainersCaption(marketData.tradingDate, gainers);
-      const losersCaption = formatLosersCaption(marketData.tradingDate, losers);
+      const postsToMake: Array<{ buffer: Buffer; caption: string; label: string }> = [];
 
-      const postsToMake: Array<{ buffer: Buffer; caption: string; label: string }> = [
-        { buffer: imageBuffers.marketSummary, caption: summaryCaption, label: 'Market Summary' },
-        { buffer: imageBuffers.topGainers, caption: gainersCaption, label: 'Top Gainers' },
-        { buffer: imageBuffers.topLosers, caption: losersCaption, label: 'Top Losers' },
-      ];
+      // Add summary posts if we have them
+      if (imageBuffers) {
+        const summaryCaption = formatImageCaption(nepseDataForFormat);
+        const gainersCaption = formatGainersCaption(marketData.tradingDate, gainers);
+        const losersCaption = formatLosersCaption(marketData.tradingDate, losers);
+        postsToMake.push(
+          { buffer: imageBuffers.marketSummary, caption: summaryCaption, label: 'Market Summary' },
+          { buffer: imageBuffers.topGainers, caption: gainersCaption, label: 'Top Gainers' },
+          { buffer: imageBuffers.topLosers, caption: losersCaption, label: 'Top Losers' },
+        );
+      }
 
       // Add individual stock card posts if provided
       if (clientStockCards && clientStockCards.length > 0) {

@@ -621,101 +621,119 @@ export default function HomePage() {
   const handlePostImages = async () => {
     if (!imagePreview) return;
     setIsPosting(true);
-    try {
-      // Send client-generated images + date to the server for Facebook posting
-      const dateToUse = previewData?.marketData?.tradingDate;
-      const body: Record<string, unknown> = {
-        mode: 'image',
-        images: {
-          marketSummary: imagePreview.marketSummary,
-          topGainers: imagePreview.topGainers,
-          topLosers: imagePreview.topLosers,
-        },
-      };
-      if (imagePreview.stockCards && imagePreview.stockCards.length > 0) {
-        body.stockCards = imagePreview.stockCards;
-      }
-      if (dateToUse) body.date = dateToUse;
 
-      const res = await fetch('/api/posts/manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+    const dateToUse = previewData?.marketData?.tradingDate;
+    const allResults: Array<{ success: boolean; label: string; postId?: string; error?: string; debug?: Record<string, unknown> }> = [];
+    let totalSent = 0;
+    let totalSuccess = 0;
 
-      let json: Record<string, unknown>;
+    // Helper: call the API with a batch of images, collect results
+    const postBatch = async (body: Record<string, unknown>, batchLabel: string): Promise<boolean> => {
       try {
-        json = await res.json();
-      } catch {
-        toast.error('Received non-JSON response from server');
-        return;
-      }
+        const res = await fetch('/api/posts/manual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
 
-      // If HTTP error or API returned success=false, show full error detail
-      if (!res.ok || !json.success) {
-        const failedPosts = (json.posts as Array<Record<string, unknown>>)?.filter((p) => !p.success) || [];
-        if (failedPosts.length > 0) {
-          // Build detailed error report
-          const lines = failedPosts.map((p, i) => {
-            const debug = p.debug as Record<string, unknown> | undefined;
-            const lines = [
-              `--- Post ${i + 1}: ${p.label || 'Unknown'} ---`,
-              `Status: FAILED`,
-              `Error: ${p.error || 'No error message'}`,
-              debug ? `Image Size: ${((debug.imageBufferSize as number) || 0)} bytes` : '',
-              debug ? `Caption Length: ${debug.captionLength || 0} chars` : '',
-              debug ? `Caption Preview: ${debug.captionPreview || 'N/A'}` : '',
-            ].filter(Boolean).join('\n');
-            return lines;
-          });
-          setErrorDialogTitle(`Facebook Posting Failed (${failedPosts.length} post${failedPosts.length > 1 ? 's' : ''})`);
-          setErrorDetailText(lines.join('\n\n'));
-          setShowErrorDialog(true);
-        } else {
-          // No per-post errors — show the top-level error
-          setErrorDialogTitle('Posting Failed');
-          setErrorDetailText(`HTTP Status: ${res.status}\n\nFull Response:\n${JSON.stringify(json, null, 2)}`);
-          setShowErrorDialog(true);
+        let json: Record<string, unknown>;
+        try {
+          json = await res.json();
+        } catch {
+          const text = await res.text().catch(() => '');
+          toast.error(`${batchLabel}: Server returned non-JSON (HTTP ${res.status}). Body too large? ${text.substring(0, 200)}`);
+          return false;
         }
-        return;
+
+        if (!res.ok || !json.success) {
+          const errMsg = json.error || `HTTP ${res.status}`;
+          toast.error(`${batchLabel}: ${errMsg}`);
+          // Collect per-post errors if available
+          const posts = (json.posts as Array<Record<string, unknown>>) || [];
+          for (const p of posts) {
+            allResults.push({ success: !!(p.success), label: (p.label as string) || batchLabel, postId: p.postId as string | undefined, error: p.error as string | undefined, debug: p.debug as Record<string, unknown> | undefined });
+            if (p.success) totalSuccess++;
+          }
+          return false;
+        }
+
+        const posts = (json.posts as Array<Record<string, unknown>>) || [];
+        for (const p of posts) {
+          allResults.push({ success: !!(p.success), label: (p.label as string) || batchLabel, postId: p.postId as string | undefined, error: p.error as string | undefined, debug: p.debug as Record<string, unknown> | undefined });
+          if (p.success) totalSuccess++;
+        }
+        return true;
+      } catch (err) {
+        toast.error(`${batchLabel}: ${err instanceof Error ? err.message : 'Network error'}`);
+        return false;
+      }
+    };
+
+    try {
+      // ---- Batch 1: 3 summary images (~1MB base64 — safe for body limit) ----
+      toast.loading('Posting 3 summary images...', { id: 'post-progress' });
+      const summaryOk = await postBatch(
+        { mode: 'image', images: { marketSummary: imagePreview.marketSummary, topGainers: imagePreview.topGainers, topLosers: imagePreview.topLosers }, date: dateToUse },
+        'Summary Images',
+      );
+      totalSent += 3;
+
+      // ---- Batch 2+: Stock cards in groups of 5 (~1.5MB per batch) ----
+      const cards = imagePreview.stockCards || [];
+      if (cards.length > 0) {
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < cards.length; i += BATCH_SIZE) {
+          const batch = cards.slice(i, i + BATCH_SIZE);
+          const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+          const totalBatches = Math.ceil(cards.length / BATCH_SIZE);
+          toast.loading(`Posting stock cards batch ${batchNum}/${totalBatches}...`, { id: 'post-progress' });
+
+          await postBatch(
+            { mode: 'image', images: {}, stockCards: batch, date: dateToUse },
+            `Stock Cards ${i + 1}-${Math.min(i + BATCH_SIZE, cards.length)}`,
+          );
+          totalSent += batch.length;
+
+          // Delay between batches to avoid rate limits
+          if (i + BATCH_SIZE < cards.length) {
+            await new Promise(r => setTimeout(r, 3000));
+          }
+        }
       }
 
-      // Success path
-      const posts = json.posts as Array<{ success: boolean; label: string; postId?: string; error?: string; debug?: Record<string, unknown> }>;
-      const postCount = posts?.length || 3;
-      const successCount = posts?.filter((p) => p.success).length || 0;
-      const failedPosts = posts?.filter((p) => !p.success) || [];
+      toast.dismiss('post-progress');
 
-      if (successCount === postCount) {
-        toast.success(`All ${postCount} images posted to Facebook!`);
-      } else {
-        // Show error dialog with full details for each failed post
-        const lines = failedPosts.map((p, i) => {
+      // Final result
+      if (totalSuccess === totalSent) {
+        toast.success(`All ${totalSent} images posted to Facebook!`);
+      } else if (totalSuccess > 0) {
+        toast.success(`${totalSuccess}/${totalSent} posted — some failed`);
+        const failed = allResults.filter(r => !r.success);
+        const lines = failed.map((p, i) => {
           const debug = p.debug;
           return [
-            `--- Post ${i + 1}: ${p.label || 'Unknown'} ---`,
-            `Status: FAILED`,
-            `Error: ${p.error || 'No error message'}`,
-            debug ? `Image Size: ${debug.imageBufferSize || 0} bytes` : '',
-            debug ? `Caption Length: ${debug.captionLength || 0} chars` : '',
-            debug ? `Caption Preview: ${debug.captionPreview || 'N/A'}` : '',
+            `--- ${p.label} ---`,
+            `Error: ${p.error || 'Unknown'}`,
+            debug ? `Image: ${((debug.imageBufferSize as number) || 0) / 1024}KB, Caption: ${debug.captionLength || 0} chars` : '',
           ].filter(Boolean).join('\n');
         });
-        setErrorDialogTitle(`Partial Failure (${successCount}/${postCount} posted)`);
+        setErrorDialogTitle(`Partial Failure (${totalSuccess}/${totalSent})`);
         setErrorDetailText(lines.join('\n\n'));
         setShowErrorDialog(true);
-
-        if (successCount > 0) {
-          toast.success(`${successCount}/${postCount} posted successfully`);
-        }
+      } else {
+        setErrorDialogTitle('All Posts Failed');
+        setErrorDetailText(allResults.map(r => `${r.label}: ${r.error || 'Unknown error'}`).join('\n'));
+        setShowErrorDialog(true);
       }
-        // Refresh data on any response (success or partial)
+
+      // Refresh data
       setImagePreview(null);
       fetchSystemStatus();
       fetchLatestData();
       fetchRecentEvents();
       fetchPosts(1, 'all');
     } catch (err) {
+      toast.dismiss('post-progress');
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setErrorDialogTitle('Network Error');
       setErrorDetailText(msg);
