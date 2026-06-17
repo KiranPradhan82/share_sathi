@@ -634,6 +634,7 @@ export default function HomePage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
+          signal: AbortSignal.timeout(180000), // 3 min — server posts to FB with delays
         });
 
         let json: Record<string, unknown>;
@@ -641,7 +642,13 @@ export default function HomePage() {
           json = await res.json();
         } catch {
           const text = await res.text().catch(() => '');
-          toast.error(`${batchLabel}: Server returned non-JSON (HTTP ${res.status}). Body too large? ${text.substring(0, 200)}`);
+          const sizeKB = Math.round(new Blob([JSON.stringify(body)]).size / 1024);
+          const detail = `HTTP ${res.status} | Request: ${sizeKB}KB | Response: ${text.substring(0, 300)}`;
+          console.error(`[${batchLabel}] Non-JSON response:`, detail);
+          toast.error(`${batchLabel}: Server error (HTTP ${res.status}). Check console for details.`, { duration: 15000 });
+          setErrorDialogTitle(`Server Error: ${batchLabel}`);
+          setErrorDetailText(detail);
+          setShowErrorDialog(true);
           return false;
         }
 

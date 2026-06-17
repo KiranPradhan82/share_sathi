@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+// Vercel serverless function timeout — need enough for multiple FB API calls + delays
+export const maxDuration = 300;
 import { db } from '@/lib/db';
 import { fetchNepseData } from '@/lib/nepse';
 import { formatMarketUpdate, formatImageCaption, formatGainersCaption, formatLosersCaption, formatStockCardCaption } from '@/lib/content-formatter';
@@ -331,7 +334,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (i < postsToMake.length - 1) {
-          await delay(10000);
+          await delay(3000);
         }
       }
 
