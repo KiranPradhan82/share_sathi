@@ -123,6 +123,7 @@ async function renderMarketSummarySvg(data: NepseData, fonts: Array<{ name: stri
           width: WIDTH, height: HEIGHT,
           background: 'linear-gradient(180deg, #ffffff 0%, #F8FAFC 40%, #F1F5F9 100%)',
           position: 'relative', overflow: 'hidden',
+          display: 'flex', flexDirection: 'column' as const,
         },
         children: [
           // Top colored band
@@ -307,6 +308,7 @@ async function renderGainersSvg(gainers: StockData[], dateStr: string, fonts: Ar
           width: WIDTH, height: HEIGHT,
           background: 'linear-gradient(180deg, #ECFDF5 0%, #F8FAFC 30%, #ffffff 100%)',
           position: 'relative', overflow: 'hidden',
+          display: 'flex', flexDirection: 'column' as const,
         },
         children: [
           { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 6, backgroundColor: '#059669' } } },
@@ -410,6 +412,7 @@ async function renderLosersSvg(losers: StockData[], dateStr: string, fonts: Arra
           width: WIDTH, height: HEIGHT,
           background: 'linear-gradient(180deg, #FEF2F2 0%, #F8FAFC 30%, #ffffff 100%)',
           position: 'relative', overflow: 'hidden',
+          display: 'flex', flexDirection: 'column' as const,
         },
         children: [
           { type: 'div', props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 6, backgroundColor: '#DC2626' } } },
@@ -475,6 +478,7 @@ async function renderStockCardSvg(
           width: WIDTH, height: HEIGHT,
           background: `linear-gradient(170deg, #ffffff 0%, ${gradientFrom} 40%, ${gradientTo} 100%)`,
           position: 'relative', overflow: 'hidden',
+          display: 'flex', flexDirection: 'column' as const,
         },
         children: [
           // Top accent bar
