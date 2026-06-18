@@ -116,12 +116,10 @@ export function formatIpoCardCaption(ipo: {
 
   if (ipo.openedToday || ipo.isOpen) {
     // Open or opened today — no oversubscription info
-    const pricePerUnit = ipo.issuedUnits > 0 ? Math.round(ipo.totalAmount / ipo.issuedUnits) : 0;
     caption = `${ipo.companyName}${symbol} - IPO ${ipo.openedToday ? 'Opening Today' : 'Now Open'}! 📊\n\n`;
     caption += `${ipo.ipoType}\n`;
-    caption += `Issue: ${ipo.issuedUnits.toLocaleString()} units`;
-    if (pricePerUnit > 0) caption += ` @ Rs. ${pricePerUnit} per unit`;
-    caption += `\n`;
+    caption += `Issue: ${ipo.issuedUnits.toLocaleString()} units\n`;
+    caption += `Total Amount: Rs. ${formatNumber(ipo.totalAmount)}\n`;
     caption += `Period: ${ipo.openDate} to ${ipo.closeDate}\n`;
     caption += `Issue Manager: ${ipo.issueManager}`;
   } else {

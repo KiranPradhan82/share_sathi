@@ -611,16 +611,13 @@ export async function generateIpoCardImage(
   });
 
   if (openedToday || isOpen) {
-    // Open/Open Today: show price per unit (total/issued), issue manager, and close date
-    const pricePerUnit = ipo.issuedUnits > 0 ? Math.round(ipo.totalAmount / ipo.issuedUnits) : 0;
-    if (pricePerUnit > 0) {
-      metrics.push({
-        label: 'PRICE PER UNIT',
-        value: `Rs. ${pricePerUnit}`,
-        headerColor: '#D97706',
-        valueColor: '#92400E',
-      });
-    }
+    // Open/Open Today: show total amount, issue manager
+    metrics.push({
+      label: 'TOTAL AMOUNT',
+      value: `Rs. ${formatIpoAmount(ipo.totalAmount)}`,
+      headerColor: '#D97706',
+      valueColor: '#92400E',
+    });
     metrics.push({
       label: 'ISSUE MANAGER',
       value: ipo.issueManager.length > 18 ? ipo.issueManager.substring(0, 16) + '...' : ipo.issueManager,
@@ -628,12 +625,18 @@ export async function generateIpoCardImage(
       valueColor: '#5B21B6',
     });
   } else {
-    // Closed IPOs with oversubscription data
+    // Closed IPOs with subscription data
     metrics.push({
       label: 'APPLICATIONS',
       value: ipo.numberOfApplications.toLocaleString(),
       headerColor: '#0891B2',
       valueColor: '#155E75',
+    });
+    metrics.push({
+      label: 'TOTAL AMOUNT',
+      value: `Rs. ${formatIpoAmount(ipo.totalAmount)}`,
+      headerColor: '#D97706',
+      valueColor: '#92400E',
     });
   }
 
