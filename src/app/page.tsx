@@ -30,6 +30,9 @@ import {
   Loader2,
   LogOut,
   Newspaper,
+  Film,
+  Upload,
+  X,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -67,7 +70,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import { generateImagesInBrowser, generateIpoCardImage, type IpoCardData } from '@/lib/client-image-generator';
+import { generateImagesInBrowser, generateIpoCardImage, generateIpoStoryImage, type IpoCardData } from '@/lib/client-image-generator';
 import { parseStockDataFromRawData } from '@/lib/nepse';
 import type { StockData } from '@/lib/nepse';
 
@@ -292,6 +295,16 @@ export default function HomePage() {
   const [ipoCardImages, setIpoCardImages] = useState<Array<{ image: string; data: IpoCardData }>>([]);
   const [isGeneratingIpoImages, setIsGeneratingIpoImages] = useState(false);
   const [postingIpoIndex, setPostingIpoIndex] = useState<number | null>(null);
+
+  // Story state
+  const [postingStoryIndex, setPostingStoryIndex] = useState<number | null>(null);
+  const [postedStoryIndices, setPostedStoryIndices] = useState<Set<number>>(new Set());
+
+  // Reel state
+  const [reelFile, setReelFile] = useState<File | null>(null);
+  const [reelCaption, setReelCaption] = useState('');
+  const [reelPreviewUrl, setReelPreviewUrl] = useState<string | null>(null);
+  const [isPostingReel, setIsPostingReel] = useState(false);
 
   // Loading states
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
@@ -737,6 +750,94 @@ export default function HomePage() {
     a.href = image;
     a.download = `IPO_${data.companySymbol || data.companyName.replace(/\s+/g, '_')}.png`;
     a.click();
+  };
+
+  // ---- Story handler: generate portrait image + post ----
+  const handlePostIpoStory = async (cardIndex: number) => {
+    const card = ipoCardImages[cardIndex];
+    if (!card) return;
+    setPostingStoryIndex(cardIndex);
+    try {
+      // Load fonts and generate 1080x1920 story image
+      const weights = [400, 500, 600, 700, 800, 900];
+      const fonts = await Promise.all(weights.map(async (w) => {
+        const res = await fetch(`/fonts/Inter-${w}.woff`);
+        const buf = await res.arrayBuffer();
+        return { name: 'Inter' as const, data: buf, weight: w, style: 'normal' as const };
+      }));
+      const storyImage = await generateIpoStoryImage(card.data, fonts);
+
+      const res = await fetch('/api/posts/story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: storyImage, ipoData: card.data }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`${card.data.companyName} Story posted!`);
+        setPostedStoryIndices(prev => new Set(prev).add(cardIndex));
+      } else {
+        toast.error(`Failed: ${json.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to post Story');
+    } finally {
+      setPostingStoryIndex(null);
+    }
+  };
+
+  // ---- Reel handlers ----
+  const handleReelFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate it's a video
+    if (!file.type.startsWith('video/')) {
+      toast.error('Please select a video file (MP4, MOV, etc.)');
+      return;
+    }
+
+    // Vercel has a 4.5MB body limit — warn for large files
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('Video must be under 50MB');
+      return;
+    }
+
+    setReelFile(file);
+    setReelPreviewUrl(URL.createObjectURL(file));
+    if (!reelCaption) {
+      setReelCaption(`${file.name.replace(/\.[^/.]+$/, '')}\n\n#NEPSE #ShareSathi #StockMarket #NepalStockExchange #NepalIPO`);
+    }
+  };
+
+  const handlePostReel = async () => {
+    if (!reelFile) { toast.error('Select a video first'); return; }
+    setIsPostingReel(true);
+    try {
+      // Convert file to base64 and send as JSON
+      const arrayBuffer = await reelFile.arrayBuffer();
+      const base64 = Buffer.from(arrayBuffer).toString('base64');
+      const dataUri = `data:${reelFile.type};base64,${base64}`;
+
+      const res = await fetch('/api/posts/reel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video: dataUri, caption: reelCaption }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Reel posted! FB ID: ${json.postId}`);
+        setReelFile(null);
+        setReelPreviewUrl(null);
+        setReelCaption('');
+      } else {
+        toast.error(`Failed: ${json.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to post Reel');
+    } finally {
+      setIsPostingReel(false);
+    }
   };
 
   const handlePostSingleCard = async (cardIndex: number) => {
@@ -1955,10 +2056,13 @@ export default function HomePage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {ipoCardImages.map((card, idx) => (
                     <Card key={idx} className="overflow-hidden">
-                      <div className="aspect-square">
+                      <div className="aspect-square relative">
                         <img src={card.image} alt={card.data.companyName} className="w-full h-full object-contain bg-white" />
+                        {postedStoryIndices.has(idx) && (
+                          <div className="absolute top-1 right-1 bg-purple-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">Story</div>
+                        )}
                       </div>
-                      <CardContent className="p-2 flex gap-2">
+                      <CardContent className="p-2 flex gap-1">
                         <Button
                           size="sm"
                           className="flex-1 gap-1 text-xs"
@@ -1967,6 +2071,17 @@ export default function HomePage() {
                         >
                           {postingIpoIndex === idx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                           Post
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1 text-xs text-purple-600 border-purple-300 hover:bg-purple-50"
+                          disabled={postingStoryIndex === idx}
+                          onClick={() => handlePostIpoStory(idx)}
+                          title="Post as Facebook Story"
+                        >
+                          {postingStoryIndex === idx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Newspaper className="h-3 w-3" />}
+                          Story
                         </Button>
                         <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => handleDownloadIpoCard(idx)}>
                           <Download className="h-3 w-3" />
@@ -1981,6 +2096,90 @@ export default function HomePage() {
             <p className="text-xs text-muted-foreground text-center">
               Data source: CDSC Nepal (cdsc.com.np) · Last fetched: {new Date().toLocaleString()}
             </p>
+
+            {/* ---- Reels Upload Section ---- */}
+            <Card className="mt-6">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Film className="h-5 w-5" />
+                  Upload Facebook Reel
+                </CardTitle>
+                <CardDescription>
+                  Upload a short video (up to 90s, max 50MB) to post as a Facebook Reel. Recommended: 1080x1920 portrait, MP4 format.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Drop zone / file selector */}
+                <div
+                  className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                  onClick={() => document.getElementById('reel-file-input')?.click()}
+                >
+                  {reelPreviewUrl ? (
+                    <div className="space-y-3">
+                      <video
+                        src={reelPreviewUrl}
+                        className="max-h-64 mx-auto rounded-lg"
+                        controls
+                        playsInline
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (reelPreviewUrl) URL.revokeObjectURL(reelPreviewUrl);
+                          setReelFile(null);
+                          setReelPreviewUrl(null);
+                        }}
+                      >
+                        <X className="h-4 w-4 mr-1" /> Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
+                      <p className="text-sm font-medium">Click to select a video</p>
+                      <p className="text-xs text-muted-foreground">MP4, MOV, WebM — max 50MB</p>
+                    </div>
+                  )}
+                  <input
+                    id="reel-file-input"
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={handleReelFileSelect}
+                  />
+                </div>
+
+                {/* Caption */}
+                <div className="space-y-2">
+                  <Label htmlFor="reel-caption" className="text-sm font-medium">Caption</Label>
+                  <Textarea
+                    id="reel-caption"
+                    placeholder="Write a caption for your Reel..."
+                    value={reelCaption}
+                    onChange={(e) => setReelCaption(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                {/* Post button */}
+                <Button
+                  className="w-full gap-2"
+                  disabled={!reelFile || isPostingReel}
+                  onClick={handlePostReel}
+                >
+                  {isPostingReel ? <Loader2 className="h-4 w-4 animate-spin" /> : <Film className="h-4 w-4" />}
+                  {isPostingReel ? 'Uploading Reel...' : 'Post as Reel'}
+                  {reelFile && (
+                    <span className="text-xs opacity-70">
+                      ({(reelFile.size / 1024 / 1024).toFixed(1)}MB)
+                    </span>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>

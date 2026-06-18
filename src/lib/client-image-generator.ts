@@ -923,3 +923,270 @@ export async function generateImagesInBrowser(
     stockCards,
   };
 }
+
+// ---- Story image generation (1080x1920 portrait) ----
+
+const STORY_W = 1080;
+const STORY_H = 1920;
+
+function svgToPngBase64Story(svg: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = STORY_W;
+    canvas.height = STORY_H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { reject(new Error('Canvas not supported')); return; }
+
+    const img = new Image();
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, STORY_W, STORY_H);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to render Story SVG to canvas'));
+    };
+    img.src = url;
+  });
+}
+
+export async function generateIpoStoryImage(
+  ipo: IpoCardData,
+  fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>,
+): Promise<string> {
+  const navBar = '#1E3A5F';
+  const medBlue = '#2B5797';
+  const isOpen = ipo.isOpen;
+  const openedToday = ipo.openedToday;
+  const isLastDay = isSameDayNepal(ipo.closeDate);
+  const statusColor = isOpen ? (isLastDay ? '#DC2626' : '#16A34A') : '#64748B';
+  const statusLabel = isOpen ? (openedToday ? 'IPO OPENED TODAY' : isLastDay ? 'LAST DAY TO APPLY' : 'NOW OPEN') : 'CLOSED';
+  const statusEmoji = isOpen ? (isLastDay ? '\u26A0\uFE0F' : '\uD83D\uDCC8') : '\uD83D\uDD12';
+
+  const hasSubscriptionData = ipo.numberOfApplications > 0 || ipo.appliedUnits > 0 || ipo.totalAmount > 0;
+  const showOversubBanner = hasSubscriptionData && ipo.oversubscription !== null && ipo.oversubscription > 0;
+
+  // Build vertical metric items (full-width in portrait)
+  const metricItems: Array<Record<string, unknown>> = [
+    {
+      type: 'div' as const,
+      props: {
+        style: { display: 'flex', flexDirection: 'row' as const, justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 14, padding: '16px 22px', borderLeft: `5px solid ${medBlue}` },
+        children: [
+          { type: 'div' as const, props: { style: { fontSize: 18, fontWeight: 700, color: '#64748B', letterSpacing: '0.08em' }, children: 'ISSUED UNITS' } },
+          { type: 'div' as const, props: { style: { fontSize: 28, fontWeight: 900, color: navBar }, children: ipo.issuedUnits.toLocaleString() } },
+        ],
+      },
+    },
+    {
+      type: 'div' as const,
+      props: {
+        style: { display: 'flex', flexDirection: 'row' as const, justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 14, padding: '16px 22px', borderLeft: `5px solid #059669` },
+        children: [
+          { type: 'div' as const, props: { style: { fontSize: 18, fontWeight: 700, color: '#64748B', letterSpacing: '0.08em' }, children: 'PRICE PER UNIT' } },
+          { type: 'div' as const, props: { style: { fontSize: 28, fontWeight: 900, color: '#065F46' }, children: 'Rs. 100' } },
+        ],
+      },
+    },
+    {
+      type: 'div' as const,
+      props: {
+        style: { display: 'flex', flexDirection: 'row' as const, justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 14, padding: '16px 22px', borderLeft: `5px solid #7C3AED` },
+        children: [
+          { type: 'div' as const, props: { style: { fontSize: 18, fontWeight: 700, color: '#64748B', letterSpacing: '0.08em' }, children: 'ISSUE MANAGER' } },
+          { type: 'div' as const, props: { style: { fontSize: 22, fontWeight: 800, color: '#5B21B6' }, children: ipo.issueManager.length > 28 ? ipo.issueManager.substring(0, 26) + '...' : ipo.issueManager } },
+        ],
+      },
+    },
+  ];
+
+  if (hasSubscriptionData) {
+    metricItems.push({
+      type: 'div' as const,
+      props: {
+        style: { display: 'flex', flexDirection: 'row' as const, justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 14, padding: '16px 22px', borderLeft: `5px solid #0891B2` },
+        children: [
+          { type: 'div' as const, props: { style: { fontSize: 18, fontWeight: 700, color: '#64748B', letterSpacing: '0.08em' }, children: 'APPLICATIONS' } },
+          { type: 'div' as const, props: { style: { fontSize: 28, fontWeight: 900, color: '#155E75' }, children: ipo.numberOfApplications.toLocaleString() } },
+        ],
+      },
+    });
+    metricItems.push({
+      type: 'div' as const,
+      props: {
+        style: { display: 'flex', flexDirection: 'row' as const, justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 14, padding: '16px 22px', borderLeft: `5px solid #D97706` },
+        children: [
+          { type: 'div' as const, props: { style: { fontSize: 18, fontWeight: 700, color: '#64748B', letterSpacing: '0.08em' }, children: 'TOTAL AMOUNT' } },
+          { type: 'div' as const, props: { style: { fontSize: 28, fontWeight: 900, color: '#92400E' }, children: `Rs. ${formatIpoAmount(ipo.totalAmount)}` } },
+        ],
+      },
+    });
+  }
+
+  const svg = await satori(
+    {
+      type: 'div',
+      props: {
+        style: {
+          width: STORY_W, height: STORY_H,
+          background: 'linear-gradient(180deg, #1E3A5F 0%, #0F2844 40%, #1E3A5F 100%)',
+          position: 'relative', overflow: 'hidden',
+          display: 'flex', flexDirection: 'column' as const,
+        },
+        children: [
+          // Top spacer for FB story UI
+          { type: 'div', props: { style: { height: 180 } } },
+          // Status badge
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', alignItems: 'center', justifyContent: 'center' },
+              children: {
+                type: 'div',
+                props: {
+                  style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'center', gap: 12, backgroundColor: statusColor, padding: '14px 40px', borderRadius: 40 },
+                  children: [
+                    { type: 'div', props: { style: { fontSize: 28, fontWeight: 900, color: '#ffffff', letterSpacing: '0.1em' }, children: `${statusEmoji}  ${statusLabel}` } },
+                  ],
+                },
+              },
+            },
+          },
+          // Company name + symbol
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', marginTop: 30, marginHorizontal: 50 },
+              children: [
+                { type: 'div', props: { style: { fontSize: ipo.companyName.length > 30 ? 36 : 42, fontWeight: 900, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase' as const, textAlign: 'center' as const, lineHeight: 1.2 }, children: ipo.companyName } },
+                ...(ipo.companySymbol ? [{ type: 'div', props: { style: { fontSize: 28, fontWeight: 800, color: '#93C5FD', marginTop: 8 }, children: `(${ipo.companySymbol})` } }] : []),
+              ],
+            },
+          },
+          // IPO type
+          { type: 'div', props: { style: { fontSize: 22, fontWeight: 700, color: '#ffffff88', textAlign: 'center' as const, marginTop: 8 }, children: ipo.ipoType } },
+          // Dates
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'center', justifyContent: 'center', gap: 28, marginTop: 28, marginHorizontal: 60 },
+              children: [
+                {
+                  type: 'div' as const,
+                  props: {
+                    style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' },
+                    children: [
+                      { type: 'div' as const, props: { style: { fontSize: 14, fontWeight: 700, color: '#ffffff66', letterSpacing: '0.1em' }, children: 'OPEN' } },
+                      { type: 'div' as const, props: { style: { fontSize: 22, fontWeight: 800, color: '#ffffff', marginTop: 4 }, children: formatDateShort(ipo.openDate) } },
+                    ],
+                  },
+                },
+                { type: 'div' as const, props: { style: { width: 2, height: 40, backgroundColor: '#ffffff33' } } },
+                {
+                  type: 'div' as const,
+                  props: {
+                    style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' },
+                    children: [
+                      { type: 'div' as const, props: { style: { fontSize: 14, fontWeight: 700, color: '#ffffff66', letterSpacing: '0.1em' }, children: 'CLOSE' } },
+                      { type: 'div' as const, props: { style: { fontSize: 22, fontWeight: 900, color: isLastDay ? '#FCA5A5' : '#ffffff', marginTop: 4 }, children: formatDateShort(ipo.closeDate) } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          // Metrics (vertical stack)
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flexDirection: 'column' as const, width: STORY_W, padding: '0px 50px', gap: 14, marginTop: 36 },
+              children: metricItems,
+            },
+          },
+          // Oversubscription banner
+          ...(showOversubBanner ? [
+            {
+              type: 'div' as const,
+              props: {
+                style: {
+                  display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center',
+                  marginHorizontal: 50, marginTop: 20, padding: '20px 24px', borderRadius: 18,
+                  backgroundColor: (() => {
+                    const v = ipo.oversubscription!;
+                    if (v >= 10) return 'rgba(220,38,38,0.15)';
+                    if (v >= 3) return 'rgba(217,119,6,0.15)';
+                    return 'rgba(22,163,74,0.15)';
+                  })(),
+                  border: `3px solid ${(() => {
+                    const v = ipo.oversubscription!;
+                    if (v >= 10) return '#EF4444';
+                    if (v >= 3) return '#F59E0B';
+                    return '#22C55E';
+                  })()}`,
+                },
+                children: [
+                  {
+                    type: 'div' as const,
+                    props: {
+                      style: { fontSize: 22, fontWeight: 800, letterSpacing: '0.12em', color: '#ffffff' },
+                      children: 'OVERSUBSCRIBED',
+                    },
+                  },
+                  {
+                    type: 'div' as const,
+                    props: {
+                      style: {
+                        fontSize: ipo.oversubscription! >= 10 ? 52 : ipo.oversubscription! >= 3 ? 46 : 40,
+                        fontWeight: 900, color: '#ffffff', marginTop: 6,
+                      },
+                      children: `by ${ipo.oversubscription!.toFixed(2)} times`,
+                    },
+                  },
+                ],
+              },
+            },
+          ] : []),
+          // Bottom CTA for open IPOs
+          ...(isOpen ? [
+            {
+              type: 'div' as const,
+              props: {
+                style: {
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginHorizontal: 80, marginTop: 'auto', marginBottom: 120,
+                  backgroundColor: '#ffffff', padding: '20px 40px', borderRadius: 40,
+                },
+                children: [
+                  { type: 'div' as const, props: { style: { fontSize: 26, fontWeight: 900, color: navBar, letterSpacing: '0.06em' }, children: 'APPLY NOW' } },
+                ],
+              },
+            },
+          ] : []),
+          // Bottom spacer for FB story UI
+          { type: 'div', props: { style: { height: isOpen ? 0 : 160 } } },
+          // Footer watermark
+          {
+            type: 'div',
+            props: {
+              style: {
+                position: 'absolute', bottom: 50, left: 0, right: 0,
+                display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 4,
+              },
+              children: [
+                { type: 'div', props: { style: { fontSize: 28, fontWeight: 900, color: '#ffffff55', letterSpacing: '0.12em' }, children: 'SHARE SATHI' } },
+                { type: 'div', props: { style: { fontSize: 14, color: '#ffffff33', letterSpacing: '0.06em' }, children: '#NEPSE #ShareSathi #IPO #NepalIPO' } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    { width: STORY_W, height: STORY_H, fonts },
+  );
+
+  return svgToPngBase64Story(svg);
+}
