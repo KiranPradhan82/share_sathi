@@ -878,7 +878,6 @@ export default function HomePage() {
         }
       }
         // Refresh data on any response (success or partial)
-      setImagePreview(null);
       fetchSystemStatus();
       fetchLatestData();
       fetchRecentEvents();
@@ -1060,24 +1059,25 @@ export default function HomePage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">1. Market Summary</p>
-                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
-                    <img src={imagePreview.marketSummary} alt="Market Summary" className="w-full h-auto" />
+                {[
+                  { src: imagePreview.marketSummary, label: '1. Market Summary' },
+                  { src: imagePreview.topGainers, label: '2. Top 10 Gainers' },
+                  { src: imagePreview.topLosers, label: '3. Top 10 Losers' },
+                ].map((item) => (
+                  <div key={item.label} className="space-y-2 relative">
+                    <p className="text-sm font-medium text-muted-foreground">{item.label}</p>
+                    <div className="rounded-lg overflow-hidden border border-border bg-muted">
+                      <img src={item.src} alt={item.label} className="w-full h-auto" />
+                    </div>
+                    {summaryPosted && (
+                      <div className="absolute top-6 right-2">
+                        <span className="inline-flex items-center gap-1 bg-emerald-500 text-white text-xs font-semibold px-2 py-1 rounded-md">
+                          <CheckCircle2 className="h-3 w-3" /> Posted
+                        </span>
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">2. Top 10 Gainers</p>
-                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
-                    <img src={imagePreview.topGainers} alt="Top 10 Gainers" className="w-full h-auto" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">3. Top 10 Losers</p>
-                  <div className="rounded-lg overflow-hidden border border-border bg-muted">
-                    <img src={imagePreview.topLosers} alt="Top 10 Losers" className="w-full h-auto" />
-                  </div>
-                </div>
+                ))}
               </div>
             </CardContent>
           </Card>
