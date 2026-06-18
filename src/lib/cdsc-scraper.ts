@@ -60,16 +60,19 @@ export async function scrapeCdscIpoList(): Promise<IpoItem[]> {
   // Extract table rows from tbody
   const items: IpoItem[] = [];
 
-  // Match each <tr> block inside tbody
-  const trRegex = /<tr>\s*<td>(\d+)<\/td>\s*<td>(.*?)<\/td>\s*<td>(.*?)<\/td>\s*<td>([\d,]+)<\/td>\s*<td>([\d,]+)<\/td>\s*<td>([\d,]+)<\/td>\s*<td>([\d,]+)<\/td>\s*<td>([\d-]+)<\/td>\s*<td>([\d-]+)<\/td>\s*<td>([^<]+)<\/td>\s*<\/tr>/gi;
+  // Extract all <tr> rows from tbody — each cell may contain digits, commas, or '-'
+  const trRegex = /<tr>\s*<td>(\d+)<\/td>\s*<td>(.*?)<\/td>\s*<td>(.*?)<\/td>\s*<td>([^<]*)<\/td>\s*<td>([^<]*)<\/td>\s*<td>([^<]*)<\/td>\s*<td>([^<]*)<\/td>\s*<td>([^<]*)<\/td>\s*<td>([^<]*)<\/td>\s*<td>([^<]+)<\/td>\s*<\/tr>/gi;
 
   let match;
   while ((match = trRegex.exec(html)) !== null) {
     const rawName = match[2].replace(/<[^>]*>/g, '').trim();
     const { name, symbol, ipoType } = parseCompanyInfo(rawName);
     const issuedUnits = parseInt(match[4].replace(/,/g, ''), 10) || 0;
+    const numberOfApplications = parseInt(match[5].replace(/,/g, ''), 10) || 0;
     const appliedUnits = parseInt(match[6].replace(/,/g, ''), 10) || 0;
-    const oversubscription = issuedUnits > 0 ? parseFloat((appliedUnits / issuedUnits).toFixed(2)) : null;
+    const totalAmount = parseAmount(match[7]);
+    const hasSubscriptionData = numberOfApplications > 0 || appliedUnits > 0 || totalAmount > 0;
+    const oversubscription = (issuedUnits > 0 && hasSubscriptionData) ? parseFloat((appliedUnits / issuedUnits).toFixed(2)) : null;
 
     items.push({
       companyName: name,
@@ -77,9 +80,9 @@ export async function scrapeCdscIpoList(): Promise<IpoItem[]> {
       ipoType,
       issueManager: match[3].replace(/<[^>]*>/g, '').trim(),
       issuedUnits,
-      numberOfApplications: parseInt(match[5].replace(/,/g, ''), 10) || 0,
+      numberOfApplications,
       appliedUnits,
-      totalAmount: parseAmount(match[7]),
+      totalAmount,
       openDate: parseDate(match[8]),
       closeDate: parseDate(match[9]),
       lastUpdate: match[10].trim(),

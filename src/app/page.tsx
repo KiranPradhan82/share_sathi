@@ -1903,6 +1903,7 @@ export default function HomePage() {
                         const open = isIpoCurrentlyOpen(ipo.closeDate);
                         const openedToday = isIpoOpenedToday(ipo.openDate);
                         const sub = ipo.oversubscription;
+                        const hasData = ipo.numberOfApplications > 0 || ipo.appliedUnits > 0 || ipo.totalAmount > 0;
                         return (
                           <TableRow key={idx}>
                             <TableCell>
@@ -1911,14 +1912,14 @@ export default function HomePage() {
                                 {ipo.companySymbol && <span>{ipo.companySymbol} · </span>}
                                 {ipo.ipoType}
                               </div>
-                              <div className="text-xs text-muted-foreground">{ipo.issueManager}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5">Manager: {ipo.issueManager}</div>
                             </TableCell>
                             <TableCell className="text-right font-mono text-sm">{ipo.issuedUnits.toLocaleString()}</TableCell>
-                            <TableCell className="text-right font-mono text-sm">{ipo.numberOfApplications.toLocaleString()}</TableCell>
-                            <TableCell className="text-right font-mono text-sm">{ipo.appliedUnits.toLocaleString()}</TableCell>
-                            <TableCell className="text-right font-mono text-sm">Rs. {formatNepaliAmount(ipo.totalAmount)}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{hasData ? ipo.numberOfApplications.toLocaleString() : '—'}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{hasData ? ipo.appliedUnits.toLocaleString() : '—'}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{hasData ? `Rs. ${formatNepaliAmount(ipo.totalAmount)}` : '—'}</TableCell>
                             <TableCell className="text-right font-mono text-sm">
-                              {openedToday || open ? '—' : (sub !== null && sub > 0 ? `${sub.toFixed(2)}x` : '—')}
+                              {sub !== null && sub > 0 ? `${sub.toFixed(2)}x` : '—'}
                             </TableCell>
                             <TableCell className="text-xs font-mono">{ipo.openDate}</TableCell>
                             <TableCell className="text-xs font-mono">{ipo.closeDate}</TableCell>

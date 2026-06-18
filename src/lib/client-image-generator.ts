@@ -611,20 +611,22 @@ export async function generateIpoCardImage(
   });
 
   if (openedToday || isOpen) {
-    // Open/Open Today: show total amount, issue manager
-    metrics.push({
-      label: 'TOTAL AMOUNT',
-      value: `Rs. ${formatIpoAmount(ipo.totalAmount)}`,
-      headerColor: '#D97706',
-      valueColor: '#92400E',
-    });
+    // Open/Open Today: show issue manager prominently, total amount if available
     metrics.push({
       label: 'ISSUE MANAGER',
-      value: ipo.issueManager.length > 18 ? ipo.issueManager.substring(0, 16) + '...' : ipo.issueManager,
+      value: ipo.issueManager.length > 22 ? ipo.issueManager.substring(0, 20) + '...' : ipo.issueManager,
       headerColor: '#7C3AED',
       valueColor: '#5B21B6',
     });
-  } else {
+    if (ipo.totalAmount > 0) {
+      metrics.push({
+        label: 'TOTAL AMOUNT',
+        value: `Rs. ${formatIpoAmount(ipo.totalAmount)}`,
+        headerColor: '#D97706',
+        valueColor: '#92400E',
+      });
+    }
+  } else if (ipo.numberOfApplications > 0 || ipo.appliedUnits > 0) {
     // Closed IPOs with subscription data
     metrics.push({
       label: 'APPLICATIONS',
