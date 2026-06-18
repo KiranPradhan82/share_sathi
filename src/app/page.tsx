@@ -792,11 +792,15 @@ export default function HomePage() {
     if (!imagePreview) return;
     setIsPosting(true);
     try {
-      // Send client-generated images + date to the server for Facebook posting
+      // Send ONLY the 3 summary images (stock cards have their own Post buttons)
       const dateToUse = previewData?.marketData?.tradingDate;
       const body: Record<string, unknown> = {
         mode: 'image',
-        images: imagePreview, // base64 data URIs from browser
+        images: {
+          marketSummary: imagePreview.marketSummary,
+          topGainers: imagePreview.topGainers,
+          topLosers: imagePreview.topLosers,
+        },
       };
       if (dateToUse) body.date = dateToUse;
 
