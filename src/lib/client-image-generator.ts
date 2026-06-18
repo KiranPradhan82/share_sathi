@@ -683,10 +683,10 @@ export async function generateIpoCardImage(
         children: rowMetrics.map((m) => ({
           type: 'div',
           props: {
-            style: { flex: 1, display: 'flex', flexDirection: 'column' as const, borderRadius: 14, overflow: 'hidden' },
+            style: { flex: 1, display: 'flex', flexDirection: 'column' as const, borderRadius: 16, overflow: 'hidden' },
             children: [
-              { type: 'div', props: { style: { fontSize: 14, fontWeight: 800, color: '#ffffff', backgroundColor: m.headerColor, padding: '9px 16px', letterSpacing: '0.1em' }, children: m.label } },
-              { type: 'div', props: { style: { fontSize: m.value.length > 18 ? 22 : m.value.length > 12 ? 26 : 30, fontWeight: 900, color: m.valueColor, backgroundColor: '#ffffff', padding: '12px 16px' }, children: m.value } },
+              { type: 'div', props: { style: { fontSize: 16, fontWeight: 800, color: '#ffffff', backgroundColor: m.headerColor, padding: '10px 18px', letterSpacing: '0.1em' }, children: m.label } },
+              { type: 'div', props: { style: { fontSize: m.value.length > 20 ? 26 : m.value.length > 14 ? 32 : 38, fontWeight: 900, color: m.valueColor, backgroundColor: '#ffffff', padding: '14px 18px' }, children: m.value } },
             ],
           },
         })),
@@ -709,12 +709,12 @@ export async function generateIpoCardImage(
           {
             type: 'div',
             props: {
-              style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'center', justifyContent: 'center', gap: 16, backgroundColor: navBar, padding: '24px 30px' },
+              style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'center', justifyContent: 'center', gap: 16, backgroundColor: navBar, padding: '22px 30px' },
               children: [
-                { type: 'div', props: { style: { fontSize: 30, fontWeight: 800, color: '#ffffff' }, children: '\uD83D\uDCB5' } },
-                { type: 'div', props: { style: { fontSize: 22, fontWeight: 900, color: '#ffffff', letterSpacing: '0.12em' }, children: 'IPO UPDATE' } },
+                { type: 'div', props: { style: { fontSize: 32, fontWeight: 800, color: '#ffffff' }, children: '\uD83D\uDCB5' } },
+                { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: '#ffffff', letterSpacing: '0.12em' }, children: 'IPO UPDATE' } },
                 { type: 'div', props: { style: { width: 2, height: 28, backgroundColor: '#ffffff55' } } },
-                { type: 'div', props: { style: { fontSize: 22, fontWeight: 900, color: '#ffffff', letterSpacing: '0.12em' }, children: 'NEPAL' } },
+                { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: '#ffffff', letterSpacing: '0.12em' }, children: 'NEPAL' } },
               ],
             },
           },
@@ -722,13 +722,13 @@ export async function generateIpoCardImage(
           {
             type: 'div',
             props: {
-              style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 18 },
+              style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 16 },
               children: {
                 type: 'div',
                 props: {
-                  style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'center', gap: 10, backgroundColor: statusColor, padding: '8px 28px', borderRadius: 30 },
+                  style: { display: 'flex', flexDirection: 'row' as const, alignItems: 'center', gap: 10, backgroundColor: statusColor, padding: '10px 32px', borderRadius: 30 },
                   children: [
-                    { type: 'div', props: { style: { fontSize: 20, fontWeight: 900, color: '#ffffff', letterSpacing: '0.1em' }, children: `${statusEmoji}  ${statusLabel}` } },
+                    { type: 'div', props: { style: { fontSize: 22, fontWeight: 900, color: '#ffffff', letterSpacing: '0.1em' }, children: `${statusEmoji}  ${statusLabel}` } },
                   ],
                 },
               },
@@ -740,8 +740,8 @@ export async function generateIpoCardImage(
             props: {
               style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', marginTop: 16, marginHorizontal: 40 },
               children: [
-                { type: 'div', props: { style: { fontSize: ipo.companyName.length > 30 ? 24 : 28, fontWeight: 900, color: navBar, letterSpacing: '0.04em', textTransform: 'uppercase' as const, textAlign: 'center' as const, lineHeight: 1.2 }, children: ipo.companyName } },
-                ...(ipo.companySymbol ? [{ type: 'div', props: { style: { fontSize: 22, fontWeight: 800, color: medBlue, marginTop: 4 }, children: `(${ipo.companySymbol})` } }] : []),
+                { type: 'div', props: { style: { fontSize: ipo.companyName.length > 30 ? 26 : 32, fontWeight: 900, color: navBar, letterSpacing: '0.04em', textTransform: 'uppercase' as const, textAlign: 'center' as const, lineHeight: 1.2 }, children: ipo.companyName } },
+                ...(ipo.companySymbol ? [{ type: 'div', props: { style: { fontSize: 24, fontWeight: 800, color: medBlue, marginTop: 4 }, children: `(${ipo.companySymbol})` } }] : []),
               ],
             },
           },
@@ -756,31 +756,31 @@ export async function generateIpoCardImage(
                   props: {
                     style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' },
                     children: [
-                      { type: 'div', props: { style: { fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.1em' }, children: 'OPEN' } },
-                      { type: 'div', props: { style: { fontSize: 17, fontWeight: 800, color: navBar, marginTop: 2 }, children: formatDateShort(ipo.openDate) } },
+                      { type: 'div', props: { style: { fontSize: 13, fontWeight: 700, color: '#64748B', letterSpacing: '0.1em' }, children: 'OPEN' } },
+                      { type: 'div', props: { style: { fontSize: 19, fontWeight: 800, color: navBar, marginTop: 2 }, children: formatDateShort(ipo.openDate) } },
                     ],
                   },
                 },
-                { type: 'div', props: { style: { width: 2, height: 30, backgroundColor: '#CBD5E1' } } },
+                { type: 'div', props: { style: { width: 2, height: 34, backgroundColor: '#CBD5E1' } } },
                 {
                   type: 'div',
                   props: {
                     style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' },
                     children: [
-                      { type: 'div', props: { style: { fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.1em' }, children: 'CLOSE' } },
-                      { type: 'div', props: { style: { fontSize: 17, fontWeight: 800, color: navBar, marginTop: 2 }, children: formatDateShort(ipo.closeDate) } },
+                      { type: 'div', props: { style: { fontSize: 13, fontWeight: 700, color: '#64748B', letterSpacing: '0.1em' }, children: 'CLOSE' } },
+                      { type: 'div', props: { style: { fontSize: 19, fontWeight: 800, color: navBar, marginTop: 2 }, children: formatDateShort(ipo.closeDate) } },
                     ],
                   },
                 },
                 ...(ipo.lastUpdate ? [
-                  { type: 'div', props: { style: { width: 2, height: 30, backgroundColor: '#CBD5E1' } } },
+                  { type: 'div', props: { style: { width: 2, height: 34, backgroundColor: '#CBD5E1' } } },
                   {
                     type: 'div',
                     props: {
                       style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' },
                       children: [
-                        { type: 'div', props: { style: { fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.1em' }, children: 'UPDATED' } },
-                        { type: 'div', props: { style: { fontSize: 13, fontWeight: 700, color: '#64748B', marginTop: 2 }, children: ipo.lastUpdate.length > 16 ? ipo.lastUpdate.substring(0, 16) : ipo.lastUpdate } },
+                        { type: 'div', props: { style: { fontSize: 13, fontWeight: 700, color: '#64748B', letterSpacing: '0.1em' }, children: 'UPDATED' } },
+                        { type: 'div', props: { style: { fontSize: 14, fontWeight: 700, color: '#64748B', marginTop: 2 }, children: ipo.lastUpdate.length > 16 ? ipo.lastUpdate.substring(0, 16) : ipo.lastUpdate } },
                       ],
                     },
                   },
@@ -806,8 +806,8 @@ export async function generateIpoCardImage(
                 alignItems: 'center', justifyContent: 'center', gap: 3,
               },
               children: [
-                { type: 'div', props: { style: { fontSize: 22, fontWeight: 900, color: '#ffffff', letterSpacing: '0.1em' }, children: 'SHARE SATHI' } },
-                { type: 'div', props: { style: { fontSize: 12, color: '#ffffff88', letterSpacing: '0.05em' }, children: '#NEPSE #ShareSathi #IPO #NepalIPO #StockMarket' } },
+                { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: '#ffffff', letterSpacing: '0.1em' }, children: 'SHARE SATHI' } },
+                { type: 'div', props: { style: { fontSize: 13, color: '#ffffff88', letterSpacing: '0.05em' }, children: '#NEPSE #ShareSathi #IPO #NepalIPO #StockMarket' } },
               ],
             },
           },
