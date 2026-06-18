@@ -658,19 +658,8 @@ export async function generateIpoCardImage(
     });
   }
 
-  // Row 4: Oversubscription (always when closed + has data)
-  if (!isOpen && !openedToday && hasSubscriptionData && ipo.oversubscription !== null) {
-    const subVal = ipo.oversubscription;
-    const subColor = subVal >= 10 ? '#DC2626' : subVal >= 3 ? '#D97706' : subVal >= 1 ? '#16A34A' : '#64748B';
-    metrics.push({
-      label: 'OVERSUBSCRIPTION',
-      value: `${subVal.toFixed(2)}x`,
-      headerColor: subColor,
-      valueColor: subColor,
-    });
-    // Show issue manager in remaining slot if we have sub data
-    // (manager already in row 2, so skip)
-  }
+  // Oversubscription — handled as a prominent banner below the grid (not in metrics)
+  const showOversubBanner = hasSubscriptionData && ipo.oversubscription !== null && ipo.oversubscription > 0;
 
   // Build the metrics grid (2 columns)
   const metricRows: Array<Record<string, unknown>> = [];
@@ -796,6 +785,57 @@ export async function generateIpoCardImage(
               children: metricRows,
             },
           },
+          // Oversubscription banner — prominent full-width callout
+          ...(showOversubBanner ? [
+            {
+              type: 'div' as const,
+              props: {
+                style: {
+                  display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center',
+                  marginHorizontal: 40, marginTop: 14, padding: '16px 20px', borderRadius: 16,
+                  backgroundColor: (() => {
+                    const v = ipo.oversubscription!;
+                    if (v >= 10) return '#FEF2F2';
+                    if (v >= 3) return '#FFFBEB';
+                    return '#F0FDF4';
+                  })(),
+                  border: `3px solid ${(() => {
+                    const v = ipo.oversubscription!;
+                    if (v >= 10) return '#DC2626';
+                    if (v >= 3) return '#D97706';
+                    return '#16A34A';
+                  })()}`,
+                },
+                children: [
+                  {
+                    type: 'div' as const,
+                    props: {
+                      style: {
+                        fontSize: 20, fontWeight: 800, letterSpacing: '0.12em',
+                        color: (() => {
+                          const v = ipo.oversubscription!;
+                          if (v >= 10) return '#DC2626';
+                          if (v >= 3) return '#D97706';
+                          return '#16A34A';
+                        })(),
+                      },
+                      children: 'OVERSUBSCRIBED',
+                    },
+                  },
+                  {
+                    type: 'div' as const,
+                    props: {
+                      style: {
+                        fontSize: ipo.oversubscription! >= 10 ? 44 : ipo.oversubscription! >= 3 ? 40 : 36,
+                        fontWeight: 900, color: '#1E293B', marginTop: 4,
+                      },
+                      children: `by ${ipo.oversubscription!.toFixed(2)} times`,
+                    },
+                  },
+                ],
+              },
+            },
+          ] : []),
           // Footer
           {
             type: 'div',

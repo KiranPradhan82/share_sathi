@@ -431,6 +431,7 @@ export async function POST(request: NextRequest) {
         issuedUnits: number; numberOfApplications: number; appliedUnits: number;
         totalAmount: number; openDate: string; closeDate: string;
         oversubscription: number | null; isOpen: boolean; openedToday: boolean;
+        isLastDay?: boolean;
       } | undefined;
       if (!ipoInfo) {
         return NextResponse.json({ error: 'Missing ipoInfo for IPO card post' }, { status: 400 });
@@ -443,7 +444,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `Failed to decode base64 image: ${convErr instanceof Error ? convErr.message : 'Unknown'}` }, { status: 400 });
       }
 
-      const caption = formatIpoCardCaption(ipoInfo);
+      // Compute isLastDay server-side using Nepal timezone
+      const ipoCloseDate = ipoInfo.closeDate || '';
+      let isLastDay = ipoInfo.isLastDay || false;
+      if (!isLastDay && ipoCloseDate) {
+        try {
+          const close = new Date(ipoCloseDate + 'T00:00:00+05:45');
+          const now = new Date();
+          const nepalNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }));
+          isLastDay = close.getFullYear() === nepalNow.getFullYear() &&
+            close.getMonth() === nepalNow.getMonth() &&
+            close.getDate() === nepalNow.getDate();
+        } catch { /* ignore */ }
+      }
+
+      const caption = formatIpoCardCaption({ ...ipoInfo, isLastDay });
 
       const fbPost = await db.facebookPost.create({
         data: {
