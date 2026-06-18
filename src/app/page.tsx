@@ -29,6 +29,7 @@ import {
   Type,
   Loader2,
   LogOut,
+  Newspaper,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -277,6 +278,15 @@ export default function HomePage() {
   } | null>(null);
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [postingCardIndex, setPostingCardIndex] = useState<number | null>(null);
+
+  // IPO state
+  const [ipoData, setIpoData] = useState<Array<{
+    companyName: string; companySymbol: string; ipoType: string; issueManager: string;
+    issuedUnits: number; numberOfApplications: number; appliedUnits: number;
+    totalAmount: number; openDate: string; closeDate: string; lastUpdate: string;
+    oversubscription: number | null;
+  }> | null>(null);
+  const [isFetchingIpo, setIsFetchingIpo] = useState(false);
 
   // Loading states
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
@@ -603,6 +613,24 @@ export default function HomePage() {
       toast.error(err instanceof Error ? err.message : 'Failed to generate images');
     } finally {
       setIsGeneratingImages(false);
+    }
+  };
+
+  const handleFetchIpo = async () => {
+    setIsFetchingIpo(true);
+    try {
+      const res = await fetch('/api/news/ipo-status');
+      const json = await res.json();
+      if (json.success) {
+        setIpoData(json.data);
+        toast.success(`Fetched ${json.count} IPO(s) from CDSC`);
+      } else {
+        toast.error(json.error || 'Failed to fetch IPO data');
+      }
+    } catch {
+      toast.error('Network error fetching IPO data');
+    } finally {
+      setIsFetchingIpo(false);
     }
   };
 
@@ -1687,6 +1715,142 @@ export default function HomePage() {
     </div>
   );
 
+  // ---- IPO & News Tab ----
+  const renderIpoTab = () => {
+    const formatNepaliAmount = (n: number) => {
+      if (n >= 10000000) return `${(n / 10000000).toFixed(2)} Cr`;
+      if (n >= 100000) return `${(n / 100000).toFixed(2)} L`;
+      return n.toLocaleString('en-US');
+    };
+
+    const isCurrentlyOpen = (closeDate: string) => {
+      if (!closeDate) return false;
+      const close = new Date(closeDate + 'T23:59:59+05:45');
+      return close > new Date();
+    };
+
+    const daysUntilClose = (closeDate: string) => {
+      if (!closeDate) return null;
+      const close = new Date(closeDate + 'T23:59:59+05:45');
+      const now = new Date();
+      const diff = Math.ceil((close.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return diff;
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">IPO & News</h2>
+            <p className="text-muted-foreground text-sm">Live IPO data from CDSC Nepal</p>
+          </div>
+          <Button onClick={handleFetchIpo} disabled={isFetchingIpo} size="lg" className="gap-2">
+            {isFetchingIpo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {isFetchingIpo ? 'Fetching...' : 'Fetch IPO Data'}
+          </Button>
+        </div>
+
+        {ipoData === null ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <Newspaper className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-1">No IPO Data Loaded</h3>
+              <p className="text-sm text-muted-foreground">Click &quot;Fetch IPO Data&quot; to get live IPO status from CDSC</p>
+            </CardContent>
+          </Card>
+        ) : ipoData.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <Newspaper className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-1">No Active IPOs</h3>
+              <p className="text-sm text-muted-foreground">There are currently no open or recent IPOs listed on CDSC</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {ipoData.map((ipo, idx) => {
+              const open = isCurrentlyOpen(ipo.closeDate);
+              const days = daysUntilClose(ipo.closeDate);
+              const sub = ipo.oversubscription;
+              return (
+                <Card key={idx} className={open ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-border'}>
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <CardTitle className="text-lg font-bold truncate">{ipo.companyName}</CardTitle>
+                        <CardDescription className="flex flex-wrap items-center gap-2 mt-1">
+                          {ipo.companySymbol && <Badge variant="outline">{ipo.companySymbol}</Badge>}
+                          <Badge variant="secondary">{ipo.ipoType}</Badge>
+                          <Badge variant="outline">{ipo.issueManager}</Badge>
+                        </CardDescription>
+                      </div>
+                      <div className="shrink-0">
+                        {open ? (
+                          <Badge className="bg-emerald-500 text-white px-3 py-1 text-sm">
+                            {days !== null && days > 0 ? `Closes in ${days} day${days > 1 ? 's' : ''}` : 'Last Day!'}
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="px-3 py-1 text-sm">Closed</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Issued Units</p>
+                        <p className="text-xl font-bold mt-0.5">{ipo.issuedUnits.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Applications</p>
+                        <p className="text-xl font-bold mt-0.5">{ipo.numberOfApplications.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Applied Units</p>
+                        <p className="text-xl font-bold mt-0.5">{ipo.appliedUnits.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Total Amount</p>
+                        <p className="text-xl font-bold mt-0.5">Rs. {formatNepaliAmount(ipo.totalAmount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Open Date</p>
+                        <p className="text-lg font-semibold mt-0.5">{ipo.openDate}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Close Date</p>
+                        <p className="text-lg font-semibold mt-0.5">{ipo.closeDate}</p>
+                      </div>
+                      {sub !== null && sub > 0 && (
+                        <div>
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Oversubscription</p>
+                          <p className={`text-2xl font-bold mt-0.5 ${sub >= 10 ? 'text-red-500' : sub >= 3 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                            {sub.toFixed(2)}x
+                          </p>
+                        </div>
+                      )}
+                      {sub !== null && sub > 0 && (
+                        <div>
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Avg Units/App</p>
+                          <p className="text-xl font-bold mt-0.5">
+                            {ipo.numberOfApplications > 0 ? Math.round(ipo.appliedUnits / ipo.numberOfApplications) : 0}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+            <p className="text-xs text-muted-foreground text-center">
+              Data source: CDSC Nepal (cdsc.com.np) · Last fetched: {new Date().toLocaleString()}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // ---- Logs Tab ----
   const renderLogs = () => (
     <div className="space-y-4">
@@ -1877,6 +2041,10 @@ export default function HomePage() {
               <Send className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Posts</span>
             </TabsTrigger>
+            <TabsTrigger value="ipo" className="gap-1.5">
+              <Newspaper className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">IPO & News</span>
+            </TabsTrigger>
             <TabsTrigger value="settings" className="gap-1.5">
               <Settings className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Settings</span>
@@ -1890,6 +2058,7 @@ export default function HomePage() {
           <TabsContent value="dashboard">{renderDashboard()}</TabsContent>
           <TabsContent value="market">{renderMarketData()}</TabsContent>
           <TabsContent value="posts">{renderPosts()}</TabsContent>
+          <TabsContent value="ipo">{renderIpoTab()}</TabsContent>
           <TabsContent value="settings">{renderSettings()}</TabsContent>
           <TabsContent value="logs">{renderLogs()}</TabsContent>
         </Tabs>

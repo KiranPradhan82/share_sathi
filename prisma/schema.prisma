@@ -72,3 +72,20 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model IpoStatus {
+  id                 String   @id @default(cuid())
+  companyName        String
+  companySymbol      String
+  ipoType            String
+  issueManager       String
+  issuedUnits        Int
+  numberOfApplications Int
+  appliedUnits       Int
+  totalAmount        Float
+  openDate           String
+  closeDate          String
+  lastUpdate         String
+  oversubscription   Float?
+  fetchedAt          DateTime @default(now())
+}
