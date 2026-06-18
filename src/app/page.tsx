@@ -67,7 +67,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import { generateImagesInBrowser } from '@/lib/client-image-generator';
+import { generateImagesInBrowser, generateIpoCardImage, type IpoCardData } from '@/lib/client-image-generator';
 import { parseStockDataFromRawData } from '@/lib/nepse';
 import type { StockData } from '@/lib/nepse';
 
@@ -287,6 +287,9 @@ export default function HomePage() {
     oversubscription: number | null;
   }> | null>(null);
   const [isFetchingIpo, setIsFetchingIpo] = useState(false);
+  const [ipoCardImages, setIpoCardImages] = useState<Array<{ image: string; data: IpoCardData }>>([]);
+  const [isGeneratingIpoImages, setIsGeneratingIpoImages] = useState(false);
+  const [postingIpoIndex, setPostingIpoIndex] = useState<number | null>(null);
 
   // Loading states
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
@@ -632,6 +635,104 @@ export default function HomePage() {
     } finally {
       setIsFetchingIpo(false);
     }
+  };
+
+  const isIpoOpenedToday = (openDate: string) => {
+    if (!openDate) return false;
+    try {
+      const d = new Date(openDate + 'T00:00:00+05:45');
+      const now = new Date();
+      const nepalOffset = 5 * 60 + 45;
+      const nowNepal = new Date(now.getTime() + (now.getTimezoneOffset() + nepalOffset) * 60000);
+      return d.getUTCFullYear() === nowNepal.getUTCFullYear() &&
+        d.getUTCMonth() === nowNepal.getUTCMonth() &&
+        d.getUTCDate() === nowNepal.getUTCDate();
+    } catch {
+      return false;
+    }
+  };
+
+  const isIpoCurrentlyOpen = (closeDate: string) => {
+    if (!closeDate) return false;
+    const close = new Date(closeDate + 'T23:59:59+05:45');
+    return close > new Date();
+  };
+
+  const handleGenerateIpoImages = async () => {
+    if (!ipoData || ipoData.length === 0) {
+      toast.error('Fetch IPO data first');
+      return;
+    }
+    setIsGeneratingIpoImages(true);
+    setIpoCardImages([]);
+    try {
+      // Dynamically import satori's loadFonts is internal; use the generateIpoCardImage function
+      // which accepts fonts — we need to load them first
+      const weights = [400, 500, 600, 700, 800, 900];
+      const fontPromises = weights.map(async (weight) => {
+        const res = await fetch(`/fonts/Inter-${weight}.woff`);
+        const buf = await res.arrayBuffer();
+        return { name: 'Inter' as const, data: buf, weight, style: 'normal' as const };
+      });
+      const fonts = await Promise.all(fontPromises);
+
+      const cards: Array<{ image: string; data: IpoCardData }> = [];
+      for (const ipo of ipoData) {
+        const isOpen = isIpoCurrentlyOpen(ipo.closeDate);
+        const openedToday = isIpoOpenedToday(ipo.openDate);
+        const cardData: IpoCardData = {
+          ...ipo,
+          isOpen,
+          openedToday,
+        };
+        const image = await generateIpoCardImage(cardData, fonts);
+        cards.push({ image, data: cardData });
+      }
+      setIpoCardImages(cards);
+      toast.success(`${cards.length} IPO card image(s) generated!`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to generate IPO images');
+    } finally {
+      setIsGeneratingIpoImages(false);
+    }
+  };
+
+  const handlePostIpoCard = async (cardIndex: number) => {
+    if (!ipoCardImages[cardIndex]) return;
+    const { image, data } = ipoCardImages[cardIndex];
+    setPostingIpoIndex(cardIndex);
+    try {
+      const res = await fetch('/api/posts/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'ipo_card',
+          images: {
+            ipoCardImage: image,
+            ipoInfo: data,
+          },
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`${data.companyName} IPO card posted to Facebook!`);
+      } else {
+        toast.error(`Failed: ${json.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to post');
+    } finally {
+      setPostingIpoIndex(null);
+    }
+  };
+
+  const handleDownloadIpoCard = (cardIndex: number) => {
+    const { image, data } = ipoCardImages[cardIndex];
+    const a = document.createElement('a');
+    a.href = image;
+    a.download = `IPO_${data.companySymbol || data.companyName.replace(/\s+/g, '_')}.png`;
+    a.click();
   };
 
   const handlePostSingleCard = async (cardIndex: number) => {
@@ -1723,20 +1824,6 @@ export default function HomePage() {
       return n.toLocaleString('en-US');
     };
 
-    const isCurrentlyOpen = (closeDate: string) => {
-      if (!closeDate) return false;
-      const close = new Date(closeDate + 'T23:59:59+05:45');
-      return close > new Date();
-    };
-
-    const daysUntilClose = (closeDate: string) => {
-      if (!closeDate) return null;
-      const close = new Date(closeDate + 'T23:59:59+05:45');
-      const now = new Date();
-      const diff = Math.ceil((close.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      return diff;
-    };
-
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1744,10 +1831,18 @@ export default function HomePage() {
             <h2 className="text-2xl font-bold tracking-tight">IPO & News</h2>
             <p className="text-muted-foreground text-sm">Live IPO data from CDSC Nepal</p>
           </div>
-          <Button onClick={handleFetchIpo} disabled={isFetchingIpo} size="lg" className="gap-2">
-            {isFetchingIpo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            {isFetchingIpo ? 'Fetching...' : 'Fetch IPO Data'}
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={handleFetchIpo} disabled={isFetchingIpo} size="lg" className="gap-2">
+              {isFetchingIpo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {isFetchingIpo ? 'Fetching...' : 'Fetch IPO Data'}
+            </Button>
+            {ipoData && ipoData.length > 0 && (
+              <Button onClick={handleGenerateIpoImages} disabled={isGeneratingIpoImages} variant="outline" size="lg" className="gap-2">
+                {isGeneratingIpoImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                {isGeneratingIpoImages ? 'Generating...' : 'Generate Images'}
+              </Button>
+            )}
+          </div>
         </div>
 
         {ipoData === null ? (
@@ -1767,81 +1862,102 @@ export default function HomePage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {ipoData.map((ipo, idx) => {
-              const open = isCurrentlyOpen(ipo.closeDate);
-              const days = daysUntilClose(ipo.closeDate);
-              const sub = ipo.oversubscription;
-              return (
-                <Card key={idx} className={open ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-border'}>
-                  <CardHeader className="pb-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <CardTitle className="text-lg font-bold truncate">{ipo.companyName}</CardTitle>
-                        <CardDescription className="flex flex-wrap items-center gap-2 mt-1">
-                          {ipo.companySymbol && <Badge variant="outline">{ipo.companySymbol}</Badge>}
-                          <Badge variant="secondary">{ipo.ipoType}</Badge>
-                          <Badge variant="outline">{ipo.issueManager}</Badge>
-                        </CardDescription>
+          <div className="space-y-6">
+            {/* Data table */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">IPO Listing ({ipoData.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-[360px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Company</TableHead>
+                        <TableHead className="text-right">Units</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead className="text-right">Oversub.</TableHead>
+                        <TableHead>Period</TableHead>
+                        <TableHead className="text-center">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ipoData.map((ipo, idx) => {
+                        const open = isIpoCurrentlyOpen(ipo.closeDate);
+                        const openedToday = isIpoOpenedToday(ipo.openDate);
+                        const sub = ipo.oversubscription;
+                        return (
+                          <TableRow key={idx}>
+                            <TableCell>
+                              <div>
+                                <div className="font-semibold text-sm">{ipo.companyName}</div>
+                                {ipo.companySymbol && <div className="text-xs text-muted-foreground">{ipo.companySymbol} · {ipo.issueManager}</div>}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm">{ipo.issuedUnits.toLocaleString()}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">Rs. {formatNepaliAmount(ipo.totalAmount)}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">
+                              {openedToday || open ? '—' : (sub !== null && sub > 0 ? `${sub.toFixed(2)}x` : '—')}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <div>{ipo.openDate}</div>
+                              <div className="text-muted-foreground">{ipo.closeDate}</div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {open ? (
+                                <Badge className="bg-emerald-500 text-white text-xs">
+                                  {openedToday ? 'Opened Today' : 'Open'}
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">Closed</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Generated IPO Card Images */}
+            {isGeneratingIpoImages && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-3 text-muted-foreground">Generating IPO card images...</span>
+              </div>
+            )}
+
+            {ipoCardImages.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold">IPO Card Images</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {ipoCardImages.map((card, idx) => (
+                    <Card key={idx} className="overflow-hidden">
+                      <div className="aspect-square">
+                        <img src={card.image} alt={card.data.companyName} className="w-full h-full object-contain bg-white" />
                       </div>
-                      <div className="shrink-0">
-                        {open ? (
-                          <Badge className="bg-emerald-500 text-white px-3 py-1 text-sm">
-                            {days !== null && days > 0 ? `Closes in ${days} day${days > 1 ? 's' : ''}` : 'Last Day!'}
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="px-3 py-1 text-sm">Closed</Badge>
-                        )}
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Issued Units</p>
-                        <p className="text-xl font-bold mt-0.5">{ipo.issuedUnits.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Applications</p>
-                        <p className="text-xl font-bold mt-0.5">{ipo.numberOfApplications.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Applied Units</p>
-                        <p className="text-xl font-bold mt-0.5">{ipo.appliedUnits.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Total Amount</p>
-                        <p className="text-xl font-bold mt-0.5">Rs. {formatNepaliAmount(ipo.totalAmount)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Open Date</p>
-                        <p className="text-lg font-semibold mt-0.5">{ipo.openDate}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Close Date</p>
-                        <p className="text-lg font-semibold mt-0.5">{ipo.closeDate}</p>
-                      </div>
-                      {sub !== null && sub > 0 && (
-                        <div>
-                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Oversubscription</p>
-                          <p className={`text-2xl font-bold mt-0.5 ${sub >= 10 ? 'text-red-500' : sub >= 3 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                            {sub.toFixed(2)}x
-                          </p>
-                        </div>
-                      )}
-                      {sub !== null && sub > 0 && (
-                        <div>
-                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Avg Units/App</p>
-                          <p className="text-xl font-bold mt-0.5">
-                            {ipo.numberOfApplications > 0 ? Math.round(ipo.appliedUnits / ipo.numberOfApplications) : 0}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                      <CardContent className="p-2 flex gap-2">
+                        <Button
+                          size="sm"
+                          className="flex-1 gap-1 text-xs"
+                          disabled={postingIpoIndex === idx}
+                          onClick={() => handlePostIpoCard(idx)}
+                        >
+                          {postingIpoIndex === idx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                          Post
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => handleDownloadIpoCard(idx)}>
+                          <Download className="h-3 w-3" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <p className="text-xs text-muted-foreground text-center">
               Data source: CDSC Nepal (cdsc.com.np) · Last fetched: {new Date().toLocaleString()}
             </p>

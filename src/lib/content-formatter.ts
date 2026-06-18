@@ -97,6 +97,51 @@ export function formatStockCardCaption(stock: { symbol: string; change: number; 
   return `${stock.symbol} today ${heart}\n\nLTP: Rs. ${stock.closePrice.toFixed(2)}\nChange: ${sign}${stock.change.toFixed(2)} (${sign}${stock.changePercent.toFixed(2)}%)\n\n#NEPSE #ShareSathi #StockMarket #NepalStockExchange #ShareMarket #NepalStockMarket #StockMarketNepal`;
 }
 
+export function formatIpoCardCaption(ipo: {
+  companyName: string;
+  companySymbol: string;
+  ipoType: string;
+  issuedUnits: number;
+  numberOfApplications: number;
+  appliedUnits: number;
+  totalAmount: number;
+  openDate: string;
+  closeDate: string;
+  oversubscription: number | null;
+  isOpen: boolean;
+  openedToday: boolean;
+}): string {
+  const symbol = ipo.companySymbol ? ` (${ipo.companySymbol})` : '';
+  let caption: string;
+
+  if (ipo.openedToday || ipo.isOpen) {
+    // Open or opened today — no oversubscription info
+    const pricePerUnit = ipo.issuedUnits > 0 ? Math.round(ipo.totalAmount / ipo.issuedUnits) : 0;
+    caption = `${ipo.companyName}${symbol} - IPO ${ipo.openedToday ? 'Opening Today' : 'Now Open'}! 📊\n\n`;
+    caption += `${ipo.ipoType}\n`;
+    caption += `Issue: ${ipo.issuedUnits.toLocaleString()} units`;
+    if (pricePerUnit > 0) caption += ` @ Rs. ${pricePerUnit} per unit`;
+    caption += `\n`;
+    caption += `Period: ${ipo.openDate} to ${ipo.closeDate}\n`;
+    caption += `Issue Manager: ${ipo.issueManager}`;
+  } else {
+    // Closed IPO — show oversubscription data
+    const sub = ipo.oversubscription;
+    caption = `${ipo.companyName}${symbol} - IPO Results 📊\n\n`;
+    caption += `${ipo.ipoType}\n`;
+    caption += `Issued: ${ipo.issuedUnits.toLocaleString()} units\n`;
+    caption += `Applications: ${ipo.numberOfApplications.toLocaleString()}\n`;
+    caption += `Applied Units: ${ipo.appliedUnits.toLocaleString()}\n`;
+    if (sub !== null && sub > 0) {
+      caption += `Oversubscription: ${sub.toFixed(2)}x\n`;
+    }
+    caption += `Period: ${ipo.openDate} to ${ipo.closeDate}`;
+  }
+
+  caption += `\n\n#NEPSE #ShareSathi #IPO #NepalIPO #StockMarket #NepalStockExchange #ShareMarket`;
+  return caption;
+}
+
 export function getPostTemplate(): string {
   return `📈 NEPSE Daily Market Update
 📅 Date: {tradingDate}
