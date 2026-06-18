@@ -278,6 +278,8 @@ export default function HomePage() {
   } | null>(null);
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [postingCardIndex, setPostingCardIndex] = useState<number | null>(null);
+  const [postedCardIndices, setPostedCardIndices] = useState<Set<number>>(new Set());
+  const [summaryPosted, setSummaryPosted] = useState(false);
 
   // IPO state
   const [ipoData, setIpoData] = useState<Array<{
@@ -611,6 +613,8 @@ export default function HomePage() {
         losers,
       );
       setImagePreview(images);
+      setPostedCardIndices(new Set());
+      setSummaryPosted(false);
       toast.success(`${3 + images.stockCards.length} images generated! Review them below.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to generate images');
@@ -773,6 +777,7 @@ export default function HomePage() {
       const json = await res.json();
       if (json.success) {
         toast.success(`${card.symbol} posted to Facebook!`);
+        setPostedCardIndices((prev) => new Set(prev).add(cardIndex));
       } else {
         toast.error(`Failed: ${json.error || 'Unknown error'}`);
       }
@@ -846,6 +851,7 @@ export default function HomePage() {
 
       if (successCount === postCount) {
         toast.success(`All ${postCount} images posted to Facebook!`);
+        setSummaryPosted(true);
       } else {
         // Show error dialog with full details for each failed post
         const lines = failedPosts.map((p, i) => {
@@ -996,16 +1002,17 @@ export default function HomePage() {
               {postMode === 'image' && imagePreview && (
                 <Button
                   onClick={handlePostImages}
-                  disabled={isPosting}
+                  disabled={isPosting || summaryPosted}
                   size="lg"
                   className="gap-2"
                 >
-                  {isPosting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                  {summaryPosted ? (
+                    <><CheckCircle2 className="h-4 w-4" /> Posted</>
+                  ) : isPosting ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Posting 3 Images...</>
                   ) : (
-                    <Send className="h-4 w-4" />
+                    <><Send className="h-4 w-4" /> Post 3 Images</>
                   )}
-                  {isPosting ? 'Posting 3 Images...' : 'Post 3 Images'}
                 </Button>
               )}
               {postMode === 'text' && (
@@ -1097,12 +1104,14 @@ export default function HomePage() {
                         </div>
                         <Button
                           size="sm"
-                          variant="outline"
-                          disabled={postingCardIndex === idx}
+                          variant={postedCardIndices.has(idx) ? 'secondary' : 'outline'}
+                          disabled={postingCardIndex === idx || postedCardIndices.has(idx)}
                           onClick={() => handlePostSingleCard(idx)}
                           className="shrink-0"
                         >
-                          {postingCardIndex === idx ? (
+                          {postedCardIndices.has(idx) ? (
+                            <><CheckCircle2 className="h-3 w-3 mr-1" /> Posted</>
+                          ) : postingCardIndex === idx ? (
                             <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Posting</>
                           ) : (
                             'Post'
