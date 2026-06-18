@@ -1876,21 +1876,25 @@ export default function HomePage() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {/* Data table */}
+            {/* Data table — full raw data */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">IPO Listing ({ipoData.length})</CardTitle>
+                <CardDescription className="text-xs">Raw data from CDSC Nepal — verify before generating images</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-[360px] overflow-y-auto">
+                <div className="max-h-[500px] overflow-y-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Company</TableHead>
-                        <TableHead className="text-right">Units</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead className="min-w-[200px]">Company</TableHead>
+                        <TableHead className="text-right">Issued Units</TableHead>
+                        <TableHead className="text-right">Applications</TableHead>
+                        <TableHead className="text-right">Applied Units</TableHead>
+                        <TableHead className="text-right">Total Amount</TableHead>
                         <TableHead className="text-right">Oversub.</TableHead>
-                        <TableHead>Period</TableHead>
+                        <TableHead>Open Date</TableHead>
+                        <TableHead>Close Date</TableHead>
                         <TableHead className="text-center">Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1902,20 +1906,22 @@ export default function HomePage() {
                         return (
                           <TableRow key={idx}>
                             <TableCell>
-                              <div>
-                                <div className="font-semibold text-sm">{ipo.companyName}</div>
-                                {ipo.companySymbol && <div className="text-xs text-muted-foreground">{ipo.companySymbol} · {ipo.issueManager}</div>}
+                              <div className="font-semibold text-sm">{ipo.companyName}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {ipo.companySymbol && <span>{ipo.companySymbol} · </span>}
+                                {ipo.ipoType}
                               </div>
+                              <div className="text-xs text-muted-foreground">{ipo.issueManager}</div>
                             </TableCell>
                             <TableCell className="text-right font-mono text-sm">{ipo.issuedUnits.toLocaleString()}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{ipo.numberOfApplications.toLocaleString()}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{ipo.appliedUnits.toLocaleString()}</TableCell>
                             <TableCell className="text-right font-mono text-sm">Rs. {formatNepaliAmount(ipo.totalAmount)}</TableCell>
                             <TableCell className="text-right font-mono text-sm">
                               {openedToday || open ? '—' : (sub !== null && sub > 0 ? `${sub.toFixed(2)}x` : '—')}
                             </TableCell>
-                            <TableCell className="text-xs">
-                              <div>{ipo.openDate}</div>
-                              <div className="text-muted-foreground">{ipo.closeDate}</div>
-                            </TableCell>
+                            <TableCell className="text-xs font-mono">{ipo.openDate}</TableCell>
+                            <TableCell className="text-xs font-mono">{ipo.closeDate}</TableCell>
                             <TableCell className="text-center">
                               {open ? (
                                 <Badge className="bg-emerald-500 text-white text-xs">
