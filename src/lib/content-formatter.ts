@@ -101,6 +101,7 @@ export function formatIpoCardCaption(ipo: {
   companyName: string;
   companySymbol: string;
   ipoType: string;
+  issueManager: string;
   issuedUnits: number;
   numberOfApplications: number;
   appliedUnits: number;

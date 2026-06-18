@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { scrapeCdscIpoList } from '@/lib/cdsc-scraper';
 import { requireAuth } from '@/lib/require-auth';
 
 export const maxDuration = 30;
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (!auth.authorized) return auth.response;
 

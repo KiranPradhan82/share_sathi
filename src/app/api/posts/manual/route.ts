@@ -227,7 +227,8 @@ export async function POST(request: NextRequest) {
         for (const card of clientStockCards) {
           const cardBuffer = dataUriToBuffer(card.image);
           // Validate PNG header
-          if (cardBuffer.length >= 8 && !cardBuffer.slice(0, 8).equals(pngSignature)) {
+          const pngSig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+          if (cardBuffer.length >= 8 && !cardBuffer.slice(0, 8).equals(pngSig)) {
             // Skip invalid stock card images
             continue;
           }
@@ -353,7 +354,7 @@ export async function POST(request: NextRequest) {
 
     // ---- SINGLE STOCK CARD MODE ----
     if (mode === 'stock_card' && clientImages && clientImages.stockCardImage) {
-      const cardInfo = clientImages.cardInfo as { symbol: string; change: number; changePercent: number; closePrice: number; type: 'gainer' | 'loser' } | undefined;
+      const cardInfo = clientImages.cardInfo as unknown as { symbol: string; change: number; changePercent: number; closePrice: number; type: 'gainer' | 'loser' } | undefined;
       if (!cardInfo) {
         return NextResponse.json({ error: 'Missing cardInfo for stock card post' }, { status: 400 });
       }
@@ -425,7 +426,7 @@ export async function POST(request: NextRequest) {
 
     // ---- IPO CARD MODE ----
     if (mode === 'ipo_card' && clientImages && clientImages.ipoCardImage) {
-      const ipoInfo = clientImages.ipoInfo as {
+      const ipoInfo = clientImages.ipoInfo as unknown as {
         companyName: string; companySymbol: string; ipoType: string; issueManager: string;
         issuedUnits: number; numberOfApplications: number; appliedUnits: number;
         totalAmount: number; openDate: string; closeDate: string;

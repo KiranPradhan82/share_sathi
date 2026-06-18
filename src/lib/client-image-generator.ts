@@ -651,7 +651,7 @@ export async function generateIpoCardImage(
   }
 
   // Build the metrics grid (2 columns)
-  const metricRows: JSX.Element[] = [];
+  const metricRows: Array<Record<string, unknown>> = [];
   for (let i = 0; i < metrics.length; i += 2) {
     const rowMetrics = metrics.slice(i, i + 2);
     metricRows.push({
