@@ -1190,3 +1190,93 @@ export async function generateIpoStoryImage(
 
   return svgToPngBase64Story(svg);
 }
+
+/**
+ * Generate a 1080x1920 Facebook Story from an existing 1080x1080 market image.
+ * Wraps the square image in a portrait story frame with label and date.
+ */
+export async function generateMarketStoryFromImage(
+  squareImageBase64: string,
+  marketData: { tradingDate: string; nepseIndex: number; change: number; changePercentage: number },
+  label: string,
+  fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>,
+): Promise<string> {
+  // Convert base64 to Image element
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = squareImageBase64;
+  });
+
+  // Create 1080x1920 canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1920;
+  const ctx = canvas.getContext('2d')!;
+
+  // Dark gradient background
+  const grad = ctx.createLinearGradient(0, 0, 0, 1920);
+  grad.addColorStop(0, '#0F172A');
+  grad.addColorStop(0.5, '#1E293B');
+  grad.addColorStop(1, '#0F172A');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1080, 1920);
+
+  // Draw the square image centered, with rounded corners effect
+  const imgSize = 1000;
+  const imgX = (1080 - imgSize) / 2;
+  const imgY = 250;
+  const radius = 24;
+
+  // Clip rounded rect
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(imgX + radius, imgY);
+  ctx.lineTo(imgX + imgSize - radius, imgY);
+  ctx.quadraticCurveTo(imgX + imgSize, imgY, imgX + imgSize, imgY + radius);
+  ctx.lineTo(imgX + imgSize, imgY + imgSize - radius);
+  ctx.quadraticCurveTo(imgX + imgSize, imgY + imgSize, imgX + imgSize - radius, imgY + imgSize);
+  ctx.lineTo(imgX + radius, imgY + imgSize);
+  ctx.quadraticCurveTo(imgX, imgY + imgSize, imgX, imgY + imgSize - radius);
+  ctx.lineTo(imgX, imgY + radius);
+  ctx.quadraticCurveTo(imgX, imgY, imgX + radius, imgY);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(img, imgX, imgY, imgSize, imgSize);
+  ctx.restore();
+
+  // Label at top
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 42px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(label.toUpperCase(), 540, 160);
+
+  // Date below image
+  ctx.fillStyle = '#94A3B8';
+  ctx.font = '500 32px Inter, sans-serif';
+  ctx.fillText(marketData.tradingDate, 540, imgY + imgSize + 60);
+
+  // Index info
+  const isPositive = marketData.change >= 0;
+  ctx.fillStyle = isPositive ? '#22C55E' : '#EF4444';
+  ctx.font = 'bold 52px Inter, sans-serif';
+  const changeStr = `${isPositive ? '+' : ''}${marketData.change.toFixed(2)} (${isPositive ? '+' : ''}${marketData.changePercentage.toFixed(2)}%)`;
+  ctx.fillText(`${marketData.nepseIndex.toFixed(2)}  ${changeStr}`, 540, imgY + imgSize + 130);
+
+  // Watermark at bottom
+  ctx.fillStyle = '#ffffff33';
+  ctx.font = '800 28px Inter, sans-serif';
+  ctx.fillText('SHARE SATHI', 540, 1870);
+
+  // Convert to base64 PNG
+  return new Promise<string>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) { reject(new Error('Failed to create story image')); return; }
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    }, 'image/png');
+  });
+}

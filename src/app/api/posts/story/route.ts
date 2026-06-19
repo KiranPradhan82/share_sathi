@@ -18,13 +18,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { image, ipoData } = body as {
+    const { image, ipoData, message } = body as {
       image?: string;
       ipoData?: Record<string, unknown>;
+      message?: string;
     };
 
-    if (!image || !ipoData) {
-      return NextResponse.json({ error: 'Missing image or ipoData' }, { status: 400 });
+    if (!image) {
+      return NextResponse.json({ error: 'Missing image' }, { status: 400 });
     }
 
     // Decode image
@@ -49,43 +50,53 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Facebook Page ID and Access Token not configured.' }, { status: 400 });
     }
 
-    // Compute isLastDay server-side
-    const closeDate = (ipoData.closeDate as string) || '';
-    let isLastDay = (ipoData.isLastDay as boolean) || false;
-    if (!isLastDay && closeDate) {
-      try {
-        const close = new Date(closeDate + 'T00:00:00+05:45');
-        const nepalNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }));
-        isLastDay = close.getFullYear() === nepalNow.getFullYear() &&
-          close.getMonth() === nepalNow.getMonth() &&
-          close.getDate() === nepalNow.getDate();
-      } catch { /* ignore */ }
+    // Determine caption: use provided message for market stories, or generate IPO caption
+    let caption: string;
+    let logLabel: string;
+
+    if (ipoData) {
+      // IPO story path
+      const closeDate = (ipoData.closeDate as string) || '';
+      let isLastDay = (ipoData.isLastDay as boolean) || false;
+      if (!isLastDay && closeDate) {
+        try {
+          const close = new Date(closeDate + 'T00:00:00+05:45');
+          const nepalNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }));
+          isLastDay = close.getFullYear() === nepalNow.getFullYear() &&
+            close.getMonth() === nepalNow.getMonth() &&
+            close.getDate() === nepalNow.getDate();
+        } catch { /* ignore */ }
+      }
+
+      caption = formatIpoCardCaption({
+        companyName: (ipoData.companyName as string) || '',
+        companySymbol: (ipoData.companySymbol as string) || '',
+        ipoType: (ipoData.ipoType as string) || '',
+        issueManager: (ipoData.issueManager as string) || '',
+        issuedUnits: (ipoData.issuedUnits as number) || 0,
+        numberOfApplications: (ipoData.numberOfApplications as number) || 0,
+        appliedUnits: (ipoData.appliedUnits as number) || 0,
+        totalAmount: (ipoData.totalAmount as number) || 0,
+        openDate: (ipoData.openDate as string) || '',
+        closeDate,
+        oversubscription: ipoData.oversubscription as number | null,
+        isOpen: (ipoData.isOpen as boolean) ?? false,
+        openedToday: (ipoData.openedToday as boolean) ?? false,
+        isLastDay,
+      });
+      logLabel = (ipoData.companySymbol as string) || 'IPO';
+    } else {
+      // Market story path — use the provided message
+      caption = message || 'Share Sathi Market Update\n\n#NEPSE #ShareSathi #NepalStockMarket';
+      logLabel = message?.substring(0, 40) || 'Market Update';
     }
 
-    const caption = formatIpoCardCaption({
-      companyName: (ipoData.companyName as string) || '',
-      companySymbol: (ipoData.companySymbol as string) || '',
-      ipoType: (ipoData.ipoType as string) || '',
-      issueManager: (ipoData.issueManager as string) || '',
-      issuedUnits: (ipoData.issuedUnits as number) || 0,
-      numberOfApplications: (ipoData.numberOfApplications as number) || 0,
-      appliedUnits: (ipoData.appliedUnits as number) || 0,
-      totalAmount: (ipoData.totalAmount as number) || 0,
-      openDate: (ipoData.openDate as string) || '',
-      closeDate,
-      oversubscription: ipoData.oversubscription as number | null,
-      isOpen: (ipoData.isOpen as boolean) ?? false,
-      openedToday: (ipoData.openedToday as boolean) ?? false,
-      isLastDay,
-    });
-
     // Log
-    const symbol = (ipoData.companySymbol as string) || 'IPO';
     await db.systemEvent.create({
       data: {
         eventType: 'post',
         entityType: 'facebook_story',
-        description: `Posting Story for ${symbol} (${Math.round(imageBuffer.length / 1024)}KB)...`,
+        description: `Posting Story for ${logLabel} (${Math.round(imageBuffer.length / 1024)}KB)...`,
         severity: 'info',
       },
     });
@@ -97,8 +108,8 @@ export async function POST(request: NextRequest) {
         eventType: 'post',
         entityType: 'facebook_story',
         description: result.success
-          ? `Story posted for ${symbol}. FB ID: ${result.postId}`
-          : `Failed to post Story for ${symbol}: ${result.error}`,
+          ? `Story posted for ${logLabel}. FB ID: ${result.postId}`
+          : `Failed to post Story for ${logLabel}: ${result.error}`,
         severity: result.success ? 'success' : 'error',
       },
     });

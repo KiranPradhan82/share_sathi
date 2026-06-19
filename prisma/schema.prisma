@@ -89,3 +89,19 @@ model IpoStatus {
   oversubscription   Float?
   fetchedAt          DateTime @default(now())
 }
+
+model NewsItem {
+  id          String   @id @default(cuid())
+  externalId  String   @unique
+  source      String
+  headline    String
+  summary     String   @default("")
+  category    String   @default("general")
+  language    String   @default("en")
+  publishedAt DateTime
+  fetchedAt   DateTime @default(now())
+  isPosted    Boolean  @default(false)
+  postedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

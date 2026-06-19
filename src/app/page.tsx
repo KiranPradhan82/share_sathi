@@ -33,6 +33,7 @@ import {
   Film,
   Upload,
   X,
+  Rss,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -70,7 +71,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import { generateImagesInBrowser, generateIpoCardImage, generateIpoStoryImage, type IpoCardData } from '@/lib/client-image-generator';
+import { generateImagesInBrowser, generateIpoCardImage, generateIpoStoryImage, generateMarketStoryFromImage, type IpoCardData } from '@/lib/client-image-generator';
 import { parseStockDataFromRawData } from '@/lib/nepse';
 import type { StockData } from '@/lib/nepse';
 
@@ -305,6 +306,24 @@ export default function HomePage() {
   const [reelCaption, setReelCaption] = useState('');
   const [reelPreviewUrl, setReelPreviewUrl] = useState<string | null>(null);
   const [isPostingReel, setIsPostingReel] = useState(false);
+
+  // News state
+  const [newsItems, setNewsItems] = useState<Array<{
+    id: string; externalId: string; source: string; headline: string; summary: string;
+    category: string; language: string; publishedAt: string; fetchedAt: string;
+    isPosted: boolean; postedAt: string | null;
+  }>>([]);
+  const [newsPage, setNewsPage] = useState(1);
+  const [newsTotalPages, setNewsTotalPages] = useState(1);
+  const [newsFilter, setNewsFilter] = useState('all');
+  const [isLoadingNews, setIsLoadingNews] = useState(false);
+  const [isFetchingNews, setIsFetchingNews] = useState(false);
+  const [postingNewsId, setPostingNewsId] = useState<string | null>(null);
+  const [postedNewsIds, setPostedNewsIds] = useState<Set<string>>(new Set());
+
+  // Market story state
+  const [postingMarketStory, setPostingMarketStory] = useState<string | null>(null);
+  const [postedMarketStories, setPostedMarketStories] = useState<Set<string>>(new Set());
 
   // Loading states
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
@@ -840,6 +859,147 @@ export default function HomePage() {
     }
   };
 
+  // ---- Market Story handler: post 1080x1080 images as story ----
+  const handlePostMarketStory = async (imageKey: string, label: string) => {
+    if (!imagePreview) return;
+    const imageData = imagePreview[imageKey as keyof typeof imagePreview];
+    if (!imageData || typeof imageData !== 'string') return;
+
+    setPostingMarketStory(imageKey);
+    try {
+      // Convert the 1080x1080 image to a 1080x1920 story by padding
+      const weights = [400, 500, 600, 700, 800, 900];
+      const fonts = await Promise.all(weights.map(async (w) => {
+        const res = await fetch(`/fonts/Inter-${w}.woff`);
+        const buf = await res.arrayBuffer();
+        return { name: 'Inter' as const, data: buf, weight: w, style: 'normal' as const };
+      }));
+
+      // Build a story wrapper around the existing image
+      const storyImage = await generateMarketStoryFromImage(
+        imageData,
+        previewData!.marketData,
+        label,
+        fonts,
+      );
+
+      const caption = label === 'Market Summary'
+        ? `${previewData!.marketData.tradingDate} | NEPSE ${previewData!.marketData.nepseIndex.toFixed(2)} (${previewData!.marketData.change >= 0 ? '+' : ''}${previewData!.marketData.changePercentage.toFixed(2)}%)`
+        : label === 'Top Gainers'
+        ? `Top 10 Gainers | ${previewData!.marketData.tradingDate}`
+        : `Top 10 Losers | ${previewData!.marketData.tradingDate}`;
+
+      const res = await fetch('/api/posts/story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: storyImage, message: caption }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`${label} Story posted!`);
+        setPostedMarketStories(prev => new Set(prev).add(imageKey));
+      } else {
+        toast.error(`Failed: ${json.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to post Story');
+    } finally {
+      setPostingMarketStory(null);
+    }
+  };
+
+  // ---- News handlers ----
+  const fetchNews = async (loadPage = 1) => {
+    setIsLoadingNews(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(loadPage),
+        limit: '30',
+        ...(newsFilter !== 'all' ? { source: newsFilter } : {}),
+      });
+      const res = await fetch(`/api/news/latest?${params}`);
+      const json = await res.json();
+      if (json.success) {
+        setNewsItems(json.items);
+        setNewsPage(json.pagination.page);
+        setNewsTotalPages(json.pagination.totalPages);
+      }
+    } catch (err) {
+      toast.error('Failed to load news');
+    } finally {
+      setIsLoadingNews(false);
+    }
+  };
+
+  const handleFetchNews = async () => {
+    setIsFetchingNews(true);
+    try {
+      const res = await fetch('/api/news/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fetchSummaries: true }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Fetched ${json.totalFetched} news (${json.added} new, ${json.updated} updated)`);
+        fetchNews(1);
+      } else {
+        toast.error(`Failed: ${json.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch news');
+    } finally {
+      setIsFetchingNews(false);
+    }
+  };
+
+  const handlePostNews = async (newsId: string) => {
+    setPostingNewsId(newsId);
+    try {
+      const res = await fetch('/api/news/post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newsId }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success('News posted to Facebook!');
+        setPostedNewsIds(prev => new Set(prev).add(newsId));
+        fetchNews(newsPage);
+      } else {
+        toast.error(`Failed: ${json.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to post news');
+    } finally {
+      setPostingNewsId(null);
+    }
+  };
+
+  // Auto-post trigger handler
+  const handleAutoPost = async () => {
+    setIsPosting(true);
+    try {
+      const res = await fetch('/api/auto-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manual: true }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message);
+      } else {
+        toast.error(json.message || json.error || 'Auto-post failed');
+      }
+      fetchSystemStatus();
+      fetchRecentEvents();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Auto-post failed');
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
   const handlePostSingleCard = async (cardIndex: number) => {
     if (!imagePreview) return;
     const card = imagePreview.stockCards[cardIndex];
@@ -1161,14 +1321,31 @@ export default function HomePage() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
-                  { src: imagePreview.marketSummary, label: '1. Market Summary' },
-                  { src: imagePreview.topGainers, label: '2. Top 10 Gainers' },
-                  { src: imagePreview.topLosers, label: '3. Top 10 Losers' },
+                  { src: imagePreview.marketSummary, label: '1. Market Summary', key: 'marketSummary' },
+                  { src: imagePreview.topGainers, label: '2. Top 10 Gainers', key: 'topGainers' },
+                  { src: imagePreview.topLosers, label: '3. Top 10 Losers', key: 'topLosers' },
                 ].map((item) => (
                   <div key={item.label} className="space-y-2 relative">
                     <p className="text-sm font-medium text-muted-foreground">{item.label}</p>
                     <div className="rounded-lg overflow-hidden border border-border bg-muted">
                       <img src={item.src} alt={item.label} className="w-full h-auto" />
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={postingMarketStory === item.key || postedMarketStories.has(item.key)}
+                        onClick={() => handlePostMarketStory(item.key, item.label.replace(/^\d+\.\s/, ''))}
+                        className="flex-1 gap-1 text-purple-600 border-purple-300 hover:bg-purple-50"
+                      >
+                        {postedMarketStories.has(item.key) ? (
+                          <><CheckCircle2 className="h-3 w-3" /> Story Posted</>
+                        ) : postingMarketStory === item.key ? (
+                          <><Loader2 className="h-3 w-3 animate-spin" /> Posting...</>
+                        ) : (
+                          <><Film className="h-3 w-3" /> Story</>
+                        )}
+                      </Button>
                     </div>
                     {summaryPosted && (
                       <div className="absolute top-6 right-2">
@@ -1709,6 +1886,148 @@ export default function HomePage() {
     </div>
   );
 
+  // ---- News Tab ----
+  const renderNewsTab = () => {
+    const sourceColors: Record<string, string> = {
+      merolagani: 'bg-orange-500/15 text-orange-500 border-orange-500/20',
+      sharesansar: 'bg-blue-500/15 text-blue-500 border-blue-500/20',
+      sebon: 'bg-purple-500/15 text-purple-500 border-purple-500/20',
+      google_news: 'bg-red-500/15 text-red-500 border-red-500/20',
+      myrepublica: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/20',
+    };
+
+    const categoryColors: Record<string, string> = {
+      market: 'bg-sky-500/15 text-sky-500',
+      ipo: 'bg-amber-500/15 text-amber-500',
+      company: 'bg-violet-500/15 text-violet-500',
+      regulatory: 'bg-rose-500/15 text-rose-500',
+      general: 'bg-gray-500/15 text-gray-500',
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Share Market News</h2>
+            <p className="text-muted-foreground text-sm">Headlines from Mero Lagani, Share Sansar, SEBON & more</p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={handleFetchNews} disabled={isFetchingNews} size="lg" className="gap-2">
+              {isFetchingNews ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rss className="h-4 w-4" />}
+              {isFetchingNews ? 'Fetching...' : 'Fetch News'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Source filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground">Filter:</span>
+          {['all', 'merolagani', 'sharesansar', 'sebon', 'google_news', 'myrepublica'].map((s) => (
+            <Button
+              key={s}
+              size="sm"
+              variant={newsFilter === s ? 'default' : 'outline'}
+              onClick={() => { setNewsFilter(s); fetchNews(1); }}
+              className="text-xs h-7"
+            >
+              {s === 'all' ? 'All Sources' : s === 'google_news' ? 'Google News' : s === 'myrepublica' ? 'My Republica' : s.charAt(0).toUpperCase() + s.slice(1)}
+            </Button>
+          ))}
+        </div>
+
+        {newsItems.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <Rss className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-1">No News Yet</h3>
+              <p className="text-sm text-muted-foreground">Click &quot;Fetch News&quot; to scrape headlines from multiple sources</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="space-y-3">
+                  {newsItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`flex flex-col sm:flex-row sm:items-start gap-3 p-4 rounded-lg border ${
+                        item.isPosted ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-card border-border'
+                      } transition-colors`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-2 flex-wrap">
+                          <h4 className={`font-semibold text-sm leading-tight ${item.language === 'ne' ? 'font-bold' : ''}`}>
+                            {item.headline}
+                          </h4>
+                          {item.isPosted && (
+                            <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/20 shrink-0">Posted</Badge>
+                          )}
+                        </div>
+                        {item.summary && (
+                          <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{item.summary}</p>
+                        )}
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <Badge variant="outline" className={`text-[10px] h-5 ${sourceColors[item.source] || ''}`}>
+                            {item.source === 'merolagani' ? 'Mero Lagani' : item.source === 'google_news' ? 'Google News' : item.source === 'myrepublica' ? 'My Republica' : item.source}
+                          </Badge>
+                          <Badge variant="outline" className={`text-[10px] h-5 ${categoryColors[item.category] || ''}`}>
+                            {item.category}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground">
+                            {item.language === 'ne' ? '🇳🇵 ' : '🇬🇧 '}{timeAgo(item.publishedAt)}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={item.isPosted ? 'secondary' : 'outline'}
+                        disabled={postingNewsId === item.id || item.isPosted}
+                        onClick={() => handlePostNews(item.id)}
+                        className="shrink-0 gap-1"
+                      >
+                        {postingNewsId === item.id ? (
+                          <><Loader2 className="h-3 w-3 animate-spin" /> Posting</>
+                        ) : item.isPosted ? (
+                          <><CheckCircle2 className="h-3 w-3" /> Posted</>
+                        ) : (
+                          <><Send className="h-3 w-3" /> Post</>
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pagination */}
+            {newsTotalPages > 1 && (
+              <div className="flex items-center justify-center gap-2">
+                <Button
+                  size="sm" variant="outline"
+                  disabled={newsPage <= 1}
+                  onClick={() => fetchNews(newsPage - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {newsPage} of {newsTotalPages}
+                </span>
+                <Button
+                  size="sm" variant="outline"
+                  disabled={newsPage >= newsTotalPages}
+                  onClick={() => fetchNews(newsPage + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   // ---- Settings Tab ----
   const renderSettings = () => (
     <div className="space-y-6">
@@ -1813,7 +2132,7 @@ export default function HomePage() {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Auto-Post Enabled</Label>
-                <p className="text-xs text-muted-foreground">Automatically post after market close</p>
+                <p className="text-xs text-muted-foreground">Automatically post after market close. Retries every 5 min if YONEPSE returns yesterday's data (up to 30 min).</p>
               </div>
               <Switch
                 checked={settings.auto_post_enabled === 'true'}
@@ -1842,6 +2161,21 @@ export default function HomePage() {
                 onChange={(e) => setSettings((s) => ({ ...s, notification_email: e.target.value }))}
               />
             </div>
+            <Separator />
+            <Button
+              onClick={handleAutoPost}
+              disabled={isPosting}
+              size="sm"
+              variant="outline"
+              className="w-full gap-1"
+            >
+              {isPosting ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running Auto-Post...</>
+              ) : (
+                <><Send className="h-3.5 w-3.5" /> Trigger Auto-Post Now</>
+              )}
+            </Button>
+            <p className="text-[10px] text-muted-foreground text-center">Manually trigger. Checks for today&apos;s data with 5-min retries.</p>
             <Separator />
             <Button
               onClick={() => handleSaveSection(
@@ -2380,6 +2714,10 @@ export default function HomePage() {
               <Newspaper className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">IPO & News</span>
             </TabsTrigger>
+            <TabsTrigger value="news" className="gap-1.5">
+              <Rss className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">News</span>
+            </TabsTrigger>
             <TabsTrigger value="settings" className="gap-1.5">
               <Settings className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Settings</span>
@@ -2394,6 +2732,7 @@ export default function HomePage() {
           <TabsContent value="market">{renderMarketData()}</TabsContent>
           <TabsContent value="posts">{renderPosts()}</TabsContent>
           <TabsContent value="ipo">{renderIpoTab()}</TabsContent>
+          <TabsContent value="news">{renderNewsTab()}</TabsContent>
           <TabsContent value="settings">{renderSettings()}</TabsContent>
           <TabsContent value="logs">{renderLogs()}</TabsContent>
         </Tabs>
