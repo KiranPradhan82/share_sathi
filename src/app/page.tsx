@@ -943,7 +943,7 @@ export default function HomePage() {
       const res = await fetch('/api/news/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fetchSummaries: true }),
+        body: JSON.stringify({ fetchSummaries: false }),
       });
       const json = await res.json();
       if (json.success) {
@@ -1994,7 +1994,7 @@ export default function HomePage() {
                             <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/20 shrink-0">Posted</Badge>
                           )}
                         </div>
-                        {item.summary && (
+                        {item.summary && !/^(merolagani|sharesansar|google_news|myrepublica)\s*[-–—]/i.test(item.summary) && !item.summary.includes("for the latest") && (
                           <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{item.summary}</p>
                         )}
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
