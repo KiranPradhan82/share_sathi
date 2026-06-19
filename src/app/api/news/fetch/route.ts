@@ -19,9 +19,18 @@ export async function POST(request: NextRequest) {
     let addedCount = 0;
     let updatedCount = 0;
     let skippedCount = 0;
+    const dbErrors: string[] = [];
 
     for (const item of items) {
       try {
+        // Validate publishedAt is a valid date
+        const pubDate = new Date(item.publishedAt);
+        if (isNaN(pubDate.getTime())) {
+          console.warn(`Skipping news item with invalid publishedAt: ${item.id} (${item.publishedAt})`);
+          skippedCount++;
+          continue;
+        }
+
         const existing = await db.newsItem.findUnique({ where: { externalId: item.id } });
         if (existing) {
           // Update summary if we now have one and didn't before
@@ -43,12 +52,15 @@ export async function POST(request: NextRequest) {
               summary: item.summary,
               category: item.category,
               language: item.language,
-              publishedAt: new Date(item.publishedAt),
+              publishedAt: pubDate,
             },
           });
           addedCount++;
         }
       } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        console.error(`Failed to upsert news item ${item.id}: ${errMsg}`);
+        dbErrors.push(`${item.source}: ${errMsg}`);
         // Unique constraint violation — skip
         skippedCount++;
       }
@@ -72,6 +84,7 @@ export async function POST(request: NextRequest) {
       skipped: skippedCount,
       sourceStats,
       errors: errors.length > 0 ? errors : undefined,
+      dbErrors: dbErrors.length > 0 ? dbErrors : undefined,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch news';

@@ -437,6 +437,9 @@ export default function HomePage() {
     fetchPosts(1, 'all');
     fetchLogs(1, 'all', 'all');
     fetchSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchNews(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchSystemStatus, fetchLatestData, fetchRecentEvents, fetchMarketData, fetchPosts, fetchLogs, fetchSettings]);
 
   // ---- Actions ----
@@ -919,10 +922,13 @@ export default function HomePage() {
       });
       const res = await fetch(`/api/news/latest?${params}`);
       const json = await res.json();
-      if (json.success) {
-        setNewsItems(json.items);
+      if (res.ok && json.success) {
+        setNewsItems(json.items || []);
         setNewsPage(json.pagination.page);
         setNewsTotalPages(json.pagination.totalPages);
+      } else {
+        console.error('Failed to load news:', json.error || res.status);
+        toast.error(json.error || 'Failed to load news');
       }
     } catch (err) {
       toast.error('Failed to load news');
@@ -941,8 +947,16 @@ export default function HomePage() {
       });
       const json = await res.json();
       if (json.success) {
-        toast.success(`Fetched ${json.totalFetched} news (${json.added} new, ${json.updated} updated)`);
-        fetchNews(1);
+        const parts = [];
+        if (json.added > 0) parts.push(`${json.added} new`);
+        if (json.updated > 0) parts.push(`${json.updated} updated`);
+        if (json.skipped > 0) parts.push(`${json.skipped} existing`);
+        toast.success(`Fetched ${json.totalFetched} news (${parts.join(', ') || 'no changes'})`);
+        if (json.dbErrors?.length > 0) {
+          console.error('News DB errors:', json.dbErrors);
+          toast.error(`${json.dbErrors.length} items failed to save. Check console.`);
+        }
+        await fetchNews(1);
       } else {
         toast.error(`Failed: ${json.error || 'Unknown error'}`);
       }
@@ -1935,7 +1949,23 @@ export default function HomePage() {
           ))}
         </div>
 
-        {newsItems.length === 0 ? (
+        {isLoadingNews ? (
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex flex-col gap-2 p-4 rounded-lg border">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-full" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-5 w-24" />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ) : newsItems.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Rss className="h-12 w-12 text-muted-foreground mb-4" />
