@@ -129,21 +129,40 @@ async function fetchMerolaganiSummary(newsId: string): Promise<string> {
     });
     if (!res.ok) return '';
     const html = await res.text();
-    // Find the news body — usually in a div with class news-content or similar
-    const bodyMatch = html.match(/class="news-content[^"]*">([\s\S]*?)(?=<div|<footer|<script)/i);
-    if (bodyMatch) {
-      return truncateSummary(bodyMatch[1]);
-    }
-    // Fallback: find largest text block
-    const textBlocks = html.replace(/<script[\s\S]*?<\/script>/gi, '')
+
+    // Strip scripts, styles, and common noise (popups, footers, nav)
+    const clean = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
       .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .match(/.{100,500}/g);
-    if (textBlocks && textBlocks.length > 0) {
-      // Return the longest meaningful block
-      const sorted = textBlocks.sort((a, b) => b.length - a.length);
-      return truncateSummary(sorted[0]);
+      .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+      .replace(/We'd like to send you notifications[\s\S]*?/gi, '')
+      .replace(/Subscribe[\s\S]*?newsletter/gi, '');
+
+    // Try multiple known content selectors for merolagani
+    const contentPatterns = [
+      /class="news-content[^"]*">([\s\S]*?)(?=<div\s+class="(?!news-content)|<footer|<script|<div\s+class="share)/i,
+      /class="news-detail[^"]*">([\s\S]*?)(?=<div\s+class="(?!news-detail)|<footer|<script)/i,
+      /class="post-content[^"]*">([\s\S]*?)(?=<div\s+class="(?!post-content)|<footer|<script)/i,
+      /id="news-body[^"]*">([\s\S]*?)(?=<div\s+id="(?!news-body)|<footer|<script)/i,
+      /class="entry-content[^"]*">([\s\S]*?)(?=<div\s+class="(?!entry-content)|<footer|<script)/i,
+    ];
+
+    for (const pattern of contentPatterns) {
+      const match = clean.match(pattern);
+      if (match) {
+        const text = match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (text.length > 80) {
+          return truncateSummary(text);
+        }
+      }
+    }
+
+    // Fallback: find largest meaningful text block (skip anything under 120 chars)
+    const textOnly = clean.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const sentences = textOnly.split(/(?<=[।\.\?!])\s+/).filter(s => s.length > 30);
+    if (sentences.length > 0) {
+      return truncateSummary(sentences.slice(0, 3).join(' '));
     }
   } catch (e) {
     console.error(`Merolagani summary fetch error for ${newsId}:`, e);
