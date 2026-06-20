@@ -7,36 +7,38 @@ import ZAI from 'z-ai-web-dev-sdk';
 export const maxDuration = 120;
 
 async function generateSummary(headline: string, language: string): Promise<string> {
-  try {
-    const zai = await ZAI.create();
-    const langInstruction = language === 'ne'
-      ? 'Write the summary in Nepali (Devanagari script).'
-      : 'Write the summary in English.';
+  const langInstruction = language === 'ne'
+    ? 'Write the summary in Nepali (Devanagari script).'
+    : 'Write the summary in English.';
 
-    const response = await zai.chat.completions.create({
-      model: 'glm-4-flash',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a Nepali share market news assistant. Given a news headline, write a short 2-3 line summary that explains the key point clearly. ${langInstruction} Do NOT use the headline itself as the summary. Do NOT start with "Here is a summary" or similar. Just write the summary directly. Keep it factual and concise. Maximum 300 characters.`,
-        },
-        {
-          role: 'user',
-          content: headline,
-        },
-      ],
-    });
+  const systemPrompt = `You are a Nepali share market news assistant. Given a news headline, write a short 2-3 line summary that explains the key point clearly. ${langInstruction} Do NOT use the headline itself as the summary. Do NOT start with "Here is a summary" or similar. Just write the summary directly. Keep it factual and concise. Maximum 300 characters.`;
 
-    const summary = response.choices?.[0]?.message?.content?.trim() || '';
-    return summary
-      .replace(/^#{1,3}\s+/gm, '')
-      .replace(/^(here is|summary|the summary)[:\s]*/i, '')
-      .trim()
-      .substring(0, 350);
-  } catch (e) {
-    console.error('AI summary generation failed for headline:', headline, e);
-    return '';
+  // Try up to 2 times
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const zai = await ZAI.create();
+      const response = await zai.chat.completions.create({
+        model: 'glm-4-flash',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: headline },
+        ],
+      });
+
+      const summary = response.choices?.[0]?.message?.content?.trim() || '';
+      const cleaned = summary
+        .replace(/^#{1,3}\s+/gm, '')
+        .replace(/^(here is|summary|the summary)[:\s]*/i, '')
+        .trim()
+        .substring(0, 350);
+
+      if (cleaned.length > 10) return cleaned;
+      console.warn(`AI summary attempt ${attempt} returned too short: "${cleaned}"`);
+    } catch (e) {
+      console.error(`AI summary attempt ${attempt} failed for headline: "${headline.substring(0, 60)}"`, e);
+    }
   }
+  return '';
 }
 
 export async function POST(request: NextRequest) {
@@ -131,7 +133,6 @@ export async function POST(request: NextRequest) {
           }
         } else if (result.status === 'rejected') {
           const errMsg = result.reason instanceof Error ? result.reason.message : String(result.reason);
-          // Try to identify which item failed from the batch
           console.error('Failed to process news item in batch:', errMsg);
           dbErrors.push(errMsg);
         }
