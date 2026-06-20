@@ -319,6 +319,7 @@ export default function HomePage() {
   const [isLoadingNews, setIsLoadingNews] = useState(false);
   const [isFetchingNews, setIsFetchingNews] = useState(false);
   const [postingNewsId, setPostingNewsId] = useState<string | null>(null);
+  const [deletingNewsId, setDeletingNewsId] = useState<string | null>(null);
   const [postedNewsIds, setPostedNewsIds] = useState<Set<string>>(new Set());
 
   // Market story state
@@ -955,7 +956,8 @@ export default function HomePage() {
           const summaryInfo = json.summaryFailed > 0
             ? ` (${json.summaryGenerated} with AI summary, ${json.summaryFailed} failed)`
             : ` (${json.summaryGenerated} with AI summary)`;
-          toast.success(`${json.added} new news found & saved${summaryInfo}`);
+          const cleanupInfo = json.deletedOld > 0 ? ` | Cleaned ${json.deletedOld} old items` : '';
+          toast.success(`${json.added} new news found & saved${summaryInfo}${cleanupInfo}`);
         } else {
           toast.info('No new news — all caught up!');
         }
@@ -994,6 +996,24 @@ export default function HomePage() {
       toast.error(err instanceof Error ? err.message : 'Failed to post news');
     } finally {
       setPostingNewsId(null);
+    }
+  };
+
+  const handleDeleteNews = async (newsId: string) => {
+    setDeletingNewsId(newsId);
+    try {
+      const res = await fetch(`/api/news/${newsId}/delete`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) {
+        toast.success('News deleted');
+        fetchNews(newsPage);
+      } else {
+        toast.error(`Failed: ${json.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete news');
+    } finally {
+      setDeletingNewsId(null);
     }
   };
 
@@ -2016,21 +2036,37 @@ export default function HomePage() {
                           </span>
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant={item.isPosted ? 'secondary' : 'outline'}
-                        disabled={postingNewsId === item.id || item.isPosted}
-                        onClick={() => handlePostNews(item.id)}
-                        className="shrink-0 gap-1"
-                      >
-                        {postingNewsId === item.id ? (
-                          <><Loader2 className="h-3 w-3 animate-spin" /> Posting</>
-                        ) : item.isPosted ? (
-                          <><CheckCircle2 className="h-3 w-3" /> Posted</>
-                        ) : (
-                          <><Send className="h-3 w-3" /> Post</>
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          size="sm"
+                          variant={item.isPosted ? 'secondary' : 'outline'}
+                          disabled={postingNewsId === item.id || item.isPosted}
+                          onClick={() => handlePostNews(item.id)}
+                          className="gap-1"
+                        >
+                          {postingNewsId === item.id ? (
+                            <><Loader2 className="h-3 w-3 animate-spin" /> Posting</>
+                          ) : item.isPosted ? (
+                            <><CheckCircle2 className="h-3 w-3" /> Posted</>
+                          ) : (
+                            <><Send className="h-3 w-3" /> Post</>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={deletingNewsId === item.id}
+                          onClick={() => handleDeleteNews(item.id)}
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          title="Delete news"
+                        >
+                          {deletingNewsId === item.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

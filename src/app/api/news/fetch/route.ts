@@ -44,6 +44,15 @@ export async function POST(request: NextRequest) {
   if (!auth.authorized) return auth.response;
 
   try {
+    // 0. Auto-delete news older than 7 days
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const deletedCount = await db.newsItem.deleteMany({
+      where: { publishedAt: { lt: oneWeekAgo } },
+    });
+    if (deletedCount.count > 0) {
+      console.log(`Auto-cleaned ${deletedCount.count} news items older than 7 days`);
+    }
+
     // 1. Get existing externalIds from the last 24h to pre-filter
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const recentItems = await db.newsItem.findMany({
@@ -131,13 +140,15 @@ export async function POST(request: NextRequest) {
 
     const totalSkipped = items.length - addedCount;
 
+    const cleanupInfo = deletedCount.count > 0 ? ` Cleaned ${deletedCount.count} items older than 7 days.` : '';
+
     await db.systemEvent.create({
       data: {
         eventType: 'fetch',
         entityType: 'news',
-        description: `News fetch: ${items.length} scraped, ${addedCount} new, ${totalSkipped} existing/stale. AI summaries: ${summaryGenerated} ok, ${summaryFailed} failed`,
+        description: `News fetch: ${items.length} scraped, ${addedCount} new, ${totalSkipped} existing/stale. AI summaries: ${summaryGenerated} ok, ${summaryFailed} failed.${cleanupInfo}`,
         severity: addedCount > 0 ? 'success' : 'info',
-        metadata: JSON.stringify({ sourceStats, errors, cutoffSkipped, summaryGenerated, summaryFailed }),
+        metadata: JSON.stringify({ sourceStats, errors, cutoffSkipped, summaryGenerated, summaryFailed, deletedOld: deletedCount.count }),
       },
     });
 
@@ -148,6 +159,7 @@ export async function POST(request: NextRequest) {
       skipped: totalSkipped,
       summaryGenerated,
       summaryFailed,
+      deletedOld: deletedCount.count || undefined,
       sourceStats,
       errors: errors.length > 0 ? errors : undefined,
       dbErrors: dbErrors.length > 0 ? dbErrors : undefined,
