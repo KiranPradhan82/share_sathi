@@ -80,12 +80,13 @@ export async function POST(request: NextRequest) {
                         newsItem.source === 'myrepublica' ? 'My Republica' : newsItem.source;
 
     let message: string;
+    let aiSummary = '';
 
     if (customMessage) {
       message = customMessage;
     } else {
       // Generate AI summary for the headline
-      const aiSummary = await generateSummary(newsItem.headline, newsItem.language);
+      aiSummary = await generateSummary(newsItem.headline, newsItem.language);
 
       // Save the generated summary to DB for reuse
       if (aiSummary) {
@@ -142,7 +143,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: result.error }, { status: 500 });
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to post news';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    const errMsg = error instanceof Error ? error.message : 'Failed to post news';
+    return NextResponse.json({ success: false, error: errMsg }, { status: 500 });
   }
 }
