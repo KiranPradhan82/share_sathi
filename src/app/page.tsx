@@ -665,7 +665,11 @@ export default function HomePage() {
       const json = await res.json();
       if (json.success) {
         setIpoData(json.data);
-        toast.success(`Fetched ${json.count} IPO(s) from CDSC`);
+        if (json.cached) {
+          toast.info(`${json.count} IPO(s) — cached ${json.cacheAge}s ago`);
+        } else {
+          toast.success(`Fetched ${json.count} IPO(s) from CDSC`);
+        }
       } else {
         toast.error(json.error || 'Failed to fetch IPO data');
       }
@@ -947,11 +951,11 @@ export default function HomePage() {
       });
       const json = await res.json();
       if (json.success) {
-        const parts = [];
-        if (json.added > 0) parts.push(`${json.added} new`);
-        if (json.updated > 0) parts.push(`${json.updated} updated`);
-        if (json.skipped > 0) parts.push(`${json.skipped} existing`);
-        toast.success(`Fetched ${json.totalFetched} news (${parts.join(', ') || 'no changes'})`);
+        if (json.added > 0) {
+          toast.success(`${json.added} new news found & saved`);
+        } else {
+          toast.info('No new news — all caught up!');
+        }
         if (json.dbErrors?.length > 0) {
           console.error('News DB errors:', json.dbErrors);
           toast.error(`${json.dbErrors.length} items failed to save. Check console.`);
