@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { postToFacebook } from '@/lib/facebook';
 import { requireAuth } from '@/lib/require-auth';
+import ZAI from 'z-ai-web-dev-sdk';
 
 export const maxDuration = 60;
 
@@ -10,13 +11,47 @@ async function getConfigValue(key: string): Promise<string> {
   return config?.value || '';
 }
 
+async function generateSummary(headline: string, language: string): Promise<string> {
+  try {
+    const zai = await ZAI.create();
+    const langInstruction = language === 'ne'
+      ? 'Write the summary in Nepali (Devanagari script).'
+      : 'Write the summary in English.';
+
+    const response = await zai.chat.completions.create({
+      model: 'glm-4-flash',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a Nepali share market news assistant. Given a news headline, write a short 2-3 line summary that explains the key point clearly. ${langInstruction} Do NOT use the headline itself as the summary. Do NOT start with "Here is a summary" or similar. Just write the summary directly. Keep it factual and concise. Maximum 300 characters.`,
+        },
+        {
+          role: 'user',
+          content: headline,
+        },
+      ],
+    });
+
+    const summary = response.choices?.[0]?.message?.content?.trim() || '';
+    // Clean up any markdown or preamble
+    return summary
+      .replace(/^#{1,3}\s+/gm, '')
+      .replace(/^(here is|summary|the summary)[:\s]*/i, '')
+      .trim()
+      .substring(0, 350);
+  } catch (e) {
+    console.error('AI summary generation failed:', e);
+    return '';
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (!auth.authorized) return auth.response;
 
   try {
     const body = await request.json();
-    const { newsId, headline, summary, customMessage } = body;
+    const { newsId, customMessage } = body;
 
     if (!newsId) {
       return NextResponse.json({ error: 'newsId is required' }, { status: 400 });
@@ -38,43 +73,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build message
-    const headlineText = headline || newsItem.headline;
-    let summaryText = (summary || newsItem.summary || '').trim();
-
-    // Clean up garbage summaries from bad scrapes
-    summaryText = summaryText
-      .replace(/^merolagani\s*[-–—]\s*/i, '')
-      .replace(/^sharesansar\s*[-–—]\s*/i, '')
-      .replace(/We'd like to send you notifications[\s\S]*/gi, '')
-      .replace(/Subscribe[\s\S]*?newsletter/gi, '')
-      .trim();
-
-    // Skip summary if it's too similar to headline (>60% character overlap)
-    if (summaryText) {
-      const h = headlineText.toLowerCase().replace(/\s+/g, '');
-      const s = summaryText.toLowerCase().replace(/\s+/g, '');
-      let matchCount = 0;
-      for (let i = 0; i < Math.min(h.length, s.length); i++) {
-        if (s.includes(h.substring(i, i + 10))) matchCount++;
-      }
-      if (matchCount > 3 || s.includes(h) || h.includes(s)) {
-        summaryText = '';
-      }
-    }
-
     const sourceLabel = newsItem.source === 'merolagani' ? 'Mero Lagani' :
                         newsItem.source === 'sharesansar' ? 'Share Sansar' :
                         newsItem.source === 'sebon' ? 'SEBON' :
                         newsItem.source === 'google_news' ? 'Google News' :
                         newsItem.source === 'myrepublica' ? 'My Republica' : newsItem.source;
 
-    let message = customMessage || `📰 ${headlineText}`;
-    if (summaryText && summaryText.length > 20) {
-      message += `\n\n${summaryText}`;
+    let message: string;
+
+    if (customMessage) {
+      message = customMessage;
+    } else {
+      // Generate AI summary for the headline
+      const aiSummary = await generateSummary(newsItem.headline, newsItem.language);
+
+      // Save the generated summary to DB for reuse
+      if (aiSummary) {
+        await db.newsItem.update({
+          where: { id: newsId },
+          data: { summary: aiSummary },
+        });
+      }
+
+      message = `📰 ${newsItem.headline}`;
+      if (aiSummary) {
+        message += `\n\n${aiSummary}`;
+      }
+      message += `\n\n📡 Source: ${sourceLabel}`;
+      message += `\n\n#NEPSE #ShareSathi #NepalStockMarket #ShareMarket`;
     }
-    message += `\n\n📡 Source: ${sourceLabel}`;
-    message += `\n\n#NEPSE #ShareSathi #NepalStockMarket #ShareMarket`;
 
     // Post to Facebook
     const result = await postToFacebook(message, pageAccessToken, pageId);
@@ -90,7 +117,7 @@ export async function POST(request: NextRequest) {
           eventType: 'post',
           entityType: 'news',
           entityId: newsId,
-          description: `Posted news to Facebook: "${headlineText.substring(0, 80)}". FB Post ID: ${result.postId}`,
+          description: `Posted news to Facebook: "${newsItem.headline.substring(0, 80)}". FB Post ID: ${result.postId}`,
           severity: 'success',
         },
       });
@@ -99,6 +126,7 @@ export async function POST(request: NextRequest) {
         success: true,
         facebookPostId: result.postId,
         message: 'News posted to Facebook',
+        generatedSummary: aiSummary || undefined,
       });
     } else {
       await db.systemEvent.create({
