@@ -2,8 +2,42 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { fetchAllNews } from '@/lib/news-scraper';
 import { requireAuth } from '@/lib/require-auth';
+import ZAI from 'z-ai-web-dev-sdk';
 
 export const maxDuration = 120;
+
+async function generateSummary(headline: string, language: string): Promise<string> {
+  try {
+    const zai = await ZAI.create();
+    const langInstruction = language === 'ne'
+      ? 'Write the summary in Nepali (Devanagari script).'
+      : 'Write the summary in English.';
+
+    const response = await zai.chat.completions.create({
+      model: 'glm-4-flash',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a Nepali share market news assistant. Given a news headline, write a short 2-3 line summary that explains the key point clearly. ${langInstruction} Do NOT use the headline itself as the summary. Do NOT start with "Here is a summary" or similar. Just write the summary directly. Keep it factual and concise. Maximum 300 characters.`,
+        },
+        {
+          role: 'user',
+          content: headline,
+        },
+      ],
+    });
+
+    const summary = response.choices?.[0]?.message?.content?.trim() || '';
+    return summary
+      .replace(/^#{1,3}\s+/gm, '')
+      .replace(/^(here is|summary|the summary)[:\s]*/i, '')
+      .trim()
+      .substring(0, 350);
+  } catch (e) {
+    console.error('AI summary generation failed for headline:', headline, e);
+    return '';
+  }
+}
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -44,32 +78,54 @@ export async function POST(request: NextRequest) {
       return true;
     });
 
-    // 6. Save only truly new items
+    // 6. Generate AI summaries for all new items (parallel, with concurrency limit of 3)
     let addedCount = 0;
+    let summaryGenerated = 0;
+    let summaryFailed = 0;
     const dbErrors: string[] = [];
+    const CONCURRENCY = 3;
 
-    for (const item of trulyNew) {
-      try {
-        const pubDate = new Date(item.publishedAt);
-        if (isNaN(pubDate.getTime())) {
-          continue;
+    for (let i = 0; i < trulyNew.length; i += CONCURRENCY) {
+      const batch = trulyNew.slice(i, i + CONCURRENCY);
+
+      const results = await Promise.allSettled(
+        batch.map(async (item) => {
+          const pubDate = new Date(item.publishedAt);
+          if (isNaN(pubDate.getTime())) return null;
+
+          // Generate AI summary for this headline
+          const summary = await generateSummary(item.headline, item.language);
+
+          const created = await db.newsItem.create({
+            data: {
+              externalId: item.id,
+              source: item.source,
+              headline: item.headline,
+              summary,
+              category: item.category,
+              language: item.language,
+              publishedAt: pubDate,
+            },
+          });
+
+          return { item, summary, created };
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          addedCount++;
+          if (result.value.summary) {
+            summaryGenerated++;
+          } else {
+            summaryFailed++;
+          }
+        } else if (result.status === 'rejected') {
+          const errMsg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          // Try to identify which item failed from the batch
+          console.error('Failed to process news item in batch:', errMsg);
+          dbErrors.push(errMsg);
         }
-        await db.newsItem.create({
-          data: {
-            externalId: item.id,
-            source: item.source,
-            headline: item.headline,
-            summary: '',
-            category: item.category,
-            language: item.language,
-            publishedAt: pubDate,
-          },
-        });
-        addedCount++;
-      } catch (e) {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        console.error(`Failed to create news item ${item.id}: ${errMsg}`);
-        dbErrors.push(`${item.source}: ${errMsg}`);
       }
     }
 
@@ -79,9 +135,9 @@ export async function POST(request: NextRequest) {
       data: {
         eventType: 'fetch',
         entityType: 'news',
-        description: `News fetch: ${items.length} scraped, ${addedCount} new, ${totalSkipped} existing/stale`,
+        description: `News fetch: ${items.length} scraped, ${addedCount} new, ${totalSkipped} existing/stale. AI summaries: ${summaryGenerated} ok, ${summaryFailed} failed`,
         severity: addedCount > 0 ? 'success' : 'info',
-        metadata: JSON.stringify({ sourceStats, errors, cutoffSkipped }),
+        metadata: JSON.stringify({ sourceStats, errors, cutoffSkipped, summaryGenerated, summaryFailed }),
       },
     });
 
@@ -90,6 +146,8 @@ export async function POST(request: NextRequest) {
       totalScraped: items.length,
       added: addedCount,
       skipped: totalSkipped,
+      summaryGenerated,
+      summaryFailed,
       sourceStats,
       errors: errors.length > 0 ? errors : undefined,
       dbErrors: dbErrors.length > 0 ? dbErrors : undefined,

@@ -952,7 +952,10 @@ export default function HomePage() {
       const json = await res.json();
       if (json.success) {
         if (json.added > 0) {
-          toast.success(`${json.added} new news found & saved`);
+          const summaryInfo = json.summaryFailed > 0
+            ? ` (${json.summaryGenerated} with AI summary, ${json.summaryFailed} failed)`
+            : ` (${json.summaryGenerated} with AI summary)`;
+          toast.success(`${json.added} new news found & saved${summaryInfo}`);
         } else {
           toast.info('No new news — all caught up!');
         }

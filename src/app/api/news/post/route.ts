@@ -2,47 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { postToFacebook } from '@/lib/facebook';
 import { requireAuth } from '@/lib/require-auth';
-import ZAI from 'z-ai-web-dev-sdk';
 
 export const maxDuration = 60;
 
 async function getConfigValue(key: string): Promise<string> {
   const config = await db.systemConfig.findUnique({ where: { key } });
   return config?.value || '';
-}
-
-async function generateSummary(headline: string, language: string): Promise<string> {
-  try {
-    const zai = await ZAI.create();
-    const langInstruction = language === 'ne'
-      ? 'Write the summary in Nepali (Devanagari script).'
-      : 'Write the summary in English.';
-
-    const response = await zai.chat.completions.create({
-      model: 'glm-4-flash',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a Nepali share market news assistant. Given a news headline, write a short 2-3 line summary that explains the key point clearly. ${langInstruction} Do NOT use the headline itself as the summary. Do NOT start with "Here is a summary" or similar. Just write the summary directly. Keep it factual and concise. Maximum 300 characters.`,
-        },
-        {
-          role: 'user',
-          content: headline,
-        },
-      ],
-    });
-
-    const summary = response.choices?.[0]?.message?.content?.trim() || '';
-    // Clean up any markdown or preamble
-    return summary
-      .replace(/^#{1,3}\s+/gm, '')
-      .replace(/^(here is|summary|the summary)[:\s]*/i, '')
-      .trim()
-      .substring(0, 350);
-  } catch (e) {
-    console.error('AI summary generation failed:', e);
-    return '';
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -63,6 +28,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'News item not found' }, { status: 404 });
     }
 
+    // If no custom message, require AI summary to exist — abort if missing
+    if (!customMessage) {
+      if (!newsItem.summary || newsItem.summary.trim() === '') {
+        return NextResponse.json(
+          { error: 'AI summary not available for this news item. Cannot post without summary. Re-fetch news to generate summary.' },
+          { status: 400 },
+        );
+      }
+    }
+
     // Get Facebook credentials
     const pageAccessToken = await getConfigValue('facebook_page_access_token');
     const pageId = await getConfigValue('facebook_page_id');
@@ -80,28 +55,12 @@ export async function POST(request: NextRequest) {
                         newsItem.source === 'myrepublica' ? 'My Republica' : newsItem.source;
 
     let message: string;
-    let aiSummary = '';
 
     if (customMessage) {
       message = customMessage;
     } else {
-      // Generate AI summary for the headline
-      aiSummary = await generateSummary(newsItem.headline, newsItem.language);
-
-      // Save the generated summary to DB for reuse
-      if (aiSummary) {
-        await db.newsItem.update({
-          where: { id: newsId },
-          data: { summary: aiSummary },
-        });
-      }
-
-      message = `📰 ${newsItem.headline}`;
-      if (aiSummary) {
-        message += `\n\n${aiSummary}`;
-      }
-      message += `\n\n📡 Source: ${sourceLabel}`;
-      message += `\n\n#NEPSE #ShareSathi #NepalStockMarket #ShareMarket`;
+      // Use the pre-generated summary from fetch time
+      message = `📰 ${newsItem.headline}\n\n${newsItem.summary}\n\n📡 Source: ${sourceLabel}\n\n#NEPSE #ShareSathi #NepalStockMarket #ShareMarket`;
     }
 
     // Post to Facebook
@@ -127,7 +86,6 @@ export async function POST(request: NextRequest) {
         success: true,
         facebookPostId: result.postId,
         message: 'News posted to Facebook',
-        generatedSummary: aiSummary || undefined,
       });
     } else {
       await db.systemEvent.create({
