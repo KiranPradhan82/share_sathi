@@ -385,7 +385,7 @@ async function fetchMyRepublicaRss(): Promise<NewsItem[]> {
 
 /**
  * Fetch article page and extract first 300 chars of meaningful content.
- * Used for sources that don't provide summaries in their listing/RSS.
+ * Uses exact ID selectors known to work for each source.
  */
 export async function fetchArticleSummary(url: string, source: string): Promise<string> {
   if (!url) return '';
@@ -398,29 +398,19 @@ export async function fetchArticleSummary(url: string, source: string): Promise<
     if (!res.ok) return '';
     const html = await res.text();
 
-    // Try to find the main content area first
     let contentBlock = '';
 
     if (source === 'merolagani') {
-      // Merolagani: look for news-content, news-detail, or similar
-      const patterns = [
-        /class="news-content[^"]*">([\s\S]*?)(?=<div\s+class="[^"]*(?:share|comment|related|sidebar|social)|<\/article>|<footer|<script)/i,
-        /class="news-detail[^"]*">([\s\S]*?)(?=<div\s+class="[^"]*(?:share|comment|related|sidebar)|<\/article>|<footer|<script)/i,
-        /class="post-content[^"]*">([\s\S]*?)(?=<div\s+class="[^"]*(?:share|comment|related)|<\/article>|<footer)/i,
-        /id="news-body[^"]*">([\s\S]*?)(?=<div\s+id="[^"]*(?:share|comment)|<\/article>|<footer)/i,
-      ];
-      for (const p of patterns) {
-        const m = html.match(p);
-        if (m && m[1].length > 100) { contentBlock = m[1]; break; }
+      // Merolagani stores article body in this exact ID
+      const m = html.match(/id="ctl00_ContentPlaceHolder1_newsDetail"[^>]*>([\s\S]*?)(?=<div\s[^>]*id="ctl00_ContentPlaceHolder1_divRelatedNews|<div\s[^>]*class="[^"]*(?:share|comment|related|advertisement))/i);
+      if (m && m[1].length > 80) {
+        contentBlock = m[1];
       }
     } else if (source === 'sharesansar') {
-      // Sharesansar uses WordPress — content is usually in entry-content or td-post-content
-      const patterns = [
-        /class="(entry-content|post-content|td-post-content)[^"]*">([\s\S]*?)(?=<div\s+class="[^"]*(?:share|related|comments|sidebar|navigation)|<footer|<script)/i,
-      ];
-      for (const p of patterns) {
-        const m = html.match(p);
-        if (m && (m[2] || m[1]).length > 100) { contentBlock = m[2] || m[1]; break; }
+      // Sharesansar stores article body in this exact ID
+      const m = html.match(/id="newsdetail-content"[^>]*>([\s\S]*?)(?=<div\s[^>]*id="[^"]*(?:comment|related|share)|<div\s[^>]*class="[^"]*(?:comment|related|share|sidebar|social))/i);
+      if (m && m[1].length > 80) {
+        contentBlock = m[1];
       }
     }
 
@@ -429,8 +419,9 @@ export async function fetchArticleSummary(url: string, source: string): Promise<
       return extractSummaryFromHtml(contentBlock, 300);
     }
 
-    // Fallback: extract from full page (noisy but better than nothing)
-    return extractSummaryFromHtml(html, 300);
+    // No content block found — return empty rather than garbage from full page
+    console.warn(`Could not find content block for ${source}: ${url}`);
+    return '';
   } catch (e) {
     console.error(`Article summary fetch error for ${url}:`, e);
     return '';
