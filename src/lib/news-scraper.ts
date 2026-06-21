@@ -1,6 +1,6 @@
 // Nepal Share Market News Scraper
 // Sources: merolagani.com, sharesansar.com, SEBON, Google News RSS, myRepublica RSS
-// Fetches headlines + 2-3 line summaries only. No full articles, no links.
+// Fetches headlines + summaries from article content or RSS descriptions.
 
 export interface NewsItem {
   id: string;            // Unique ID per source (e.g., "merolagani-127644")
@@ -11,6 +11,7 @@ export interface NewsItem {
   language: string;      // 'ne' | 'en'
   publishedAt: string;   // ISO date string
   fetchedAt: string;     // ISO date string when we fetched it
+  url?: string;          // Original article URL (for summary fetching)
 }
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
@@ -30,26 +31,77 @@ function classifyCategory(text: string): string {
 }
 
 function detectLanguage(text: string): 'ne' | 'en' {
-  // If text contains Devanagari characters, it's Nepali
   if (/[\u0900-\u097F]/.test(text)) return 'ne';
   return 'en';
 }
 
-function truncateSummary(text: string, maxChars = 280): string {
+/**
+ * Clean HTML to plain text and extract first N chars as summary.
+ * Strips all tags, normalises whitespace, removes common noise.
+ */
+function extractSummaryFromHtml(html: string, maxChars = 300): string {
+  // Strip scripts, styles, nav, footer, header, sidebar
+  let clean = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+    .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+    .replace(/<header[\s\S]*?<\/header>/gi, '')
+    .replace(/<aside[\s\S]*?<\/aside>/gi, '')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
+    // Remove common noise text
+    .replace(/We'd like to send you notifications[\s\S]*?/gi, '')
+    .replace(/Subscribe[\s\S]*?newsletter/gi, '')
+    .replace(/Sign up[\s\S]*?newsletter/gi, '')
+    .replace(/advertisement[\s\S]*?/gi, '')
+    // Remove all remaining HTML tags
+    .replace(/<[^>]+>/g, ' ')
+    // Normalise whitespace
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#\d+;/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Remove lines that are too short (likely navigation, labels, etc.)
+  // But keep lines that contain Devanagari (Nepali text tends to be meaningful even if short)
+  const lines = clean.split(/\.\s+/).filter(line => {
+    const trimmed = line.trim();
+    if (trimmed.length < 20) return false;
+    // Skip known noise patterns
+    if (/^(merolagani|sharesansar|subscribe|follow|like|comment|share|print|email)/i.test(trimmed)) return false;
+    if (/for the latest|newsletter|notification|click here|download app/i.test(trimmed)) return false;
+    return true;
+  });
+
+  const meaningful = lines.join('. ').trim();
+
+  if (meaningful.length <= maxChars) return meaningful;
+  // Cut at last sentence boundary within limit
+  const cut = meaningful.lastIndexOf('. ', maxChars);
+  if (cut > 50) return meaningful.substring(0, cut + 1);
+  // Fall back to cutting at last space
+  const spaceCut = meaningful.lastIndexOf(' ', maxChars);
+  return meaningful.substring(0, spaceCut > 0 ? spaceCut : maxChars).trim() + '...';
+}
+
+function truncateSummary(text: string, maxChars = 300): string {
   if (!text) return '';
-  // Strip HTML tags
   const clean = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   if (clean.length <= maxChars) return clean;
-  // Find last space before maxChars to avoid cutting words
-  const cut = clean.lastIndexOf(' ', maxChars);
-  return clean.substring(0, cut > 0 ? cut : maxChars) + '...';
+  const cut = clean.lastIndexOf('. ', maxChars);
+  if (cut > 50) return clean.substring(0, cut + 1);
+  const spaceCut = clean.lastIndexOf(' ', maxChars);
+  return clean.substring(0, spaceCut > 0 ? spaceCut : maxChars) + '...';
 }
 
 // ==================== MERO LAGANI ====================
 async function scrapeMerolagani(): Promise<NewsItem[]> {
   const items: NewsItem[] = [];
   try {
-    // Fetch Nepali news
     const res = await fetch('https://merolagani.com/NewsList.aspx', {
       headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html' },
       signal: AbortSignal.timeout(15000),
@@ -57,10 +109,6 @@ async function scrapeMerolagani(): Promise<NewsItem[]> {
     if (!res.ok) return items;
     const html = await res.text();
 
-    // Parse with regex (no cheerio dependency needed)
-    // Pattern: news items have class media-news or media-news-lg
-    // Title in <a> tags inside elements with media-title class
-    // Date in media-body area
     const newsItemRegex = /class="(?:media-news|media-news-lg)[^"]*">[\s\S]*?<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="media-body[^"]*">([\s\S]*?)<\/div>/gi;
 
     let match;
@@ -71,11 +119,9 @@ async function scrapeMerolagani(): Promise<NewsItem[]> {
 
       if (title.length < 10) continue;
 
-      // Extract news ID from link
       const idMatch = link.match(/newsID=(\d+)/i);
       const newsId = idMatch ? idMatch[1] : `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-      // Parse date (format: "Jun 19, 2026 11:25 AM")
       let publishedAt = new Date().toISOString();
       try {
         const parsed = new Date(dateStr);
@@ -86,17 +132,16 @@ async function scrapeMerolagani(): Promise<NewsItem[]> {
         id: extractId('merolagani', newsId),
         source: 'merolagani',
         headline: title,
-        summary: '', // Will be fetched from detail page if needed
+        summary: '',
         category: classifyCategory(title),
         language: detectLanguage(title),
         publishedAt,
         fetchedAt: new Date().toISOString(),
+        url: `https://merolagani.com/NewsDetail.aspx?newsID=${newsId}`,
       });
     }
 
-    // If regex didn't find items, try a simpler approach
     if (items.length === 0) {
-      // Fallback: find all links to NewsDetail
       const linkRegex = /href="(\/NewsDetail\.aspx\?newsID=(\d+))"[^>]*>([^<]+)</gi;
       while ((match = linkRegex.exec(html)) !== null) {
         const title = match[3].trim();
@@ -111,6 +156,7 @@ async function scrapeMerolagani(): Promise<NewsItem[]> {
           language: detectLanguage(title),
           publishedAt: new Date().toISOString(),
           fetchedAt: new Date().toISOString(),
+          url: `https://merolagani.com/NewsDetail.aspx?newsID=${newsId}`,
         });
       }
     }
@@ -118,56 +164,6 @@ async function scrapeMerolagani(): Promise<NewsItem[]> {
     console.error('Merolagani scrape error:', e);
   }
   return items;
-}
-
-// Fetch summary from individual merolagani news article
-async function fetchMerolaganiSummary(newsId: string): Promise<string> {
-  try {
-    const res = await fetch(`https://merolagani.com/NewsDetail.aspx?newsID=${newsId}`, {
-      headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html' },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return '';
-    const html = await res.text();
-
-    // Strip scripts, styles, and common noise (popups, footers, nav)
-    const clean = html
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<nav[\s\S]*?<\/nav>/gi, '')
-      .replace(/<footer[\s\S]*?<\/footer>/gi, '')
-      .replace(/We'd like to send you notifications[\s\S]*?/gi, '')
-      .replace(/Subscribe[\s\S]*?newsletter/gi, '');
-
-    // Try multiple known content selectors for merolagani
-    const contentPatterns = [
-      /class="news-content[^"]*">([\s\S]*?)(?=<div\s+class="(?!news-content)|<footer|<script|<div\s+class="share)/i,
-      /class="news-detail[^"]*">([\s\S]*?)(?=<div\s+class="(?!news-detail)|<footer|<script)/i,
-      /class="post-content[^"]*">([\s\S]*?)(?=<div\s+class="(?!post-content)|<footer|<script)/i,
-      /id="news-body[^"]*">([\s\S]*?)(?=<div\s+id="(?!news-body)|<footer|<script)/i,
-      /class="entry-content[^"]*">([\s\S]*?)(?=<div\s+class="(?!entry-content)|<footer|<script)/i,
-    ];
-
-    for (const pattern of contentPatterns) {
-      const match = clean.match(pattern);
-      if (match) {
-        const text = match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-        if (text.length > 80) {
-          return truncateSummary(text);
-        }
-      }
-    }
-
-    // Fallback: find largest meaningful text block (skip anything under 120 chars)
-    const textOnly = clean.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    const sentences = textOnly.split(/(?<=[।\.\?!])\s+/).filter(s => s.length > 30);
-    if (sentences.length > 0) {
-      return truncateSummary(sentences.slice(0, 3).join(' '));
-    }
-  } catch (e) {
-    console.error(`Merolagani summary fetch error for ${newsId}:`, e);
-  }
-  return '';
 }
 
 // ==================== SHARE SANSAR ====================
@@ -181,7 +177,6 @@ async function scrapeSharesansar(): Promise<NewsItem[]> {
     if (!res.ok) return items;
     const html = await res.text();
 
-    // Sharesansar news links contain /newsdetail/ in href
     const newsRegex = /href="(\/newsdetail\/([^"<]+))"[^>]*>([^<]{20,})</gi;
     const seen = new Set<string>();
 
@@ -191,12 +186,10 @@ async function scrapeSharesansar(): Promise<NewsItem[]> {
       const slug = match[2];
       const title = match[3].trim();
 
-      // Deduplicate by slug prefix
       const dedupeKey = slug.split('-').slice(0, 4).join('-');
       if (seen.has(dedupeKey) || title.length < 20) continue;
       seen.add(dedupeKey);
 
-      // Extract date from slug (usually ends with YYYYMMDD)
       const dateMatch = slug.match(/(\d{4})(\d{2})(\d{2})$/);
       let publishedAt = new Date().toISOString();
       if (dateMatch) {
@@ -213,6 +206,7 @@ async function scrapeSharesansar(): Promise<NewsItem[]> {
         language: detectLanguage(title),
         publishedAt,
         fetchedAt: new Date().toISOString(),
+        url: `https://www.sharesansar.com/newsdetail/${slug}`,
       });
     }
   } catch (e) {
@@ -221,40 +215,10 @@ async function scrapeSharesansar(): Promise<NewsItem[]> {
   return items;
 }
 
-// Fetch summary from sharesansar article
-async function fetchSharesansarSummary(slug: string): Promise<string> {
-  try {
-    const res = await fetch(`https://www.sharesansar.com/newsdetail/${slug}`, {
-      headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html' },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return '';
-    const html = await res.text();
-    // Sharesansar uses WordPress — content is usually in entry-content or post-content
-    const bodyMatch = html.match(/class="(entry-content|post-content|td-post-content)[^"]*">([\s\S]*?)(?=<div\s+class="(share|related|comments|sidebar)|<footer|<script)/i);
-    if (bodyMatch) {
-      return truncateSummary(bodyMatch[2] || bodyMatch[0]);
-    }
-    // Fallback
-    const textBlocks = html.replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .match(/.{100,500}/g);
-    if (textBlocks && textBlocks.length > 0) {
-      return truncateSummary(textBlocks.sort((a, b) => b.length - a.length)[0]);
-    }
-  } catch (e) {
-    console.error(`Sharesansar summary fetch error for ${slug}:`, e);
-  }
-  return '';
-}
-
 // ==================== SEBON NOTICES ====================
 async function scrapeSebonNotices(): Promise<NewsItem[]> {
   const items: NewsItem[] = [];
   try {
-    // Fetch first 2 pages of notices
     for (let page = 1; page <= 2; page++) {
       const res = await fetch(`https://www.sebon.gov.np/notices?page=${page}`, {
         headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html' },
@@ -263,7 +227,6 @@ async function scrapeSebonNotices(): Promise<NewsItem[]> {
       if (!res.ok) continue;
       const html = await res.text();
 
-      // SEBON notices are in table rows — extract title and date
       const rowRegex = /<tr[^>]*>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<\/tr>/gi;
       let match;
       while ((match = rowRegex.exec(html)) !== null) {
@@ -271,7 +234,6 @@ async function scrapeSebonNotices(): Promise<NewsItem[]> {
         const dateCell = match[2].replace(/<[^>]*>/g, '').trim();
 
         if (titleCell.length < 10) continue;
-        // Skip header row
         if (/notice|title|मिति|अवस्था/i.test(titleCell) && titleCell.length < 30) continue;
 
         let publishedAt = new Date().toISOString();
@@ -315,7 +277,6 @@ async function fetchGoogleNewsRss(lang: 'en' | 'ne'): Promise<NewsItem[]> {
 
     const xml = await res.text();
 
-    // Parse RSS XML with regex (no xml2js dependency needed)
     const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
     let match;
 
@@ -327,6 +288,8 @@ async function fetchGoogleNewsRss(lang: 'en' | 'ne'): Promise<NewsItem[]> {
       const pubDateMatch = itemXml.match(/<pubDate>([^<]+)<\/pubDate>/i);
       const descMatch = itemXml.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i) ||
                         itemXml.match(/<description>([^<]+)<\/description>/i);
+      const linkMatch = itemXml.match(/<link><!\[CDATA\[([\s\S]*?)\]\]><\/link>/i) ||
+                        itemXml.match(/<link>([^<]+)<\/link>/i);
 
       if (!titleMatch) continue;
 
@@ -339,7 +302,9 @@ async function fetchGoogleNewsRss(lang: 'en' | 'ne'): Promise<NewsItem[]> {
         if (!isNaN(parsed.getTime())) publishedAt = parsed.toISOString();
       }
 
+      // Google News descriptions are usually decent snippets
       const description = descMatch ? descMatch[1].replace(/<[^>]*>/g, ' ').trim() : '';
+      const articleUrl = linkMatch ? linkMatch[1].trim() : '';
 
       items.push({
         id: extractId('google_news', `${lang}-${title.substring(0, 50).replace(/\s+/g, '-')}`),
@@ -350,6 +315,7 @@ async function fetchGoogleNewsRss(lang: 'en' | 'ne'): Promise<NewsItem[]> {
         language: lang,
         publishedAt,
         fetchedAt: new Date().toISOString(),
+        url: articleUrl || undefined,
       });
     }
   } catch (e) {
@@ -386,7 +352,6 @@ async function fetchMyRepublicaRss(): Promise<NewsItem[]> {
       const title = titleMatch[1].trim();
       if (title.length < 10) continue;
 
-      // Filter for market/finance relevance
       if (!SHARE_KEYWORDS.test(title)) continue;
 
       let publishedAt = new Date().toISOString();
@@ -395,14 +360,16 @@ async function fetchMyRepublicaRss(): Promise<NewsItem[]> {
         if (!isNaN(parsed.getTime())) publishedAt = parsed.toISOString();
       }
 
-      const content = contentMatch ? contentMatch[1].replace(/<[^>]*>/g, ' ').trim() : '';
+      // MyRepublica RSS has full article content in content:encoded
+      const rawContent = contentMatch ? contentMatch[1] : '';
+      const summary = extractSummaryFromHtml(rawContent, 300);
 
       items.push({
         id: extractId('myrepublica', `${title.substring(0, 50).replace(/\s+/g, '-')}`),
         source: 'myrepublica',
         headline: title,
-        summary: truncateSummary(content),
-        category: classifyCategory(title + ' ' + content),
+        summary,
+        category: classifyCategory(title + ' ' + summary),
         language: 'en',
         publishedAt,
         fetchedAt: new Date().toISOString(),
@@ -414,23 +381,72 @@ async function fetchMyRepublicaRss(): Promise<NewsItem[]> {
   return items;
 }
 
-// ==================== MAIN FETCHER ====================
+// ==================== ARTICLE CONTENT FETCHER (for summary) ====================
 
 /**
- * Fetch news from all sources in parallel.
- * Returns deduplicated items sorted by publishedAt (newest first).
- * Optionally fetches summaries for top items (adds ~2-3s per item).
+ * Fetch article page and extract first 300 chars of meaningful content.
+ * Used for sources that don't provide summaries in their listing/RSS.
  */
+export async function fetchArticleSummary(url: string, source: string): Promise<string> {
+  if (!url) return '';
+
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html' },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return '';
+    const html = await res.text();
+
+    // Try to find the main content area first
+    let contentBlock = '';
+
+    if (source === 'merolagani') {
+      // Merolagani: look for news-content, news-detail, or similar
+      const patterns = [
+        /class="news-content[^"]*">([\s\S]*?)(?=<div\s+class="[^"]*(?:share|comment|related|sidebar|social)|<\/article>|<footer|<script)/i,
+        /class="news-detail[^"]*">([\s\S]*?)(?=<div\s+class="[^"]*(?:share|comment|related|sidebar)|<\/article>|<footer|<script)/i,
+        /class="post-content[^"]*">([\s\S]*?)(?=<div\s+class="[^"]*(?:share|comment|related)|<\/article>|<footer)/i,
+        /id="news-body[^"]*">([\s\S]*?)(?=<div\s+id="[^"]*(?:share|comment)|<\/article>|<footer)/i,
+      ];
+      for (const p of patterns) {
+        const m = html.match(p);
+        if (m && m[1].length > 100) { contentBlock = m[1]; break; }
+      }
+    } else if (source === 'sharesansar') {
+      // Sharesansar uses WordPress — content is usually in entry-content or td-post-content
+      const patterns = [
+        /class="(entry-content|post-content|td-post-content)[^"]*">([\s\S]*?)(?=<div\s+class="[^"]*(?:share|related|comments|sidebar|navigation)|<footer|<script)/i,
+      ];
+      for (const p of patterns) {
+        const m = html.match(p);
+        if (m && (m[2] || m[1]).length > 100) { contentBlock = m[2] || m[1]; break; }
+      }
+    }
+
+    // If we found a content block, extract summary from it
+    if (contentBlock) {
+      return extractSummaryFromHtml(contentBlock, 300);
+    }
+
+    // Fallback: extract from full page (noisy but better than nothing)
+    return extractSummaryFromHtml(html, 300);
+  } catch (e) {
+    console.error(`Article summary fetch error for ${url}:`, e);
+    return '';
+  }
+}
+
+// ==================== MAIN FETCHER ====================
+
 export async function fetchAllNews(options?: { fetchSummaries?: boolean; maxPerSource?: number }): Promise<{
   items: NewsItem[];
   sourceStats: Record<string, number>;
   errors: string[];
 }> {
   const maxPerSource = options?.maxPerSource || 15;
-  const fetchSummaries = options?.fetchSummaries || false;
   const errors: string[] = [];
 
-  // Fetch all sources in parallel
   const [merolaganiItems, sharesansarItems, sebonItems, googleEnItems, googleNeItems, myrepublicaItems] = await Promise.all([
     scrapeMerolagani().catch(e => { errors.push(`merolagani: ${e.message}`); return [] as NewsItem[]; }),
     scrapeSharesansar().catch(e => { errors.push(`sharesansar: ${e.message}`); return [] as NewsItem[]; }),
@@ -440,7 +456,6 @@ export async function fetchAllNews(options?: { fetchSummaries?: boolean; maxPerS
     fetchMyRepublicaRss().catch(e => { errors.push(`myrepublica: ${e.message}`); return [] as NewsItem[]; }),
   ]);
 
-  // Limit per source and collect stats
   const sourceStats: Record<string, number> = {};
   const allItems: NewsItem[] = [];
 
@@ -453,7 +468,7 @@ export async function fetchAllNews(options?: { fetchSummaries?: boolean; maxPerS
     allItems.push(...limited);
   }
 
-  // Deduplicate by headline similarity (exact match after trimming)
+  // Deduplicate by headline similarity
   const seenHeadlines = new Set<string>();
   const deduped = allItems.filter(item => {
     const key = item.headline.trim().toLowerCase().substring(0, 80);
@@ -465,32 +480,9 @@ export async function fetchAllNews(options?: { fetchSummaries?: boolean; maxPerS
   // Sort by publishedAt (newest first)
   deduped.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 
-  // Fetch summaries for items that don't have one (top 10 only to save time)
-  if (fetchSummaries) {
-    const needsSummary = deduped.filter(item => !item.summary).slice(0, 10);
-    await Promise.all(needsSummary.map(async (item) => {
-      try {
-        if (item.source === 'merolagani') {
-          const idMatch = item.id.match(/merolagani-(\d+)/);
-          if (idMatch) {
-            item.summary = await fetchMerolaganiSummary(idMatch[1]);
-          }
-        } else if (item.source === 'sharesansar') {
-          const slugMatch = item.id.match(/sharesansar-(.+)/);
-          if (slugMatch) {
-            item.summary = await fetchSharesansarSummary(slugMatch[1]);
-          }
-        }
-      } catch { /* skip summary for this item */ }
-    }));
-  }
-
   return { items: deduped, sourceStats, errors };
 }
 
-/**
- * Fetch news from a single source.
- */
 export async function fetchNewsFromSource(source: string): Promise<NewsItem[]> {
   switch (source) {
     case 'merolagani': return scrapeMerolagani();

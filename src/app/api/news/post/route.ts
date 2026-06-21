@@ -2,43 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { postToFacebook } from '@/lib/facebook';
 import { requireAuth } from '@/lib/require-auth';
-import ZAI from 'z-ai-web-dev-sdk';
+import { fetchArticleSummary } from '@/lib/news-scraper';
 
 export const maxDuration = 60;
 
 async function getConfigValue(key: string): Promise<string> {
   const config = await db.systemConfig.findUnique({ where: { key } });
   return config?.value || '';
-}
-
-async function generateSummaryFallback(headline: string, language: string): Promise<string> {
-  try {
-    const zai = await ZAI.create();
-    const langInstruction = language === 'ne'
-      ? 'Write the summary in Nepali (Devanagari script).'
-      : 'Write the summary in English.';
-
-    const response = await zai.chat.completions.create({
-      model: 'glm-4-flash',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a Nepali share market news assistant. Given a news headline, write a short 2-3 line summary that explains the key point clearly. ${langInstruction} Do NOT use the headline itself as the summary. Do NOT start with "Here is a summary" or similar. Just write the summary directly. Keep it factual and concise. Maximum 300 characters.`,
-        },
-        { role: 'user', content: headline },
-      ],
-    });
-
-    const summary = response.choices?.[0]?.message?.content?.trim() || '';
-    return summary
-      .replace(/^#{1,3}\s+/gm, '')
-      .replace(/^(here is|summary|the summary)[:\s]*/i, '')
-      .trim()
-      .substring(0, 350);
-  } catch (e) {
-    console.error('Fallback AI summary generation failed:', e);
-    return '';
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -76,37 +46,44 @@ export async function POST(request: NextRequest) {
                         newsItem.source === 'myrepublica' ? 'My Republica' : newsItem.source;
 
     let message: string;
-    let usedFallback = false;
 
     if (customMessage) {
       message = customMessage;
     } else {
       let summary = newsItem.summary || '';
 
-      // If no summary from fetch time, try generating now as fallback
+      // If no summary, try fetching article content now
       if (!summary.trim()) {
-        console.log(`No pre-generated summary for news ${newsId}, attempting fallback generation...`);
-        summary = await generateSummaryFallback(newsItem.headline, newsItem.language);
-        usedFallback = true;
+        console.log(`No summary for news ${newsId}, fetching article content...`);
+        // Reconstruct URL based on source
+        let articleUrl = '';
+        if (newsItem.source === 'merolagani') {
+          const idMatch = newsItem.externalId.match(/merolagani-(\d+)/);
+          if (idMatch) articleUrl = `https://merolagani.com/NewsDetail.aspx?newsID=${idMatch[1]}`;
+        } else if (newsItem.source === 'sharesansar') {
+          const slugMatch = newsItem.externalId.match(/sharesansar-(.+)/);
+          if (slugMatch) articleUrl = `https://www.sharesansar.com/newsdetail/${slugMatch[1]}`;
+        }
 
-        // Save the fallback summary to DB for future use
-        if (summary.trim()) {
-          await db.newsItem.update({
-            where: { id: newsId },
-            data: { summary: summary.trim() },
-          });
+        if (articleUrl) {
+          summary = await fetchArticleSummary(articleUrl, newsItem.source);
+          if (summary.trim()) {
+            // Save it for next time
+            await db.newsItem.update({
+              where: { id: newsId },
+              data: { summary: summary.trim() },
+            });
+          }
         }
       }
 
-      // If still no summary after fallback, abort
-      if (!summary.trim()) {
-        return NextResponse.json(
-          { error: 'Failed to generate AI summary. The news cannot be posted without a summary. Try again later.' },
-          { status: 400 },
-        );
+      // Build post message
+      if (summary.trim() && summary.trim() !== 'SEBON notice — see details on SEBON website.') {
+        message = `📰 ${newsItem.headline}\n\n${summary.trim()}\n\n📡 Source: ${sourceLabel}\n\n#NEPSE #ShareSathi #NepalStockMarket #ShareMarket`;
+      } else {
+        // Last resort: headline only with clear formatting
+        message = `📰 ${newsItem.headline}\n\n📡 Source: ${sourceLabel}\n\n#NEPSE #ShareSathi #NepalStockMarket #ShareMarket`;
       }
-
-      message = `📰 ${newsItem.headline}\n\n${summary}\n\n📡 Source: ${sourceLabel}\n\n#NEPSE #ShareSathi #NepalStockMarket #ShareMarket`;
     }
 
     // Post to Facebook
@@ -123,7 +100,7 @@ export async function POST(request: NextRequest) {
           eventType: 'post',
           entityType: 'news',
           entityId: newsId,
-          description: `Posted news to Facebook: "${newsItem.headline.substring(0, 80)}". FB Post ID: ${result.postId}${usedFallback ? ' (used fallback summary)' : ''}`,
+          description: `Posted news to Facebook: "${newsItem.headline.substring(0, 80)}". FB Post ID: ${result.postId}`,
           severity: 'success',
         },
       });
@@ -132,7 +109,6 @@ export async function POST(request: NextRequest) {
         success: true,
         facebookPostId: result.postId,
         message: 'News posted to Facebook',
-        usedFallback,
       });
     } else {
       await db.systemEvent.create({

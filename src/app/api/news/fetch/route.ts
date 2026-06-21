@@ -1,45 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { fetchAllNews } from '@/lib/news-scraper';
+import { fetchAllNews, fetchArticleSummary } from '@/lib/news-scraper';
 import { requireAuth } from '@/lib/require-auth';
-import ZAI from 'z-ai-web-dev-sdk';
 
 export const maxDuration = 120;
-
-async function generateSummary(headline: string, language: string): Promise<string> {
-  const langInstruction = language === 'ne'
-    ? 'Write the summary in Nepali (Devanagari script).'
-    : 'Write the summary in English.';
-
-  const systemPrompt = `You are a Nepali share market news assistant. Given a news headline, write a short 2-3 line summary that explains the key point clearly. ${langInstruction} Do NOT use the headline itself as the summary. Do NOT start with "Here is a summary" or similar. Just write the summary directly. Keep it factual and concise. Maximum 300 characters.`;
-
-  // Try up to 2 times
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const zai = await ZAI.create();
-      const response = await zai.chat.completions.create({
-        model: 'glm-4-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: headline },
-        ],
-      });
-
-      const summary = response.choices?.[0]?.message?.content?.trim() || '';
-      const cleaned = summary
-        .replace(/^#{1,3}\s+/gm, '')
-        .replace(/^(here is|summary|the summary)[:\s]*/i, '')
-        .trim()
-        .substring(0, 350);
-
-      if (cleaned.length > 10) return cleaned;
-      console.warn(`AI summary attempt ${attempt} returned too short: "${cleaned}"`);
-    } catch (e) {
-      console.error(`AI summary attempt ${attempt} failed for headline: "${headline.substring(0, 60)}"`, e);
-    }
-  }
-  return '';
-}
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -63,25 +27,25 @@ export async function POST(request: NextRequest) {
     });
     const existingIds = new Set(recentItems.map(i => i.externalId));
 
-    // 2. Get the most recent publishedAt we have (to know if there's anything newer)
+    // 2. Get the most recent publishedAt we have
     const latestItem = await db.newsItem.findFirst({
       orderBy: { publishedAt: 'desc' },
       select: { publishedAt: true },
     });
 
-    // 3. Scrape all sources (needed to discover new items)
-    const { items, sourceStats, errors } = await fetchAllNews({ fetchSummaries: false });
+    // 3. Scrape all sources
+    const { items, sourceStats, errors } = await fetchAllNews();
 
-    // 4. Filter to only NEW items not already in DB (from last 24h)
+    // 4. Filter to only NEW items
     const newItems = items.filter(item => !existingIds.has(item.id));
 
-    // 5. Also skip items older than our newest existing item (they're stale)
+    // 5. Skip items older than our newest existing item
     let cutoffSkipped = 0;
     const trulyNew = newItems.filter(item => {
       if (latestItem) {
         const itemDate = new Date(item.publishedAt).getTime();
         const latestDate = latestItem.publishedAt.getTime();
-        if (itemDate < latestDate - 60 * 1000) { // 1min tolerance
+        if (itemDate < latestDate - 60 * 1000) {
           cutoffSkipped++;
           return false;
         }
@@ -89,10 +53,10 @@ export async function POST(request: NextRequest) {
       return true;
     });
 
-    // 6. Generate AI summaries for all new items (parallel, with concurrency limit of 3)
+    // 6. Fetch article summaries for items that need them (parallel, concurrency 3)
     let addedCount = 0;
-    let summaryGenerated = 0;
-    let summaryFailed = 0;
+    let summaryFetched = 0;
+    let summarySkipped = 0; // RSS items that already have summaries
     const dbErrors: string[] = [];
     const CONCURRENCY = 3;
 
@@ -104,8 +68,17 @@ export async function POST(request: NextRequest) {
           const pubDate = new Date(item.publishedAt);
           if (isNaN(pubDate.getTime())) return null;
 
-          // Generate AI summary for this headline
-          const summary = await generateSummary(item.headline, item.language);
+          let summary = item.summary || '';
+
+          // If no summary yet, fetch from article page
+          if (!summary && item.url) {
+            summary = await fetchArticleSummary(item.url, item.source);
+          }
+
+          // SEBON items get a generic summary
+          if (!summary && item.source === 'sebon') {
+            summary = 'SEBON notice — see details on SEBON website.';
+          }
 
           const created = await db.newsItem.create({
             data: {
@@ -127,9 +100,11 @@ export async function POST(request: NextRequest) {
         if (result.status === 'fulfilled' && result.value) {
           addedCount++;
           if (result.value.summary) {
-            summaryGenerated++;
-          } else {
-            summaryFailed++;
+            if (result.value.item.summary) {
+              summarySkipped++; // Came with summary (RSS)
+            } else {
+              summaryFetched++; // We fetched from article
+            }
           }
         } else if (result.status === 'rejected') {
           const errMsg = result.reason instanceof Error ? result.reason.message : String(result.reason);
@@ -147,9 +122,9 @@ export async function POST(request: NextRequest) {
       data: {
         eventType: 'fetch',
         entityType: 'news',
-        description: `News fetch: ${items.length} scraped, ${addedCount} new, ${totalSkipped} existing/stale. AI summaries: ${summaryGenerated} ok, ${summaryFailed} failed.${cleanupInfo}`,
+        description: `News fetch: ${items.length} scraped, ${addedCount} new, ${totalSkipped} existing/stale. Summaries: ${summaryFetched} fetched, ${summarySkipped} from RSS.${cleanupInfo}`,
         severity: addedCount > 0 ? 'success' : 'info',
-        metadata: JSON.stringify({ sourceStats, errors, cutoffSkipped, summaryGenerated, summaryFailed, deletedOld: deletedCount.count }),
+        metadata: JSON.stringify({ sourceStats, errors, cutoffSkipped, summaryFetched, summarySkipped, deletedOld: deletedCount.count }),
       },
     });
 
@@ -158,8 +133,8 @@ export async function POST(request: NextRequest) {
       totalScraped: items.length,
       added: addedCount,
       skipped: totalSkipped,
-      summaryGenerated,
-      summaryFailed,
+      summaryFetched,
+      summarySkipped,
       deletedOld: deletedCount.count || undefined,
       sourceStats,
       errors: errors.length > 0 ? errors : undefined,

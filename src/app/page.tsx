@@ -953,9 +953,7 @@ export default function HomePage() {
       const json = await res.json();
       if (json.success) {
         if (json.added > 0) {
-          const summaryInfo = json.summaryFailed > 0
-            ? ` (${json.summaryGenerated} with AI summary, ${json.summaryFailed} failed)`
-            : ` (${json.summaryGenerated} with AI summary)`;
+          const summaryInfo = ` (${json.summaryFetched || 0} summaries fetched, ${json.summarySkipped || 0} from RSS)`;
           const cleanupInfo = json.deletedOld > 0 ? ` | Cleaned ${json.deletedOld} old items` : '';
           toast.success(`${json.added} new news found & saved${summaryInfo}${cleanupInfo}`);
         } else {
