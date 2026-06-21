@@ -211,6 +211,50 @@ function statusBadge(status: string) {
 // ---- Component ----
 export default function HomePage() {
   const { theme, setTheme } = useTheme();
+
+  // ---- 5-minute inactivity timeout ----
+  const INACTIVITY_LIMIT = 5 * 60 * 1000; // 5 minutes
+  const WARNING_BEFORE = 30 * 1000; // warn 30s before expiry
+  let lastActivity = Date.now();
+  let warningShown = false;
+
+  useEffect(() => {
+    const resetTimer = () => {
+      lastActivity = Date.now();
+      warningShown = false;
+    };
+
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    const checkInterval = setInterval(() => {
+      const elapsed = Date.now() - lastActivity;
+      const remaining = INACTIVITY_LIMIT - elapsed;
+
+      if (remaining <= 0) {
+        // Session expired — logout and redirect
+        clearInterval(checkInterval);
+        fetch('/api/auth/logout', { method: 'POST' }).finally(() => {
+          window.location.href = '/auth/login';
+        });
+      } else if (remaining <= WARNING_BEFORE && !warningShown) {
+        // Show warning
+        warningShown = true;
+        const secs = Math.ceil(remaining / 1000);
+        toast.warning(`Session expires in ${secs}s due to inactivity`, {
+          duration: (secs - 1) * 1000,
+          id: 'inactivity-warning',
+        });
+      }
+    }, 5000); // check every 5 seconds
+
+    return () => {
+      clearInterval(checkInterval);
+      activityEvents.forEach(evt => window.removeEventListener(evt, resetTimer));
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // Dashboard state

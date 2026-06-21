@@ -45,8 +45,8 @@ export function generateSessionToken(): string {
   return randomBytes(32).toString('hex');
 }
 
-// Session expiry: 7 days
-const SESSION_MAX_AGE = 7 * 24 * 60 * 60;
+// Session expiry: 5 minutes (inactivity enforced client-side; cookie as server-side safety net)
+const SESSION_MAX_AGE = 5 * 60;
 
 // Cookie options for the session token
 export const SESSION_COOKIE = {
