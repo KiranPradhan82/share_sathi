@@ -121,6 +121,7 @@ export function formatIpoCardCaption(ipo: {
   isOpen: boolean;
   openedToday: boolean;
   isLastDay?: boolean;
+  dayNumber?: number;
 }): string {
   const formatAmt = (n: number) => {
     if (n >= 10000000) return `${(n / 10000000).toFixed(2)} Crore`;
@@ -130,6 +131,13 @@ export function formatIpoCardCaption(ipo: {
 
   const symbol = ipo.companySymbol ? `(${ipo.companySymbol})` : '';
   const closeStr = ipo.closeDate ? formatDateForCaption(ipo.closeDate) : '';
+
+  // Helper: ordinal suffix
+  const ordinal = (n: number) => {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
 
   // LAST DAY caption
   if (ipo.isLastDay) {
@@ -143,8 +151,8 @@ export function formatIpoCardCaption(ipo: {
       `\n#NEPSE #ShareSathi #IPO #NepalIPO #${ipo.companySymbol || 'NepalStockMarket'} #StockMarket`;
   }
 
-  // OPENED TODAY caption
-  if (ipo.openedToday) {
+  // DAY 1 — IPO just opened
+  if (ipo.openedToday || (ipo.dayNumber === 1)) {
     return `\uD83D\uDCE2 IPO OPENED TODAY!\n\n` +
       `${ipo.companyName} ${symbol}\n` +
       `${ipo.ipoType}\n\n` +
@@ -157,7 +165,32 @@ export function formatIpoCardCaption(ipo: {
       `#NEPSE #ShareSathi #IPO #NepalIPO #${ipo.companySymbol || 'NepalStockMarket'} #StockMarket`;
   }
 
-  // OPEN (not today) caption
+  // DAY 2+ — ongoing (show which day)
+  if (ipo.isOpen && ipo.dayNumber && ipo.dayNumber >= 2) {
+    const dayLabel = ordinal(ipo.dayNumber);
+    let caption = `\uD83D\uDCC8 ${dayLabel} day for ${ipo.companyName} ${symbol}\n\n` +
+      `${ipo.ipoType}\n\n` +
+      `\uD83D\uDCB5 Issued Units: ${ipo.issuedUnits.toLocaleString()}\n` +
+      `\uD83D\uDCB0 Price Per Unit: Rs. 100\n` +
+      `\uD83D\uDC64 Issue Manager: ${ipo.issueManager}\n` +
+      `\uD83D\uDCC5 Closes: ${closeStr}\n`;
+
+    if (ipo.numberOfApplications > 0) {
+      caption += `\uD83D\uDC65 Applications: ${ipo.numberOfApplications.toLocaleString()}\n`;
+    }
+    if (ipo.oversubscription && ipo.oversubscription > 0) {
+      caption += `\uD83D\uDCC8 Oversubscribed: ${ipo.oversubscription.toFixed(2)}x times\n`;
+    }
+    if (ipo.totalAmount > 0) {
+      caption += `\uD83D\uDCB0 Total Amount: Rs. ${formatAmt(ipo.totalAmount)}\n`;
+    }
+
+    caption += `\nApply now through your Demat/CMMS account!\n\n` +
+      `#NEPSE #ShareSathi #IPO #NepalIPO #${ipo.companySymbol || 'NepalStockMarket'} #StockMarket`;
+    return caption;
+  }
+
+  // OPEN (fallback — day number unknown, not today, not last day)
   if (ipo.isOpen) {
     let caption = `\uD83D\uDCC8 IPO NOW OPEN\n\n` +
       `${ipo.companyName} ${symbol}\n\n` +

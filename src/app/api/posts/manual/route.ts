@@ -444,18 +444,30 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `Failed to decode base64 image: ${convErr instanceof Error ? convErr.message : 'Unknown'}` }, { status: 400 });
       }
 
-      // Compute isLastDay server-side using Nepal timezone
+      // Compute isLastDay and dayNumber server-side using Nepal timezone
+      const ipoOpenDate = ipoInfo.openDate || '';
       const ipoCloseDate = ipoInfo.closeDate || '';
       let isLastDay = ipoInfo.isLastDay || false;
-      if (!isLastDay && ipoCloseDate) {
-        try {
-          const now = new Date();
-          const nepalDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' }); // "2026-06-22"
-          isLastDay = ipoCloseDate === nepalDateStr;
-        } catch { /* ignore */ }
-      }
+      let dayNumber = 0;
 
-      const caption = formatIpoCardCaption({ ...ipoInfo, isLastDay });
+      try {
+        const now = new Date();
+        const nepalDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' }); // "2026-06-22"
+
+        if (!isLastDay && ipoCloseDate) {
+          isLastDay = ipoCloseDate === nepalDateStr;
+        }
+
+        // Calculate which day of the IPO period (1-based)
+        if (ipoOpenDate && ipoCloseDate) {
+          const todayMs = new Date(nepalDateStr + 'T12:00:00').getTime();
+          const openMs = new Date(ipoOpenDate + 'T12:00:00').getTime();
+          const diffDays = Math.round((todayMs - openMs) / (24 * 60 * 60 * 1000));
+          if (diffDays >= 0) dayNumber = diffDays + 1;
+        }
+      } catch { /* ignore */ }
+
+      const caption = formatIpoCardCaption({ ...ipoInfo, isLastDay, dayNumber });
 
       const fbPost = await db.facebookPost.create({
         data: {

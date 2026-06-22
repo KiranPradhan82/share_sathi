@@ -56,15 +56,27 @@ export async function POST(request: NextRequest) {
 
     if (ipoData) {
       // IPO story path
+      const openDate = (ipoData.openDate as string) || '';
       const closeDate = (ipoData.closeDate as string) || '';
       let isLastDay = (ipoData.isLastDay as boolean) || false;
-      if (!isLastDay && closeDate) {
-        try {
-          const now = new Date();
-          const nepalDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' });
+      let dayNumber = 0;
+
+      try {
+        const now = new Date();
+        const nepalDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' });
+
+        if (!isLastDay && closeDate) {
           isLastDay = closeDate === nepalDateStr;
-        } catch { /* ignore */ }
-      }
+        }
+
+        // Calculate which day of the IPO period (1-based)
+        if (openDate && closeDate) {
+          const todayMs = new Date(nepalDateStr + 'T12:00:00').getTime();
+          const openMs = new Date(openDate + 'T12:00:00').getTime();
+          const diffDays = Math.round((todayMs - openMs) / (24 * 60 * 60 * 1000));
+          if (diffDays >= 0) dayNumber = diffDays + 1;
+        }
+      } catch { /* ignore */ }
 
       caption = formatIpoCardCaption({
         companyName: (ipoData.companyName as string) || '',
@@ -75,12 +87,13 @@ export async function POST(request: NextRequest) {
         numberOfApplications: (ipoData.numberOfApplications as number) || 0,
         appliedUnits: (ipoData.appliedUnits as number) || 0,
         totalAmount: (ipoData.totalAmount as number) || 0,
-        openDate: (ipoData.openDate as string) || '',
+        openDate,
         closeDate,
         oversubscription: ipoData.oversubscription as number | null,
         isOpen: (ipoData.isOpen as boolean) ?? false,
         openedToday: (ipoData.openedToday as boolean) ?? false,
         isLastDay,
+        dayNumber,
       });
       logLabel = (ipoData.companySymbol as string) || 'IPO';
     } else {
