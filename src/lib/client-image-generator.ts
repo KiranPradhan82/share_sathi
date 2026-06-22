@@ -571,6 +571,38 @@ function isSameDay(dateStr: string): boolean {
   }
 }
 
+function getIpoDayNumber(ipo: IpoCardData): number {
+  try {
+    const now = new Date();
+    const nepalDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' }); // "2026-06-22"
+    if (!ipo.openDate) return 0;
+    const todayMs = new Date(nepalDateStr + 'T12:00:00').getTime();
+    const openMs = new Date(ipo.openDate + 'T12:00:00').getTime();
+    const diffDays = Math.round((todayMs - openMs) / (24 * 60 * 60 * 1000));
+    return diffDays >= 0 ? diffDays + 1 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function getIpoStatusLabel(ipo: IpoCardData, isLastDay: boolean): string {
+  if (!ipo.isOpen) return 'CLOSED';
+  if (isLastDay) return 'LAST DAY TO APPLY';
+  const dayNum = getIpoDayNumber(ipo);
+  if (dayNum === 1 || ipo.openedToday) return 'IPO OPENED TODAY';
+  if (dayNum >= 2) {
+    const ordinal = getOrdinal(dayNum);
+    return `${ordinal} DAY FOR THIS IPO`;
+  }
+  return 'NOW OPEN';
+}
+
+function getOrdinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 function formatDateShort(dateStr: string): string {
   try {
     const d = new Date(dateStr + 'T00:00:00');
@@ -593,10 +625,10 @@ export async function generateIpoCardImage(
   const navBar = '#1E3A5F';
   const medBlue = '#2B5797';
   const isOpen = ipo.isOpen;
-  const openedToday = ipo.openedToday;
-  const statusColor = isOpen ? '#16A34A' : '#64748B';
-  const statusLabel = isOpen ? (openedToday ? 'IPO OPENED TODAY' : 'NOW OPEN') : 'CLOSED';
-  const statusEmoji = isOpen ? '\uD83D\uDCC8' : '\uD83D\uDD12';
+  const isLastDay = isSameDay(ipo.closeDate);
+  const statusColor = isOpen ? (isLastDay ? '#DC2626' : '#16A34A') : '#64748B';
+  const statusLabel = getIpoStatusLabel(ipo, isLastDay);
+  const statusEmoji = isOpen ? (isLastDay ? '\u26A0\uFE0F' : '\uD83D\uDCC8') : '\uD83D\uDD12';
 
   const hasSubscriptionData = ipo.numberOfApplications > 0 || ipo.appliedUnits > 0 || ipo.totalAmount > 0;
 
@@ -962,9 +994,9 @@ export async function generateIpoStoryImage(
   const medBlue = '#2B5797';
   const isOpen = ipo.isOpen;
   const openedToday = ipo.openedToday;
-  const isLastDay = isSameDayNepal(ipo.closeDate);
+  const isLastDay = isSameDay(ipo.closeDate);
   const statusColor = isOpen ? (isLastDay ? '#DC2626' : '#16A34A') : '#64748B';
-  const statusLabel = isOpen ? (openedToday ? 'IPO OPENED TODAY' : isLastDay ? 'LAST DAY TO APPLY' : 'NOW OPEN') : 'CLOSED';
+  const statusLabel = getIpoStatusLabel(ipo, isLastDay);
   const statusEmoji = isOpen ? (isLastDay ? '\u26A0\uFE0F' : '\uD83D\uDCC8') : '\uD83D\uDD12';
 
   const hasSubscriptionData = ipo.numberOfApplications > 0 || ipo.appliedUnits > 0 || ipo.totalAmount > 0;
