@@ -60,11 +60,9 @@ export async function POST(request: NextRequest) {
       let isLastDay = (ipoData.isLastDay as boolean) || false;
       if (!isLastDay && closeDate) {
         try {
-          const close = new Date(closeDate + 'T00:00:00+05:45');
-          const nepalNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }));
-          isLastDay = close.getFullYear() === nepalNow.getFullYear() &&
-            close.getMonth() === nepalNow.getMonth() &&
-            close.getDate() === nepalNow.getDate();
+          const now = new Date();
+          const nepalDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' });
+          isLastDay = closeDate === nepalDateStr;
         } catch { /* ignore */ }
       }
 

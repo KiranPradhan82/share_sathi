@@ -449,12 +449,9 @@ export async function POST(request: NextRequest) {
       let isLastDay = ipoInfo.isLastDay || false;
       if (!isLastDay && ipoCloseDate) {
         try {
-          const close = new Date(ipoCloseDate + 'T00:00:00+05:45');
           const now = new Date();
-          const nepalNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }));
-          isLastDay = close.getFullYear() === nepalNow.getFullYear() &&
-            close.getMonth() === nepalNow.getMonth() &&
-            close.getDate() === nepalNow.getDate();
+          const nepalDateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' }); // "2026-06-22"
+          isLastDay = ipoCloseDate === nepalDateStr;
         } catch { /* ignore */ }
       }
 
