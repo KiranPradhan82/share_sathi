@@ -34,6 +34,9 @@ import {
   Upload,
   X,
   Rss,
+  Clock,
+  FileText,
+  ExternalLink,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -340,6 +343,17 @@ export default function HomePage() {
   const [ipoCardImages, setIpoCardImages] = useState<Array<{ image: string; data: IpoCardData }>>([]);
   const [isGeneratingIpoImages, setIsGeneratingIpoImages] = useState(false);
   const [postingIpoIndex, setPostingIpoIndex] = useState<number | null>(null);
+
+  // Upcoming IPO + SEBON pipeline state
+  const [upcomingIpoData, setUpcomingIpoData] = useState<Array<{
+    id: number; symbol: string; companyName: string; sector: string;
+    units: number; totalAmount: number; applicationDate: string;
+    sebonDate: string; issueManager: string; shareType: string;
+  }> | null>(null);
+  const [sebonPipelineData, setSebonPipelineData] = useState<Array<{
+    title: string; date: string; englishUrl: string; nepaliUrl: string;
+  }> | null>(null);
+  const [ipoActiveTab, setIpoActiveTab] = useState<'cdsc' | 'upcoming' | 'sebon'>('cdsc');
 
   // Story state
   const [postingStoryIndex, setPostingStoryIndex] = useState<number | null>(null);
@@ -709,11 +723,14 @@ export default function HomePage() {
       const res = await fetch('/api/news/ipo-status');
       const json = await res.json();
       if (json.success) {
-        setIpoData(json.data);
+        setIpoData(json.cdsc || []);
+        setUpcomingIpoData(json.upcoming || []);
+        setSebonPipelineData(json.sebonPipeline || []);
+        const total = (json.cdscCount || 0) + (json.upcomingCount || 0);
         if (json.cached) {
-          toast.info(`${json.count} IPO(s) — cached ${json.cacheAge}s ago`);
+          toast.info(`${total} IPO records — cached ${json.cacheAge}s ago`);
         } else {
-          toast.success(`Fetched ${json.count} IPO(s) from CDSC`);
+          toast.success(`Fetched ${json.cdscCount || 0} active + ${json.upcomingCount || 0} upcoming IPOs`);
         }
       } else {
         toast.error(json.error || 'Failed to fetch IPO data');
@@ -2408,7 +2425,38 @@ export default function HomePage() {
           </div>
         </div>
 
-        {ipoData === null ? (
+        {/* IPO Tab Navigation */}
+        {(ipoData !== null || upcomingIpoData !== null || sebonPipelineData !== null) && (
+          <div className="flex gap-1 border-b">
+            <button
+              onClick={() => setIpoActiveTab('cdsc')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                ipoActiveTab === 'cdsc' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Active IPOs{ipoData !== null ? ` (${ipoData.length})` : ''}
+            </button>
+            <button
+              onClick={() => setIpoActiveTab('upcoming')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                ipoActiveTab === 'upcoming' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Upcoming IPOs{upcomingIpoData !== null ? ` (${upcomingIpoData.length})` : ''}
+            </button>
+            <button
+              onClick={() => setIpoActiveTab('sebon')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                ipoActiveTab === 'sebon' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              SEBON Pipeline{sebonPipelineData !== null ? ` (${sebonPipelineData.length})` : ''}
+            </button>
+          </div>
+        )}
+
+        {ipoActiveTab === 'cdsc' && (
+          ipoData === null ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Newspaper className="h-12 w-12 text-muted-foreground mb-4" />
@@ -2545,8 +2593,122 @@ export default function HomePage() {
             <p className="text-xs text-muted-foreground text-center">
               Data source: CDSC Nepal (cdsc.com.np) · Last fetched: {new Date().toLocaleString()}
             </p>
+          </div>
+        ))}
 
-            {/* ---- Reels Upload Section ---- */}
+        {ipoActiveTab === 'upcoming' && (
+          upcomingIpoData === null ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <Clock className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-1">No Data Loaded</h3>
+                <p className="text-sm text-muted-foreground">Click &quot;Fetch IPO Data&quot; to load upcoming IPOs</p>
+              </CardContent>
+            </Card>
+          ) : upcomingIpoData.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <Clock className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-1">No Upcoming IPOs</h3>
+                <p className="text-sm text-muted-foreground">There are no upcoming IPOs in the pipeline</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Upcoming IPOs ({upcomingIpoData.length})</CardTitle>
+                <CardDescription>Companies applied for IPO — waiting for SEBON approval &amp; opening date</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-[600px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Symbol</TableHead>
+                        <TableHead className="min-w-[200px]">Company</TableHead>
+                        <TableHead>Sector</TableHead>
+                        <TableHead className="text-right">Units</TableHead>
+                        <TableHead className="text-right">Total Amount</TableHead>
+                        <TableHead>Applied On</TableHead>
+                        <TableHead>SEBON Date</TableHead>
+                        <TableHead>Issue Manager</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {upcomingIpoData.map((ipo, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-mono font-semibold text-sm">{ipo.symbol || '—'}</TableCell>
+                          <TableCell className="text-sm">{ipo.companyName}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{ipo.sector || '—'}</TableCell>
+                          <TableCell className="text-right font-mono text-sm">{ipo.units > 0 ? ipo.units.toLocaleString() : '—'}</TableCell>
+                          <TableCell className="text-right font-mono text-sm">{ipo.totalAmount > 0 ? `Rs. ${formatNepaliAmount(ipo.totalAmount)}` : '—'}</TableCell>
+                          <TableCell className="text-xs font-mono">{ipo.applicationDate || '—'}</TableCell>
+                          <TableCell className="text-xs font-mono">{ipo.sebonDate || '—'}</TableCell>
+                          <TableCell className="text-xs">{ipo.issueManager || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        )}
+
+        {ipoActiveTab === 'sebon' && (
+          sebonPipelineData === null ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-1">No Data Loaded</h3>
+                <p className="text-sm text-muted-foreground">Click &quot;Fetch IPO Data&quot; to load SEBON pipeline</p>
+              </CardContent>
+            </Card>
+          ) : sebonPipelineData.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-1">No SEBON Entries</h3>
+                <p className="text-sm text-muted-foreground">There are no entries in the SEBON pipeline</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>SEBON IPO Pipeline ({sebonPipelineData.length})</CardTitle>
+                <CardDescription>Official IPO application lists published by SEBON (sebon.gov.np)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {sebonPipelineData.map((entry, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                      <div>
+                        <div className="font-medium text-sm">{entry.title}</div>
+                        <div className="text-xs text-muted-foreground">Published: {entry.date}</div>
+                      </div>
+                      <div className="flex gap-2">
+                        {entry.englishUrl && (
+                          <a href={entry.englishUrl} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 border border-blue-200">
+                            <ExternalLink className="h-3 w-3" /> English
+                          </a>
+                        )}
+                        {entry.nepaliUrl && (
+                          <a href={entry.nepaliUrl} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-orange-50 text-orange-700 rounded-md hover:bg-orange-100 border border-orange-200">
+                            <ExternalLink className="h-3 w-3" /> Nepali
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        )}
+
+        {/* ---- Reels Upload Section ---- */}
             <Card className="mt-6">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -2629,8 +2791,6 @@ export default function HomePage() {
                 </Button>
               </CardContent>
             </Card>
-          </div>
-        )}
       </div>
     );
   };
