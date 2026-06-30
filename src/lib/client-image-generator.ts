@@ -1312,3 +1312,154 @@ export async function generateMarketStoryFromImage(
     }, 'image/png');
   });
 }
+
+// ---- IPO Result Card Image (1080x1080) ----
+export async function generateIpoResultCardImage(
+  ipo: IpoCardData,
+  fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>,
+): Promise<string> {
+  const gold = '#D97706';
+  const darkGold = '#92400E';
+  const white = '#FFFFFF';
+  const lightBg = '#FFFBEB';
+  const fmtAmt = (n: number) => formatIpoAmount(n);
+  const mgrDisplay = ipo.issueManager.length > 28 ? ipo.issueManager.substring(0, 26) + '...' : ipo.issueManager;
+
+  const statusLabel = 'IPO RESULT OUT';
+  const sub = ipo.oversubscription;
+
+  const metrics: Array<{ label: string; value: string; color: string }> = [];
+  metrics.push({ label: 'ISSUED UNITS', value: ipo.issuedUnits.toLocaleString(), color: '#1E3A5F' });
+  metrics.push({ label: 'APPLICATIONS', value: ipo.numberOfApplications > 0 ? ipo.numberOfApplications.toLocaleString() : 'N/A', color: '#7C3AED' });
+  metrics.push({ label: 'APPLIED UNITS', value: ipo.appliedUnits > 0 ? fmtAmt(ipo.appliedUnits) : 'N/A', color: '#059669' });
+  metrics.push({ label: 'TOTAL AMOUNT', value: ipo.totalAmount > 0 ? `Rs. ${fmtAmt(ipo.totalAmount)}` : 'N/A', color: '#DC2626' });
+  if (sub !== null && sub > 0) {
+    metrics.push({ label: 'OVERSUBSCRIPTION', value: `${sub.toFixed(2)}x Times`, color: '#EA580C' });
+  }
+
+  const jsx = {
+    type: 'div' as const,
+    props: {
+      style: {
+        width: '100%', height: '100%', padding: '60px', backgroundColor: lightBg,
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        fontFamily: 'Inter, sans-serif', position: 'relative', overflow: 'hidden',
+      },
+      children: [
+        // Top status bar
+        {
+          type: 'div' as const,
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+            children: [
+              { type: 'div' as const, props: { style: { display: 'flex', alignItems: 'center', gap: '10px' }, children: [
+                { type: 'div' as const, props: { style: { width: '48px', height: '48px', borderRadius: '12px', backgroundColor: gold, display: 'flex', alignItems: 'center', justifyContent: 'center' }, children: [
+                  { type: 'div' as const, props: { style: { fontSize: '24px', color: white } , children: ['\uD83C\uDFC6'] } },
+                ] } },
+                { type: 'div' as const, props: { style: { fontSize: '18px', fontWeight: 800, color: darkGold, letterSpacing: '2px' }, children: [statusLabel] } },
+              ] } },
+              { type: 'div' as const, props: { style: { fontSize: '12px', color: '#78716C', fontWeight: 500 }, children: ['Share Sathi'] } },
+            ],
+          },
+        },
+        // Company name
+        { type: 'div' as const, props: { style: { fontSize: '34px', fontWeight: 900, color: '#1C1917', lineHeight: 1.2, marginBottom: '4px' }, children: [ipo.companyName] } },
+        { type: 'div' as const, props: { style: { fontSize: '16px', color: '#57534E', fontWeight: 600, marginBottom: '24px' }, children: [
+          ipo.companySymbol ? `${ipo.companySymbol}  |  ${ipo.ipoType}` : ipo.ipoType,
+        ] } },
+        // Metrics grid
+        {
+          type: 'div' as const,
+          props: {
+            style: { display: 'grid', gridTemplateColumns: metrics.length >= 5 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: '16px', marginBottom: '24px' },
+            children: metrics.map(m => ({
+              type: 'div' as const,
+              props: {
+                style: { backgroundColor: white, borderRadius: '16px', padding: '20px', border: '1px solid #E7E5E4' },
+                children: [
+                  { type: 'div' as const, props: { style: { fontSize: '11px', fontWeight: 700, color: m.color, letterSpacing: '1px', marginBottom: '8px' }, children: [m.label] } },
+                  { type: 'div' as const, props: { style: { fontSize: '22px', fontWeight: 800, color: '#1C1917' }, children: [m.value] } },
+                ],
+              },
+            })),
+          },
+        },
+        // Issue manager
+        { type: 'div' as const, props: { style: { fontSize: '13px', color: '#78716C', marginBottom: '4px' }, children: [`Issue Manager: ${mgrDisplay}`] } },
+        // Date range
+        { type: 'div' as const, props: { style: { fontSize: '13px', color: '#78716C' }, children: [
+          `${ipo.openDate ? formatDateShort(ipo.openDate) : '?'}  to  ${ipo.closeDate ? formatDateShort(ipo.closeDate) : '?'}`,
+        ] } },
+        // Watermark
+        logoWatermark(),
+      ],
+    },
+  };
+
+  const svg = await satori(jsx, { width: WIDTH, height: HEIGHT, fonts });
+  return svgToPngBase64(svg);
+}
+
+// ---- IPO Result Story Image (1080x1920) ----
+export async function generateIpoResultStoryImage(
+  ipo: IpoCardData,
+  fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>,
+): Promise<string> {
+  const cardImage = await generateIpoResultCardImage(ipo, fonts);
+  const blob = await (await fetch(cardImage)).blob();
+  const img = await createImageBitmap(blob);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1920;
+  const ctx = canvas.getContext('2d')!;
+
+  // Dark gradient background
+  const grad = ctx.createLinearGradient(0, 0, 0, 1920);
+  grad.addColorStop(0, '#1C1917');
+  grad.addColorStop(1, '#292524');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 1080, 1920);
+
+  // Title at top
+  ctx.fillStyle = '#D97706';
+  ctx.font = 'bold 36px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('IPO RESULT OUT', 540, 120);
+
+  // Card image in center
+  const imgSize = 920;
+  const imgX = (1080 - imgSize) / 2;
+  const imgY = 200;
+  const radius = 24;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(imgX + radius, imgY);
+  ctx.lineTo(imgX + imgSize - radius, imgY);
+  ctx.quadraticCurveTo(imgX + imgSize, imgY, imgX + imgSize, imgY + radius);
+  ctx.lineTo(imgX + imgSize, imgY + imgSize - radius);
+  ctx.quadraticCurveTo(imgX + imgSize, imgY + imgSize, imgX + imgSize - radius, imgY + imgSize);
+  ctx.lineTo(imgX + radius, imgY + imgSize);
+  ctx.quadraticCurveTo(imgX, imgY + imgSize, imgX, imgY + imgSize - radius);
+  ctx.lineTo(imgX, imgY + radius);
+  ctx.quadraticCurveTo(imgX, imgY, imgX + radius, imgY);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(img, imgX, imgY, imgSize, imgSize);
+  ctx.restore();
+
+  // Watermark
+  ctx.fillStyle = '#ffffff33';
+  ctx.font = '800 28px Inter, sans-serif';
+  ctx.fillText('SHARE SATHI', 540, 1870);
+
+  return new Promise<string>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) { reject(new Error('Failed to create result story image')); return; }
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    }, 'image/png');
+  });
+}

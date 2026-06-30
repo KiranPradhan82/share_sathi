@@ -14,29 +14,8 @@ export async function POST(request: NextRequest) {
     // Fetch NEPSE data
     const nepseData = await fetchNepseData(date);
 
-    // Check for existing entry
-    const existing = await db.marketData.findUnique({
-      where: { tradingDate: nepseData.tradingDate },
-    });
-
-    if (existing) {
-      await db.systemEvent.create({
-        data: {
-          eventType: 'fetch',
-          entityType: 'market_data',
-          entityId: existing.id,
-          description: `Market data for ${nepseData.tradingDate} already exists. Skipped fetch.`,
-          severity: 'info',
-        },
-      });
-
-      return NextResponse.json({
-        data: existing,
-        message: 'Data for this date already exists',
-      });
-    }
-
-    // Create new market data entry (upsert to avoid UNIQUE constraint race conditions)
+    // Always upsert — ensures we always have the most recent data from the source,
+    // even if a record for this date already exists (data may update during trading hours).
     const data = await db.marketData.upsert({
       where: { tradingDate: nepseData.tradingDate },
       update: {

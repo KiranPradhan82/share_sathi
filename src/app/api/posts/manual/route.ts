@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 300;
 import { db } from '@/lib/db';
 import { fetchNepseData } from '@/lib/nepse';
-import { formatMarketUpdate, formatImageCaption, formatGainersCaption, formatLosersCaption, formatStockCardCaption, formatIpoCardCaption } from '@/lib/content-formatter';
+import { formatMarketUpdate, formatImageCaption, formatGainersCaption, formatLosersCaption, formatStockCardCaption, formatIpoCardCaption, formatIpoResultCaption } from '@/lib/content-formatter';
 import { postToFacebook } from '@/lib/facebook';
 import { postPhotoToFacebook } from '@/lib/facebook-photo';
 import { parseTopStocksFromRawData, parseStockDataFromRawData } from '@/lib/nepse';
@@ -523,6 +523,44 @@ export async function POST(request: NextRequest) {
         postId: result.postId,
         error: result.error,
       });
+    }
+
+    // ---- IPO RESULT CARD MODE ----
+    if (mode === 'ipo_result_card' && clientImages && clientImages.ipoResultCardImage) {
+      const ipoInfo = clientImages.ipoInfo as unknown as {
+        companyName: string; companySymbol: string; ipoType: string; issueManager: string;
+        issuedUnits: number; numberOfApplications: number; appliedUnits: number;
+        totalAmount: number; openDate: string; closeDate: string; oversubscription: number | null;
+      } | undefined;
+      if (!ipoInfo) return NextResponse.json({ error: 'Missing ipoInfo for IPO result card post' }, { status: 400 });
+
+      let imageBuffer: Buffer;
+      try { imageBuffer = dataUriToBuffer(clientImages.ipoResultCardImage); }
+      catch (convErr) { return NextResponse.json({ error: `Failed to decode image: ${convErr instanceof Error ? convErr.message : 'Unknown'}` }, { status: 400 }); }
+
+      const caption = formatIpoResultCaption(ipoInfo);
+      const fbPost = await db.facebookPost.create({
+        data: { marketDataId: marketData.id, message: `[IPO RESULT] ${ipoInfo.companyName}: ${caption.substring(0, 100)}...`, status: 'posting', attemptCount: 1 },
+      });
+      await db.systemEvent.create({
+        data: { eventType: 'post', entityType: 'facebook_post', entityId: fbPost.id, facebookPostId: fbPost.id,
+          description: `Posting IPO result card for ${ipoInfo.companyName} (${Math.round(imageBuffer.length / 1024)}KB)...`, severity: 'info' },
+      });
+      const result = await postPhotoToFacebook(imageBuffer, caption, pageAccessToken, pageId);
+      if (result.success) {
+        await db.facebookPost.update({ where: { id: fbPost.id }, data: { status: 'success', facebookPostId: result.postId || null, postedTime: new Date() } });
+        await db.systemEvent.create({
+          data: { eventType: 'post', entityType: 'facebook_post', entityId: fbPost.id, facebookPostId: fbPost.id,
+            description: `Successfully posted ${ipoInfo.companyName} IPO result card. FB ID: ${result.postId}`, severity: 'success' },
+        });
+      } else {
+        await db.facebookPost.update({ where: { id: fbPost.id }, data: { status: 'failed', attemptCount: 1, errorMessage: result.error || 'Unknown error' } });
+        await db.systemEvent.create({
+          data: { eventType: 'post', entityType: 'facebook_post', entityId: fbPost.id, facebookPostId: fbPost.id,
+            description: `Failed to post ${ipoInfo.companyName} IPO result card: ${result.error}`, severity: 'error' },
+        });
+      }
+      return NextResponse.json({ success: result.success, mode: 'ipo_result_card', postId: result.postId, error: result.error });
     }
 
     // ---- TEXT MODE ----

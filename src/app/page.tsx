@@ -37,6 +37,7 @@ import {
   Clock,
   FileText,
   ExternalLink,
+  Trophy,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -74,7 +75,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import { generateImagesInBrowser, generateIpoCardImage, generateIpoStoryImage, generateMarketStoryFromImage, type IpoCardData } from '@/lib/client-image-generator';
+import { generateImagesInBrowser, generateIpoCardImage, generateIpoStoryImage, generateMarketStoryFromImage, generateIpoResultCardImage, generateIpoResultStoryImage, type IpoCardData } from '@/lib/client-image-generator';
 import { parseStockDataFromRawData } from '@/lib/nepse';
 import type { StockData } from '@/lib/nepse';
 
@@ -353,7 +354,22 @@ export default function HomePage() {
   const [sebonPipelineData, setSebonPipelineData] = useState<Array<{
     title: string; date: string; englishUrl: string; nepaliUrl: string;
   }> | null>(null);
-  const [ipoActiveTab, setIpoActiveTab] = useState<'cdsc' | 'upcoming' | 'sebon'>('cdsc');
+  const [ipoActiveTab, setIpoActiveTab] = useState<'cdsc' | 'upcoming' | 'sebon' | 'results'>('cdsc');
+
+  // IPO Result state
+  const [ipoResultNews, setIpoResultNews] = useState<Array<{
+    id: string; externalId: string; source: string; headline: string; summary: string;
+    category: string; language: string; publishedAt: string; fetchedAt: string;
+    isPosted: boolean; postedAt: string | null;
+  }>>([]);
+  const [isFetchingIpoResultNews, setIsFetchingIpoResultNews] = useState(false);
+  const [isLoadingIpoResultNews, setIsLoadingIpoResultNews] = useState(false);
+  const [postingIpoResultNewsId, setPostingIpoResultNewsId] = useState<string | null>(null);
+  const [ipoResultCardImages, setIpoResultCardImages] = useState<Array<{ image: string; data: IpoCardData }>>([]);
+  const [isGeneratingIpoResultImages, setIsGeneratingIpoResultImages] = useState(false);
+  const [postingIpoResultCardIdx, setPostingIpoResultCardIdx] = useState<number | null>(null);
+  const [postingIpoResultStoryIdx, setPostingIpoResultStoryIdx] = useState<number | null>(null);
+  const [postedIpoResultStoryIdxs, setPostedIpoResultStoryIdxs] = useState<Set<number>>(new Set());
 
   // Story state
   const [postingStoryIndex, setPostingStoryIndex] = useState<number | null>(null);
@@ -565,7 +581,7 @@ export default function HomePage() {
       const res = await fetch('/api/market-data/fetch', { method: 'POST' });
       const json = await res.json();
       if (res.ok) {
-        toast.success('Market data fetched!');
+        toast.success(json.message || 'Market data updated!');
         fetchMarketData(1);
         fetchLatestData();
         fetchSystemStatus();
@@ -872,6 +888,110 @@ export default function HomePage() {
     } finally {
       setPostingStoryIndex(null);
     }
+  };
+
+  // ---- IPO Result handlers ----
+  const handleFetchIpoResultNews = async () => {
+    setIsFetchingIpoResultNews(true);
+    try {
+      const res = await fetch('/api/news/ipo-result', { method: 'POST' });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Fetched ${json.totalScraped} result news, ${json.added} new`);
+        loadIpoResultNews();
+      } else {
+        toast.error(json.error || 'Failed to fetch IPO result news');
+      }
+    } catch { toast.error('Network error'); } finally { setIsFetchingIpoResultNews(false); }
+  };
+
+  const loadIpoResultNews = async () => {
+    setIsLoadingIpoResultNews(true);
+    try {
+      const res = await fetch('/api/news/latest?category=ipo&source=sharesansar&limit=30');
+      if (res.ok) {
+        const json = await res.json();
+        const results = (json.items || []).filter((item: { headline: string }) =>
+          /result|allotment|निष्कासन|आवंटन/i.test(item.headline)
+        );
+        setIpoResultNews(results);
+      }
+    } catch { /* ignore */ } finally { setIsLoadingIpoResultNews(false); }
+  };
+
+  const handlePostIpoResultNews = async (newsId: string) => {
+    setPostingIpoResultNewsId(newsId);
+    try {
+      const res = await fetch('/api/news/post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ newsId }) });
+      const json = await res.json();
+      if (json.success) {
+        toast.success('IPO result news posted!');
+        setIpoResultNews(prev => prev.map(n => n.id === newsId ? { ...n, isPosted: true, postedAt: new Date().toISOString() } : n));
+      } else { toast.error(`Failed: ${json.error || 'Unknown'}`); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed'); } finally { setPostingIpoResultNewsId(null); }
+  };
+
+  const handleGenerateIpoResultImages = async () => {
+    if (!ipoData || ipoData.length === 0) { toast.error('Fetch IPO data first'); return; }
+    const closedWithResults = ipoData.filter(ipo => !isIpoCurrentlyOpen(ipo.closeDate) && ipo.numberOfApplications > 0 && ipo.appliedUnits > 0);
+    if (closedWithResults.length === 0) { toast.error('No closed IPOs with result data'); return; }
+    setIsGeneratingIpoResultImages(true);
+    setIpoResultCardImages([]);
+    try {
+      const weights = [400, 500, 600, 700, 800, 900];
+      const fonts = await Promise.all(weights.map(async (w) => {
+        const r = await fetch(`/fonts/Inter-${w}.woff`);
+        return { name: 'Inter' as const, data: await r.arrayBuffer(), weight: w, style: 'normal' as const };
+      }));
+      const cards: Array<{ image: string; data: IpoCardData }> = [];
+      for (const ipo of closedWithResults) {
+        const cardData: IpoCardData = { ...ipo, isOpen: false, openedToday: false };
+        cards.push({ image: await generateIpoResultCardImage(cardData, fonts), data: cardData });
+      }
+      setIpoResultCardImages(cards);
+      toast.success(`${cards.length} IPO result card(s) generated!`);
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to generate'); } finally { setIsGeneratingIpoResultImages(false); }
+  };
+
+  const handlePostIpoResultCard = async (idx: number) => {
+    const card = ipoResultCardImages[idx];
+    if (!card) return;
+    setPostingIpoResultCardIdx(idx);
+    try {
+      const res = await fetch('/api/posts/manual', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'ipo_result_card', images: { ipoResultCardImage: card.image, ipoInfo: card.data } }),
+      });
+      const json = await res.json();
+      if (json.success) toast.success(`${card.data.companyName} result card posted!`);
+      else toast.error(`Failed: ${json.error || 'Unknown'}`);
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed'); } finally { setPostingIpoResultCardIdx(null); }
+  };
+
+  const handlePostIpoResultStory = async (idx: number) => {
+    const card = ipoResultCardImages[idx];
+    if (!card) return;
+    setPostingIpoResultStoryIdx(idx);
+    try {
+      const weights = [400, 500, 600, 700, 800, 900];
+      const fonts = await Promise.all(weights.map(async (w) => {
+        const r = await fetch(`/fonts/Inter-${w}.woff`);
+        return { name: 'Inter' as const, data: await r.arrayBuffer(), weight: w, style: 'normal' as const };
+      }));
+      const storyImage = await generateIpoResultStoryImage(card.data, fonts);
+      const res = await fetch('/api/posts/story', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: storyImage, ipoData: card.data }) });
+      const json = await res.json();
+      if (json.success) { toast.success(`${card.data.companyName} result Story posted!`); setPostedIpoResultStoryIdxs(prev => new Set(prev).add(idx)); }
+      else toast.error(`Failed: ${json.error || 'Unknown'}`);
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed'); } finally { setPostingIpoResultStoryIdx(null); }
+  };
+
+  const handleDownloadIpoResultCard = (idx: number) => {
+    const { image, data } = ipoResultCardImages[idx];
+    const a = document.createElement('a');
+    a.href = image;
+    a.download = `IPO_Result_${data.companySymbol || data.companyName.replace(/\s+/g, '_')}.png`;
+    a.click();
   };
 
   // ---- Reel handlers ----
@@ -2451,6 +2571,14 @@ export default function HomePage() {
               }`}
             >
               SEBON Pipeline{sebonPipelineData !== null ? ` (${sebonPipelineData.length})` : ''}
+            </button>
+            <button
+              onClick={() => setIpoActiveTab('results')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+                ipoActiveTab === 'results' ? 'border-amber-500 text-amber-500' : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Trophy className="h-3.5 w-3.5" /> Results
             </button>
           </div>
         )}

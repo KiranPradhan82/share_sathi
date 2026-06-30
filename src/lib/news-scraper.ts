@@ -474,6 +474,97 @@ export async function fetchAllNews(options?: { fetchSummaries?: boolean; maxPerS
   return { items: deduped, sourceStats, errors };
 }
 
+// ==================== SHARE SANSAR IPO RESULTS ====================
+async function scrapeSharesansarIpoResults(): Promise<NewsItem[]> {
+  const items: NewsItem[] = [];
+  try {
+    const res = await fetch('https://www.sharesansar.com/iporesult', {
+      headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return items;
+    const html = await res.text();
+
+    // Look for links containing iporesult in href that are detail pages
+    const detailRegex = /href="(\/iporesult\/([^"<]+))"[^>]*>([\s\S]*?)<\/a>/gi;
+    const seen = new Set<string>();
+
+    let match;
+    while ((match = detailRegex.exec(html)) !== null) {
+      const slug = match[2];
+      const title = match[3].replace(/<[^>]*>/g, '').trim();
+      if (!title || title.length < 10 || seen.has(slug)) continue;
+      seen.add(slug);
+
+      const dateMatch = slug.match(/(\d{4})(\d{2})(\d{2})$/);
+      let publishedAt = new Date().toISOString();
+      if (dateMatch) {
+        const d = new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`);
+        if (!isNaN(d.getTime())) publishedAt = d.toISOString();
+      }
+
+      items.push({
+        id: extractId('ipo_result', slug.substring(0, 60)),
+        source: 'sharesansar',
+        headline: title,
+        summary: '',
+        category: 'ipo',
+        language: detectLanguage(title),
+        publishedAt,
+        fetchedAt: new Date().toISOString(),
+        url: `https://www.sharesansar.com/iporesult/${slug}`,
+      });
+    }
+
+    // Fallback: try table rows with result/allotment keywords
+    if (items.length === 0) {
+      const rowRegex = /<tr[^>]*>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<\/tr>/gi;
+      while ((match = rowRegex.exec(html)) !== null) {
+        const cell1 = match[1].replace(/<[^>]*>/g, '').trim();
+        const cell2 = match[2].replace(/<[^>]*>/g, '').trim();
+        const cell3 = match[3].replace(/<[^>]*>/g, '').trim();
+        const combined = `${cell1} ${cell2} ${cell3}`;
+        if (!/result|allotment|निष्कासन|आवंटन/i.test(combined)) continue;
+        const headline = cell2.length > cell1.length ? cell2 : cell1;
+        if (headline.length < 10) continue;
+        let publishedAt = new Date().toISOString();
+        if (cell3.length > 6) { const p = new Date(cell3); if (!isNaN(p.getTime())) publishedAt = p.toISOString(); }
+        items.push({
+          id: extractId('ipo_result', `${headline.substring(0, 40).replace(/\s+/g, '-')}-${items.length}`),
+          source: 'sharesansar',
+          headline,
+          summary: '',
+          category: 'ipo',
+          language: detectLanguage(headline),
+          publishedAt,
+          fetchedAt: new Date().toISOString(),
+        });
+      }
+    }
+  } catch (e) {
+    console.error('Sharesansar IPO result scrape error:', e);
+  }
+  return items;
+}
+
+/**
+ * Fetch IPO result news from sharesansar.com/iporesult.
+ */
+export async function fetchIpoResultNews(): Promise<{
+  items: NewsItem[];
+  errors: string[];
+}> {
+  const errors: string[] = [];
+  let items: NewsItem[] = [];
+  try {
+    items = await scrapeSharesansarIpoResults();
+  } catch (e) {
+    errors.push(`sharesansar_ipo_result: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  items.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  return { items, errors };
+}
+
 export async function fetchNewsFromSource(source: string): Promise<NewsItem[]> {
   switch (source) {
     case 'merolagani': return scrapeMerolagani();
@@ -482,6 +573,7 @@ export async function fetchNewsFromSource(source: string): Promise<NewsItem[]> {
     case 'google_news_en': return fetchGoogleNewsRss('en');
     case 'google_news_ne': return fetchGoogleNewsRss('ne');
     case 'myrepublica': return fetchMyRepublicaRss();
+    case 'ipo_result': return scrapeSharesansarIpoResults();
     default: return [];
   }
 }

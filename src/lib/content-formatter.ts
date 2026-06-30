@@ -249,3 +249,49 @@ export function getPostTemplate(): string {
 
 #NEPSE #NepalStockExchange #ShareMarket #ShareSathi`;
 }
+
+export function formatIpoResultCaption(ipo: {
+  companyName: string;
+  companySymbol: string;
+  ipoType: string;
+  issueManager: string;
+  issuedUnits: number;
+  numberOfApplications: number;
+  appliedUnits: number;
+  totalAmount: number;
+  openDate: string;
+  closeDate: string;
+  oversubscription: number | null;
+}): string {
+  const formatAmt = (n: number) => {
+    if (n >= 10000000) return `${(n / 10000000).toFixed(2)} Crore`;
+    if (n >= 100000) return `${(n / 100000).toFixed(2)} Lakhs`;
+    return n.toLocaleString('en-US');
+  };
+
+  const symbol = ipo.companySymbol ? `(${ipo.companySymbol})` : '';
+  const closeStr = ipo.closeDate ? formatDateForCaption(ipo.closeDate) : '';
+
+  let caption = `\uD83C\uDFC6 IPO RESULT OUT!\n\n` +
+    `${ipo.companyName} ${symbol}\n` +
+    `${ipo.ipoType}\n\n` +
+    `\uD83D\uDCB5 Issued Units: ${ipo.issuedUnits.toLocaleString()}\n`;
+
+  if (ipo.numberOfApplications > 0) {
+    caption += `\uD83D\uDC65 Applications: ${ipo.numberOfApplications.toLocaleString()}\n`;
+  }
+  if (ipo.appliedUnits > 0) {
+    caption += `\uD83D\uDCC8 Applied Units: ${formatAmt(ipo.appliedUnits)}\n`;
+  }
+  if (ipo.totalAmount > 0) {
+    caption += `\uD83D\uDCB0 Total Amount: Rs. ${formatAmt(ipo.totalAmount)}\n`;
+  }
+  if (ipo.oversubscription && ipo.oversubscription > 0) {
+    caption += `\uD83D\uDD25 Oversubscribed: ${ipo.oversubscription.toFixed(2)}x times\n`;
+  }
+
+  caption += `\nIssue Manager: ${ipo.issueManager}\n`;
+  caption += `Period: ${ipo.openDate || '?'} to ${closeStr}\n\n`;
+  caption += `#NEPSE #ShareSathi #IPOResult #NepalIPO #${ipo.companySymbol || 'NepalStockMarket'} #StockMarket`;
+  return caption;
+}
