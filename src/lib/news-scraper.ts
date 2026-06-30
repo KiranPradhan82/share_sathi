@@ -475,28 +475,64 @@ export async function fetchAllNews(options?: { fetchSummaries?: boolean; maxPerS
 }
 
 // ==================== SHARE SANSAR IPO RESULTS ====================
+/**
+ * Scrape IPO result / allotment news from the ShareSansar homepage.
+ * The /ipo-result page is a search form (not a listing), and /iporesult returns 404.
+ * The homepage contains newsdetail URLs for IPO allotment articles — we extract those.
+ * We also fetch each article page for a content summary.
+ */
+const IPO_RESULT_KEYWORDS = /allotment|result|आवंटन|निष्कासन|allotted|lottery/i;
+
 async function scrapeSharesansarIpoResults(): Promise<NewsItem[]> {
   const items: NewsItem[] = [];
   try {
-    const res = await fetch('https://www.sharesansar.com/iporesult', {
+    const res = await fetch('https://www.sharesansar.com', {
       headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html' },
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) return items;
     const html = await res.text();
 
-    // Look for links containing iporesult in href that are detail pages
-    const detailRegex = /href="(\/iporesult\/([^"<]+))"[^>]*>([\s\S]*?)<\/a>/gi;
+    // Extract all newsdetail URLs from the page
+    const urlRegex = /https?:\/\/www\.sharesansar\.com\/newsdetail\/([^\s"<>]+)/gi;
+    const allUrls = [...new Set(html.match(urlRegex) || [])];
+
+    // Filter for IPO result / allotment keywords in the URL slug
+    const resultUrls = allUrls.filter(u => IPO_RESULT_KEYWORDS.test(decodeURIComponent(u)));
+
+    // Also find link titles near the URLs in the HTML for better headlines
+    const titleMap = new Map<string, string>();
+    // Look for <a> tags with newsdetail href that contain title text
+    const linkTitleRegex = /href="(https?:\/\/www\.sharesansar\.com\/newsdetail\/([^"]+))"[^>]*>([\s\S]*?)<\/a>/gi;
+    let linkMatch;
+    while ((linkMatch = linkTitleRegex.exec(html)) !== null) {
+      const href = linkMatch[1];
+      const rawTitle = linkMatch[3].replace(/<[^>]*>/g, '').replace(/^\d{1,2}\s+\w+,\s+\d{4}\s*/i, '').trim();
+      if (rawTitle.length > 15) {
+        titleMap.set(href, rawTitle);
+      }
+    }
+
     const seen = new Set<string>();
+    for (const fullUrl of resultUrls) {
+      const slug = fullUrl.replace('https://www.sharesansar.com/newsdetail/', '');
+      const dedupeKey = slug.split('-').slice(0, 5).join('-');
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
 
-    let match;
-    while ((match = detailRegex.exec(html)) !== null) {
-      const slug = match[2];
-      const title = match[3].replace(/<[^>]*>/g, '').trim();
-      if (!title || title.length < 10 || seen.has(slug)) continue;
-      seen.add(slug);
+      // Try to get title from the link text map, or derive from slug
+      let headline = titleMap.get(fullUrl) || '';
+      if (!headline || headline.length < 15) {
+        // Decode URL and convert slug to readable title
+        headline = decodeURIComponent(slug)
+          .replace(/-\d{4}-\d{2}-\d{2}$/, '') // remove trailing date
+          .replace(/-/g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
+      }
 
-      const dateMatch = slug.match(/(\d{4})(\d{2})(\d{2})$/);
+      if (headline.length < 15) continue;
+
+      const dateMatch = slug.match(/(\d{4})-(\d{2})-(\d{2})$/);
       let publishedAt = new Date().toISOString();
       if (dateMatch) {
         const d = new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`);
@@ -506,40 +542,28 @@ async function scrapeSharesansarIpoResults(): Promise<NewsItem[]> {
       items.push({
         id: extractId('ipo_result', slug.substring(0, 60)),
         source: 'sharesansar',
-        headline: title,
+        headline,
         summary: '',
         category: 'ipo',
-        language: detectLanguage(title),
+        language: detectLanguage(headline),
         publishedAt,
         fetchedAt: new Date().toISOString(),
-        url: `https://www.sharesansar.com/iporesult/${slug}`,
+        url: fullUrl,
       });
     }
 
-    // Fallback: try table rows with result/allotment keywords
-    if (items.length === 0) {
-      const rowRegex = /<tr[^>]*>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<\/tr>/gi;
-      while ((match = rowRegex.exec(html)) !== null) {
-        const cell1 = match[1].replace(/<[^>]*>/g, '').trim();
-        const cell2 = match[2].replace(/<[^>]*>/g, '').trim();
-        const cell3 = match[3].replace(/<[^>]*>/g, '').trim();
-        const combined = `${cell1} ${cell2} ${cell3}`;
-        if (!/result|allotment|निष्कासन|आवंटन/i.test(combined)) continue;
-        const headline = cell2.length > cell1.length ? cell2 : cell1;
-        if (headline.length < 10) continue;
-        let publishedAt = new Date().toISOString();
-        if (cell3.length > 6) { const p = new Date(cell3); if (!isNaN(p.getTime())) publishedAt = p.toISOString(); }
-        items.push({
-          id: extractId('ipo_result', `${headline.substring(0, 40).replace(/\s+/g, '-')}-${items.length}`),
-          source: 'sharesansar',
-          headline,
-          summary: '',
-          category: 'ipo',
-          language: detectLanguage(headline),
-          publishedAt,
-          fetchedAt: new Date().toISOString(),
-        });
-      }
+    // Fetch article summaries for each item (limit concurrency)
+    const CONCURRENCY = 3;
+    for (let i = 0; i < items.length; i += CONCURRENCY) {
+      const batch = items.slice(i, i + CONCURRENCY);
+      await Promise.allSettled(
+        batch.map(async (item) => {
+          if (item.url) {
+            const summary = await fetchArticleSummary(item.url, 'sharesansar');
+            if (summary) item.summary = summary;
+          }
+        }),
+      );
     }
   } catch (e) {
     console.error('Sharesansar IPO result scrape error:', e);
@@ -548,7 +572,7 @@ async function scrapeSharesansarIpoResults(): Promise<NewsItem[]> {
 }
 
 /**
- * Fetch IPO result news from sharesansar.com/iporesult.
+ * Fetch IPO result news from sharesansar homepage.
  */
 export async function fetchIpoResultNews(): Promise<{
   items: NewsItem[];

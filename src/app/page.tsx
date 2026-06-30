@@ -2836,6 +2836,149 @@ export default function HomePage() {
           )
         )}
 
+        {ipoActiveTab === 'results' && (
+          <div className="space-y-4">
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                className="gap-2"
+                disabled={isFetchingIpoResultNews}
+                onClick={handleFetchIpoResultNews}
+              >
+                {isFetchingIpoResultNews ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rss className="h-4 w-4" />}
+                Fetch IPO Result News
+              </Button>
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled={isGeneratingIpoResultImages || ipoData === null || ipoData.length === 0}
+                onClick={handleGenerateIpoResultImages}
+              >
+                {isGeneratingIpoResultImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                Generate Result Cards
+              </Button>
+            </div>
+
+            {/* Loading state */}
+            {isLoadingIpoResultNews && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span className="ml-2 text-sm text-muted-foreground">Loading IPO result news...</span>
+              </div>
+            )}
+
+            {/* News articles list */}
+            {!isLoadingIpoResultNews && ipoResultNews.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-amber-500" />
+                    IPO Result News ({ipoResultNews.length})
+                  </CardTitle>
+                  <CardDescription>Latest IPO allotment &amp; result news from ShareSansar</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {ipoResultNews.map((news) => (
+                      <div key={news.id} className="flex items-start justify-between gap-3 p-3 rounded-lg border bg-card">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">{news.headline}</div>
+                          {news.summary && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{news.summary}</p>
+                          )}
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {new Date(news.publishedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            {news.isPosted && (
+                              <Badge variant="secondary" className="ml-2 text-[10px]">Posted</Badge>
+                            )}
+                          </div>
+                        </div>
+                        {!news.isPosted && (
+                          <Button
+                            size="sm"
+                            className="shrink-0 gap-1 text-xs"
+                            disabled={postingIpoResultNewsId === news.id}
+                            onClick={() => handlePostIpoResultNews(news.id)}
+                          >
+                            {postingIpoResultNewsId === news.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                            Post
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {!isLoadingIpoResultNews && ipoResultNews.length === 0 && (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <Trophy className="h-10 w-10 text-muted-foreground mb-3" />
+                  <h3 className="text-base font-semibold mb-1">No IPO Result News</h3>
+                  <p className="text-sm text-muted-foreground">Click &quot;Fetch IPO Result News&quot; to scrape latest allotment news from ShareSansar</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Generated Result Card Images */}
+            {isGeneratingIpoResultImages && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span className="ml-2 text-sm text-muted-foreground">Generating IPO result card images...</span>
+              </div>
+            )}
+
+            {ipoResultCardImages.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Generated Result Cards ({ipoResultCardImages.length})</CardTitle>
+                  <CardDescription>Image cards for closed IPOs — post to Facebook feed or as Story</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {ipoResultCardImages.map((card, idx) => (
+                      <Card key={idx} className="overflow-hidden">
+                        <div className="aspect-square relative">
+                          <img src={card.image} alt={card.data.companyName} className="w-full h-full object-contain bg-white" />
+                          {postedIpoResultStoryIdxs.has(idx) && (
+                            <div className="absolute top-1 right-1 bg-purple-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">Story</div>
+                          )}
+                        </div>
+                        <CardContent className="p-2 flex gap-1">
+                          <Button
+                            size="sm"
+                            className="flex-1 gap-1 text-xs"
+                            disabled={postingIpoResultCardIdx === idx}
+                            onClick={() => handlePostIpoResultCard(idx)}
+                          >
+                            {postingIpoResultCardIdx === idx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                            Post
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1 text-xs text-purple-600 border-purple-300 hover:bg-purple-50"
+                            disabled={postingIpoResultStoryIdx === idx}
+                            onClick={() => handlePostIpoResultStory(idx)}
+                            title="Post as Facebook Story"
+                          >
+                            {postingIpoResultStoryIdx === idx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Newspaper className="h-3 w-3" />}
+                            Story
+                          </Button>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => handleDownloadIpoResultCard(idx)}>
+                            <Download className="h-3 w-3" />
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
         {/* ---- Reels Upload Section ---- */}
             <Card className="mt-6">
               <CardHeader className="pb-3">
