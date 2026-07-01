@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Eye, EyeOff, Sprout, ShieldCheck } from 'lucide-react';
+import { Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 
 export default function SetupPage() {
   const router = useRouter();
@@ -89,9 +89,11 @@ export default function SetupPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-3">
-          <div className="mx-auto flex items-center justify-center w-14 h-14 rounded-2xl bg-green-500/10">
-            <Sprout className="h-7 w-7 text-green-500" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="Share Sathi"
+            className="mx-auto h-16 w-16 rounded-2xl object-cover shadow-lg"
+          />
           <CardTitle className="text-2xl font-bold">Create Your Account</CardTitle>
           <CardDescription>
             This is the first time you&apos;re accessing Share Sathi. Create your admin account to get started.

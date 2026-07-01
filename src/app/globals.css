@@ -120,3 +120,54 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ---- Splash Screen Animations ---- */
+@keyframes splash-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes splash-bar-fill {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+@keyframes splash-fade-in {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.splash-logo-wrapper {
+  animation: splash-pulse 1.8s ease-in-out infinite;
+}
+
+.splash-logo-img {
+  width: 96px;
+  height: 96px;
+  border-radius: 20px;
+  object-fit: cover;
+}
+
+.splash-text {
+  animation: splash-fade-in 0.8s ease-out 0.4s both;
+}
+
+.splash-bar-container {
+  width: 160px;
+  height: 3px;
+  background: oklch(0.269 0 0);
+  border-radius: 9999px;
+  overflow: hidden;
+  animation: splash-fade-in 0.6s ease-out 0.6s both;
+}
+
+.dark .splash-bar-container {
+  background: oklch(1 0 0 / 15%);
+}
+
+.splash-bar {
+  height: 100%;
+  background: oklch(0.488 0.243 264.376);
+  border-radius: 9999px;
+  animation: splash-bar-fill 1.5s ease-in-out 0.3s both;
+}
