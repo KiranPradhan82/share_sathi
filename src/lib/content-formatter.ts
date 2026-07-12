@@ -295,3 +295,17 @@ export function formatIpoResultCaption(ipo: {
   caption += `#NEPSE #ShareSathi #IPOResult #NepalIPO #${ipo.companySymbol || 'NepalStockMarket'} #StockMarket`;
   return caption;
 }
+
+export function formatNewsCardCaption(news: {
+  headline: string;
+  source: string;
+  category: string;
+}): string {
+  const sourceLabel = news.source === 'merolagani' ? 'Mero Lagani' :
+    news.source === 'sharesansar' ? 'Share Sansar' :
+    news.source === 'google_news' ? 'Google News' :
+    news.source === 'myrepublica' ? 'My Republica' :
+    news.source === 'sebon' ? 'SEBON' : news.source;
+
+  return `${news.headline}\n\n📡 Source: ${sourceLabel}\n\n#NEPSE #ShareSathi #NepalStockMarket #ShareMarket #StockMarketNepal`;
+}

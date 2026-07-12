@@ -1463,3 +1463,206 @@ export async function generateIpoResultStoryImage(
     }, 'image/png');
   });
 }
+
+// ---- News Card Image (1080x1080) ----
+// Generates a professional news card with headline and optional AI summary
+
+interface NewsCardData {
+  headline: string;
+  summary: string;
+  source: string;
+  category: string;
+  publishedAt: string;
+  language: string;
+}
+
+function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return text.substring(0, maxChars).trim() + '...';
+}
+
+function formatDateLabel(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return '';
+  }
+}
+
+const CATEGORY_STYLES: Record<string, { bg: string; text: string; accent: string }> = {
+  market: { bg: '#F0F9FF', text: '#0369A1', accent: '#0284C7' },
+  ipo: { bg: '#FFFBEB', text: '#92400E', accent: '#D97706' },
+  company: { bg: '#FAF5FF', text: '#6B21A8', accent: '#7C3AED' },
+  regulatory: { bg: '#FFF1F2', text: '#9F1239', accent: '#E11D48' },
+  general: { bg: '#F9FAFB', text: '#374151', accent: '#6B7280' },
+};
+
+export async function generateNewsCardImage(
+  news: NewsCardData,
+  fonts: Array<{ name: string; data: ArrayBuffer; weight: number; style: string }>,
+): Promise<string> {
+  const catStyle = CATEGORY_STYLES[news.category] || CATEGORY_STYLES.general;
+  const dateLabel = formatDateLabel(news.publishedAt);
+  const sourceLabel = news.source === 'merolagani' ? 'Mero Lagani' :
+    news.source === 'sharesansar' ? 'Share Sansar' :
+    news.source === 'google_news' ? 'Google News' :
+    news.source === 'myrepublica' ? 'My Republica' :
+    news.source === 'sebon' ? 'SEBON' : news.source.charAt(0).toUpperCase() + news.source.slice(1);
+  const langLabel = news.language === 'ne' ? 'NEPALI' : 'ENGLISH';
+
+  // Word-wrap summary for Satori (it doesn't auto-wrap long text)
+  const wrapText = (text: string, maxCharsPerLine: number): string[] => {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (testLine.length > maxCharsPerLine && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
+
+  // Truncate headline to fit (roughly 8-10 lines at 38px in 1080px width)
+  const maxHeadlineChars = 120;
+  const headlineText = truncateText(news.headline, maxHeadlineChars);
+  const headlineLines = wrapText(headlineText, 32);
+
+  // Truncate summary
+  const hasSummary = news.summary && news.summary.trim().length > 0 &&
+    !/^(merolagani|sharesansar|google_news|myrepublica)\s*[-–—]/i.test(news.summary) &&
+    !news.summary.includes("for the latest");
+  const maxSummaryChars = 300;
+  const summaryText = hasSummary ? truncateText(news.summary, maxSummaryChars) : '';
+  const summaryLines = hasSummary ? wrapText(summaryText, 48) : [];
+
+  const jsx = {
+    type: 'div' as const,
+    props: {
+      style: {
+        width: '100%', height: '100%', padding: '60px', backgroundColor: '#FFFFFF',
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        fontFamily: 'Inter, sans-serif', position: 'relative', overflow: 'hidden',
+      },
+      children: [
+        // Top accent bar
+        { type: 'div' as const, props: { style: { position: 'absolute', top: 0, left: 0, right: 0, height: 6, backgroundColor: catStyle.accent } } },
+        // Header row: logo + source + date
+        {
+          type: 'div' as const,
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 },
+            children: [
+              // Left: Source + Category
+              {
+                type: 'div' as const,
+                props: {
+                  style: { display: 'flex', alignItems: 'center', gap: 10 },
+                  children: [
+                    // Source badge
+                    {
+                      type: 'div' as const,
+                      props: {
+                        style: { backgroundColor: catStyle.bg, padding: '8px 16px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 },
+                        children: [
+                          { type: 'div' as const, props: { style: { fontSize: 12, fontWeight: 700, color: catStyle.text, letterSpacing: '0.5px' }, children: ['\uD83D\uDCF0 ' + sourceLabel.toUpperCase()] } },
+                        ],
+                      },
+                    },
+                    // Category badge
+                    {
+                      type: 'div' as const,
+                      props: {
+                        style: { backgroundColor: '#F3F4F6', padding: '8px 12px', borderRadius: 8 },
+                        children: [
+                          { type: 'div' as const, props: { style: { fontSize: 11, fontWeight: 600, color: '#6B7280', letterSpacing: '0.5px', textTransform: 'uppercase' as const }, children: [news.category] } },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+              // Right: Language + Date
+              {
+                type: 'div' as const,
+                props: {
+                  style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', gap: 4 },
+                  children: [
+                    { type: 'div' as const, props: { style: { fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.5px' }, children: [langLabel] } },
+                    ...(dateLabel ? [{ type: 'div' as const, props: { style: { fontSize: 12, color: '#6B7280', fontWeight: 500 }, children: [dateLabel] } }] : []),
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        // Headline
+        {
+          type: 'div' as const,
+          props: {
+            style: { display: 'flex', flexDirection: 'column' as const, gap: 4, flex: 1, justifyContent: 'flex-start' },
+            children: [
+              ...headlineLines.map((line, i) => ({
+                type: 'div' as const,
+                props: {
+                  style: {
+                    fontSize: i === 0 ? 38 : 36,
+                    fontWeight: 800,
+                    color: '#111827',
+                    lineHeight: 1.25,
+                  },
+                  children: [line],
+                },
+              })),
+            ],
+          },
+        },
+        // Summary section (if available)
+        ...(summaryLines.length > 0 ? [
+          {
+            type: 'div' as const,
+            props: {
+              style: {
+                display: 'flex', flexDirection: 'column' as const, gap: 4,
+                marginTop: 24, paddingTop: 20,
+                borderTop: '1px solid #E5E7EB',
+              },
+              children: [
+                { type: 'div' as const, props: { style: { fontSize: 12, fontWeight: 700, color: catStyle.accent, letterSpacing: '1px', marginBottom: 8 }, children: ['SUMMARY'] } },
+                ...summaryLines.map((line) => ({
+                  type: 'div' as const,
+                  props: {
+                    style: { fontSize: 20, fontWeight: 500, color: '#4B5563', lineHeight: 1.5 },
+                    children: [line],
+                  },
+                })),
+              ],
+            },
+          },
+        ] : []),
+        // Footer: Share Sathi branding
+        {
+          type: 'div' as const,
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, paddingTop: 16, borderTop: '1px solid #F3F4F6' },
+            children: [
+              { type: 'div' as const, props: { style: { fontSize: 16, fontWeight: 800, color: '#D97706', letterSpacing: '0.08em' }, children: ['SHARE SATHI'] } },
+              { type: 'div' as const, props: { style: { fontSize: 11, color: '#9CA3AF' }, children: ['NEPSE Market Updates'] } },
+            ],
+          },
+        },
+        // Watermark
+        logoWatermark(),
+      ],
+    },
+  };
+
+  const svg = await satori(jsx, { width: WIDTH, height: HEIGHT, fonts });
+  return svgToPngBase64(svg);
+}

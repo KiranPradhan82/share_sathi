@@ -75,7 +75,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import { generateImagesInBrowser, generateIpoCardImage, generateIpoStoryImage, generateMarketStoryFromImage, generateIpoResultCardImage, generateIpoResultStoryImage, type IpoCardData } from '@/lib/client-image-generator';
+import { generateImagesInBrowser, generateIpoCardImage, generateIpoStoryImage, generateMarketStoryFromImage, generateIpoResultCardImage, generateIpoResultStoryImage, generateNewsCardImage, type IpoCardData } from '@/lib/client-image-generator';
 import { parseStockDataFromRawData } from '@/lib/nepse';
 import type { StockData } from '@/lib/nepse';
 
@@ -395,6 +395,11 @@ export default function HomePage() {
   const [postingNewsId, setPostingNewsId] = useState<string | null>(null);
   const [deletingNewsId, setDeletingNewsId] = useState<string | null>(null);
   const [postedNewsIds, setPostedNewsIds] = useState<Set<string>>(new Set());
+
+  // News card image state
+  const [newsCardImages, setNewsCardImages] = useState<Array<{ image: string; data: { headline: string; summary: string; source: string; category: string; publishedAt: string; language: string; newsId: string } }>>([]);
+  const [isGeneratingNewsImages, setIsGeneratingNewsImages] = useState(false);
+  const [postingNewsCardIdx, setPostingNewsCardIdx] = useState<number | null>(null);
 
   // Market story state
   const [postingMarketStory, setPostingMarketStory] = useState<string | null>(null);
@@ -1194,6 +1199,87 @@ export default function HomePage() {
     } finally {
       setDeletingNewsId(null);
     }
+  };
+
+  // News card image handlers
+  const handleGenerateNewsCardImages = async () => {
+    if (newsItems.length === 0) { toast.error('No news items to generate cards for'); return; }
+    setIsGeneratingNewsImages(true);
+    setNewsCardImages([]);
+    try {
+      const weights = [400, 500, 600, 700, 800, 900];
+      const fonts = await Promise.all(weights.map(async (w) => {
+        const r = await fetch(`/fonts/Inter-${w}.woff`);
+        return { name: 'Inter' as const, data: await r.arrayBuffer(), weight: w, style: 'normal' as const };
+      }));
+
+      const cards: Array<{ image: string; data: { headline: string; summary: string; source: string; category: string; publishedAt: string; language: string; newsId: string } }> = [];
+      for (const item of newsItems) {
+        const image = await generateNewsCardImage({
+          headline: item.headline,
+          summary: item.summary,
+          source: item.source,
+          category: item.category,
+          publishedAt: item.publishedAt,
+          language: item.language,
+        }, fonts);
+        cards.push({
+          image,
+          data: {
+            headline: item.headline,
+            summary: item.summary,
+            source: item.source,
+            category: item.category,
+            publishedAt: item.publishedAt,
+            language: item.language,
+            newsId: item.id,
+          },
+        });
+      }
+      setNewsCardImages(cards);
+      toast.success(`Generated ${cards.length} news card images`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to generate news cards');
+    } finally {
+      setIsGeneratingNewsImages(false);
+    }
+  };
+
+  const handlePostNewsCard = async (idx: number) => {
+    const card = newsCardImages[idx];
+    if (!card) return;
+    setPostingNewsCardIdx(idx);
+    try {
+      const res = await fetch('/api/posts/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'news_card',
+          images: { newsCardImage: card.image, newsInfo: { headline: card.data.headline, source: card.data.source, category: card.data.category, newsId: card.data.newsId } },
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`News card posted!`);
+        setPostedNewsIds(prev => new Set(prev).add(card.data.newsId));
+        fetchNews(newsPage);
+      } else {
+        toast.error(`Failed: ${json.error || 'Unknown'}`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setPostingNewsCardIdx(null);
+    }
+  };
+
+  const handleDownloadNewsCard = (idx: number) => {
+    const { image, data } = newsCardImages[idx];
+    const a = document.createElement('a');
+    a.href = image;
+    const safeName = data.headline.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 50);
+    a.download = `News_${safeName}.png`;
+    a.click();
   };
 
   // Auto-post trigger handler
@@ -2136,6 +2222,16 @@ export default function HomePage() {
               {isFetchingNews ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rss className="h-4 w-4" />}
               {isFetchingNews ? 'Fetching...' : 'Fetch News'}
             </Button>
+            <Button
+              variant="outline"
+              onClick={handleGenerateNewsCardImages}
+              disabled={isGeneratingNewsImages || newsItems.length === 0}
+              size="lg"
+              className="gap-2"
+            >
+              {isGeneratingNewsImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+              {isGeneratingNewsImages ? 'Generating...' : 'Generate News Cards'}
+            </Button>
           </div>
         </div>
 
@@ -2275,6 +2371,52 @@ export default function HomePage() {
               </div>
             )}
           </>
+        )}
+
+        {/* Generating news cards indicator */}
+        {isGeneratingNewsImages && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <span className="ml-2 text-sm text-muted-foreground">Generating news card images...</span>
+          </div>
+        )}
+
+        {/* Generated News Card Images */}
+        {newsCardImages.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Generated News Cards ({newsCardImages.length})</CardTitle>
+              <CardDescription>Image cards for news — post to Facebook feed. Headline is used as caption, summary is in the image.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                {newsCardImages.map((card, idx) => (
+                  <Card key={idx} className="overflow-hidden">
+                    <div className="aspect-square relative">
+                      <img src={card.image} alt={card.data.headline} className="w-full h-full object-contain bg-white" />
+                      {postedNewsIds.has(card.data.newsId) && (
+                        <div className="absolute top-1 right-1 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">Posted</div>
+                      )}
+                    </div>
+                    <CardContent className="p-2 flex gap-1">
+                      <Button
+                        size="sm"
+                        className="flex-1 gap-1 text-xs"
+                        disabled={postingNewsCardIdx === idx || postedNewsIds.has(card.data.newsId)}
+                        onClick={() => handlePostNewsCard(idx)}
+                      >
+                        {postingNewsCardIdx === idx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                        Post
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => handleDownloadNewsCard(idx)}>
+                        <Download className="h-3 w-3" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     );
