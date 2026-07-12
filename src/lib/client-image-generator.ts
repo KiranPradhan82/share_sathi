@@ -1571,7 +1571,7 @@ export async function generateNewsCardImage(
                       props: {
                         style: { backgroundColor: catStyle.bg, padding: '8px 16px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6 },
                         children: [
-                          { type: 'div' as const, props: { style: { fontSize: 12, fontWeight: 700, color: catStyle.text, letterSpacing: '0.5px' }, children: ['\uD83D\uDCF0 ' + sourceLabel.toUpperCase()] } },
+                          { type: 'div' as const, props: { style: { fontSize: 12, fontWeight: 700, color: catStyle.text, letterSpacing: '0.5px', display: 'flex' }, children: ['\uD83D\uDCF0 ' + sourceLabel.toUpperCase()] } },
                         ],
                       },
                     },
@@ -1579,9 +1579,9 @@ export async function generateNewsCardImage(
                     {
                       type: 'div' as const,
                       props: {
-                        style: { backgroundColor: '#F3F4F6', padding: '8px 12px', borderRadius: 8 },
+                        style: { backgroundColor: '#F3F4F6', padding: '8px 12px', borderRadius: 8, display: 'flex', alignItems: 'center' },
                         children: [
-                          { type: 'div' as const, props: { style: { fontSize: 11, fontWeight: 600, color: '#6B7280', letterSpacing: '0.5px', textTransform: 'uppercase' as const }, children: [news.category] } },
+                          { type: 'div' as const, props: { style: { fontSize: 11, fontWeight: 600, color: '#6B7280', letterSpacing: '0.5px', textTransform: 'uppercase' as const, display: 'flex' }, children: [news.category] } },
                         ],
                       },
                     },
@@ -1594,8 +1594,8 @@ export async function generateNewsCardImage(
                 props: {
                   style: { display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', gap: 4 },
                   children: [
-                    { type: 'div' as const, props: { style: { fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.5px' }, children: [langLabel] } },
-                    ...(dateLabel ? [{ type: 'div' as const, props: { style: { fontSize: 12, color: '#6B7280', fontWeight: 500 }, children: [dateLabel] } }] : []),
+                    { type: 'div' as const, props: { style: { fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.5px', display: 'flex' }, children: [langLabel] } },
+                    ...(dateLabel ? [{ type: 'div' as const, props: { style: { fontSize: 12, color: '#6B7280', fontWeight: 500, display: 'flex' }, children: [dateLabel] } }] : []),
                   ],
                 },
               },
@@ -1616,6 +1616,7 @@ export async function generateNewsCardImage(
                     fontWeight: 800,
                     color: '#111827',
                     lineHeight: 1.25,
+                    display: 'flex',
                   },
                   children: [line],
                 },
@@ -1634,11 +1635,11 @@ export async function generateNewsCardImage(
                 borderTop: '1px solid #E5E7EB',
               },
               children: [
-                { type: 'div' as const, props: { style: { fontSize: 12, fontWeight: 700, color: catStyle.accent, letterSpacing: '1px', marginBottom: 8 }, children: ['SUMMARY'] } },
+                { type: 'div' as const, props: { style: { fontSize: 12, fontWeight: 700, color: catStyle.accent, letterSpacing: '1px', marginBottom: 8, display: 'flex' }, children: ['SUMMARY'] } },
                 ...summaryLines.map((line) => ({
                   type: 'div' as const,
                   props: {
-                    style: { fontSize: 20, fontWeight: 500, color: '#4B5563', lineHeight: 1.5 },
+                    style: { fontSize: 20, fontWeight: 500, color: '#4B5563', lineHeight: 1.5, display: 'flex' },
                     children: [line],
                   },
                 })),
@@ -1652,8 +1653,8 @@ export async function generateNewsCardImage(
           props: {
             style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, paddingTop: 16, borderTop: '1px solid #F3F4F6' },
             children: [
-              { type: 'div' as const, props: { style: { fontSize: 16, fontWeight: 800, color: '#D97706', letterSpacing: '0.08em' }, children: ['SHARE SATHI'] } },
-              { type: 'div' as const, props: { style: { fontSize: 11, color: '#9CA3AF' }, children: ['NEPSE Market Updates'] } },
+              { type: 'div' as const, props: { style: { fontSize: 16, fontWeight: 800, color: '#D97706', letterSpacing: '0.08em', display: 'flex' }, children: ['SHARE SATHI'] } },
+              { type: 'div' as const, props: { style: { fontSize: 11, color: '#9CA3AF', display: 'flex' }, children: ['NEPSE Market Updates'] } },
             ],
           },
         },
