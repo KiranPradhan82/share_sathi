@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { fetchNepseData } from '@/lib/nepse';
-import { formatMarketUpdate } from '@/lib/content-formatter';
-import { postToFacebook } from '@/lib/facebook';
+import { fetchNepseData, parseStockDataFromRawData } from '@/lib/nepse';
+import { formatImageCaption, formatGainersCaption, formatLosersCaption } from '@/lib/content-formatter';
+import { postPhotoToFacebook } from '@/lib/facebook-photo';
 import { requireAuth } from '@/lib/require-auth';
+import { verifyMarketData } from '@/lib/market-verifier';
+import { generateAllImages } from '@/lib/image-generator';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -13,9 +15,6 @@ async function getConfigValue(key: string): Promise<string> {
   return config?.value || '';
 }
 
-/**
- * Get today's date in Nepal timezone (Asia/Kathmandu, UTC+5:45).
- */
 function getNepalToday(): string {
   const now = new Date();
   const nepalStr = now.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' });
@@ -23,62 +22,8 @@ function getNepalToday(): string {
   return nepalDate.toISOString().split('T')[0];
 }
 
-/**
- * Fetch NEPSE data and verify the tradingDate matches today (Nepal time).
- * If YONEPSE returns yesterday's data, retries every 5 minutes up to maxAttempts.
- */
-async function fetchWithTodayCheck(maxAttempts = 6, retryDelayMs = 300000): Promise<{
-  nepseData: Awaited<ReturnType<typeof fetchNepseData>>;
-  dateMatch: boolean;
-  attempts: number;
-  lastError: string | null;
-}> {
-  const todayNepal = getNepalToday();
-  let lastError: string | null = null;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const data = await fetchNepseData();
-      const dataDate = data.tradingDate;
-
-      if (dataDate === todayNepal) {
-        return { nepseData: data, dateMatch: true, attempts: attempt, lastError: null };
-      }
-
-      lastError = `YONEPSE returned data for ${dataDate}, but today (Nepal) is ${todayNepal}. Market data not yet updated.`;
-      await db.systemEvent.create({
-        data: {
-          eventType: 'auto_post',
-          entityType: 'market_data',
-          description: `Auto-post attempt ${attempt}/${maxAttempts}: ${lastError} Retrying in ${retryDelayMs / 1000}s...`,
-          severity: 'warning',
-        },
-      });
-
-      if (attempt < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, retryDelayMs));
-      }
-    } catch (e) {
-      lastError = e instanceof Error ? e.message : 'Unknown fetch error';
-      await db.systemEvent.create({
-        data: {
-          eventType: 'auto_post',
-          entityType: 'market_data',
-          description: `Auto-post attempt ${attempt}/${maxAttempts}: Fetch failed — ${lastError}. Retrying in ${retryDelayMs / 1000}s...`,
-          severity: 'warning',
-        },
-      });
-
-      if (attempt < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, retryDelayMs));
-      }
-    }
-  }
-
-  throw new Error(
-    `Auto-post failed after ${maxAttempts} attempts. Could not get today's (${todayNepal}) data from YONEPSE.\n` +
-    `Last error: ${lastError}`
-  );
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export async function POST(request: NextRequest) {
@@ -97,17 +42,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if already posted today
+    // Check if already posted today (with images)
     const todayNepal = getNepalToday();
     const todayData = await db.marketData.findUnique({ where: { tradingDate: todayNepal } });
     if (todayData) {
       const alreadyPosted = await db.facebookPost.findFirst({
-        where: { marketDataId: todayData.id, status: 'success' },
+        where: {
+          marketDataId: todayData.id,
+          status: 'success',
+          message: { contains: '[AUTO-IMAGE]' },
+        },
       });
       if (alreadyPosted) {
         return NextResponse.json({
           success: false,
-          message: `Already posted for ${todayNepal}. Skipping duplicate.`,
+          message: `Already auto-posted images for ${todayNepal}. Skipping duplicate.`,
           facebookPostId: alreadyPosted.facebookPostId,
         });
       }
@@ -120,17 +69,152 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Facebook credentials not configured' }, { status: 400 });
     }
 
-    // Fetch NEPSE data with today-check retry logic
-    const { nepseData, dateMatch, attempts } = await fetchWithTodayCheck();
+    // =============================================
+    // PHASE 1: Fetch YONEPSE data with date verification
+    // =============================================
+    const MAX_FETCH_ATTEMPTS = 6;
+    const FETCH_RETRY_DELAY = 10 * 60 * 1000; // 10 minutes
+    let nepseData: Awaited<ReturnType<typeof fetchNepseData>> | null = null;
+    let fetchAttempts = 0;
 
-    if (!dateMatch) {
+    await db.systemEvent.create({
+      data: {
+        eventType: 'auto_post',
+        entityType: 'market_data',
+        description: `Auto-post pipeline started for ${todayNepal}. Phase 1: Fetching YONEPSE data...`,
+        severity: 'info',
+      },
+    });
+
+    for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt++) {
+      fetchAttempts = attempt;
+      try {
+        const data = await fetchNepseData();
+
+        if (data.tradingDate !== todayNepal) {
+          await db.systemEvent.create({
+            data: {
+              eventType: 'auto_post',
+              entityType: 'market_data',
+              description: `Attempt ${attempt}/${MAX_FETCH_ATTEMPTS}: YONEPSE has data for ${data.tradingDate}, not today (${todayNepal}). Retrying in 10 min...`,
+              severity: 'warning',
+            },
+          });
+          if (attempt < MAX_FETCH_ATTEMPTS) await delay(FETCH_RETRY_DELAY);
+          continue;
+        }
+
+        nepseData = data;
+        break;
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : 'Unknown error';
+        await db.systemEvent.create({
+          data: {
+            eventType: 'auto_post',
+            entityType: 'market_data',
+            description: `Attempt ${attempt}/${MAX_FETCH_ATTEMPTS}: Fetch failed — ${errMsg}. Retrying in 10 min...`,
+            severity: 'warning',
+          },
+        });
+        if (attempt < MAX_FETCH_ATTEMPTS) await delay(FETCH_RETRY_DELAY);
+      }
+    }
+
+    if (!nepseData) {
       return NextResponse.json({
         success: false,
-        message: `Could not get today's data after ${attempts} attempts. YONEPSE may not have updated yet.`,
+        message: `Failed to fetch today's (${todayNepal}) data after ${MAX_FETCH_ATTEMPTS} attempts.`,
       });
     }
 
-    // Upsert market data
+    // =============================================
+    // PHASE 2: Verify against NEPSE official + Mero Lagani
+    // =============================================
+    await db.systemEvent.create({
+      data: {
+        eventType: 'auto_post',
+        entityType: 'market_data',
+        entityId: todayData?.id,
+        description: `Phase 2: Verifying YONEPSE data (Index: ${nepseData.nepseIndex}) against official sources...`,
+        severity: 'info',
+      },
+    });
+
+    let verification = await verifyMarketData({
+      nepseIndex: nepseData.nepseIndex,
+      change: nepseData.change,
+      changePercentage: nepseData.changePercentage,
+      turnover: nepseData.turnover,
+    });
+
+    // If not verified, retry verification every 10 minutes up to 6 times
+    const MAX_VERIFY_ATTEMPTS = 6;
+    let verifyAttempts = 1;
+
+    while (!verification.verified && verifyAttempts < MAX_VERIFY_ATTEMPTS) {
+      verifyAttempts++;
+      await db.systemEvent.create({
+        data: {
+          eventType: 'auto_post',
+          entityType: 'market_data',
+          description: `Verification attempt ${verifyAttempts}/${MAX_VERIFY_ATTEMPTS}: Data not yet matching official sources. Re-fetching YONEPSE and re-verifying in 10 min...\n${verification.matchDetails}`,
+          severity: 'warning',
+        },
+      });
+
+      await delay(FETCH_RETRY_DELAY);
+
+      // Re-fetch from YONEPSE
+      try {
+        const freshData = await fetchNepseData();
+        if (freshData.tradingDate === todayNepal) {
+          nepseData = freshData;
+        }
+      } catch {
+        // Keep existing data, just re-verify
+      }
+
+      verification = await verifyMarketData({
+        nepseIndex: nepseData.nepseIndex,
+        change: nepseData.change,
+        changePercentage: nepseData.changePercentage,
+        turnover: nepseData.turnover,
+      });
+    }
+
+    // Log final verification result
+    await db.systemEvent.create({
+      data: {
+        eventType: 'auto_post',
+        entityType: 'market_data',
+        description: `Verification result (after ${verifyAttempts} attempt(s)): verified=${verification.verified}\n${verification.matchDetails}`,
+        severity: verification.verified ? 'success' : 'warning',
+      },
+    });
+
+    // If still not verified after all retries, but both sources were unreachable,
+    // proceed anyway (YONEPSE is generally reliable)
+    if (!verification.verified) {
+      if (verification.nepseOfficial === null && verification.meroLagani === null) {
+        await db.systemEvent.create({
+          data: {
+            eventType: 'auto_post',
+            entityType: 'market_data',
+            description: 'Could not verify against any official source (both unreachable). Proceeding with YONEPSE data as it is generally reliable.',
+            severity: 'warning',
+          },
+        });
+      } else {
+        return NextResponse.json({
+          success: false,
+          message: `YONEPSE data does not match official sources after ${verifyAttempts} verification attempts. Aborting auto-post.\n${verification.matchDetails}`,
+        });
+      }
+    }
+
+    // =============================================
+    // PHASE 3: Upsert market data to DB
+    // =============================================
     const marketData = await db.marketData.upsert({
       where: { tradingDate: nepseData.tradingDate },
       update: {
@@ -162,83 +246,188 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Post text update to Facebook
-    const message = formatMarketUpdate({
-      tradingDate: marketData.tradingDate,
-      nepseIndex: marketData.nepseIndex,
-      change: marketData.change,
-      changePercentage: marketData.changePercentage,
-      turnover: marketData.turnover,
-      volume: marketData.volume,
-      trades: marketData.trades,
-      gainers: marketData.gainers,
-      losers: marketData.losers,
-      unchanged: marketData.unchanged,
-      rawData: marketData.rawData,
-    });
-
-    const fbPost = await db.facebookPost.create({
-      data: {
-        marketDataId: marketData.id,
-        message: `[AUTO] ${message.substring(0, 100)}...`,
-        status: 'posting',
-        attemptCount: 1,
-      },
-    });
-
+    // =============================================
+    // PHASE 4: Generate images server-side
+    // =============================================
     await db.systemEvent.create({
       data: {
         eventType: 'auto_post',
-        entityType: 'market_data',
-        entityId: marketData.id,
+        entityType: 'image',
         marketDataId: marketData.id,
-        description: `Auto-post triggered for ${marketData.tradingDate} (took ${attempts} attempt(s) to get today's data). Index: ${marketData.nepseIndex}`,
+        description: `Phase 4: Generating market images server-side...`,
         severity: 'info',
       },
     });
 
-    const result = await postToFacebook(message, pageAccessToken, pageId);
+    const { gainers, losers } = parseStockDataFromRawData(nepseData.rawData);
+    let images: Awaited<ReturnType<typeof generateAllImages>>;
 
-    if (result.success) {
-      await db.facebookPost.update({
-        where: { id: fbPost.id },
-        data: { status: 'success', facebookPostId: result.postId || null, postedTime: new Date() },
-      });
+    try {
+      images = await generateAllImages(nepseData, gainers, losers);
+    } catch (imgErr) {
+      const errMsg = imgErr instanceof Error ? imgErr.message : 'Unknown image generation error';
       await db.systemEvent.create({
         data: {
           eventType: 'auto_post',
-          entityType: 'facebook_post',
-          entityId: fbPost.id,
-          facebookPostId: fbPost.id,
-          description: `Auto-post successful for ${marketData.tradingDate}. FB Post ID: ${result.postId}`,
-          severity: 'success',
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        message: `Auto-posted market update for ${marketData.tradingDate} (${attempts} fetch attempt(s))`,
-        facebookPostId: result.postId,
-        attempts,
-      });
-    } else {
-      await db.facebookPost.update({
-        where: { id: fbPost.id },
-        data: { status: 'failed', attemptCount: 1, errorMessage: result.error || 'Unknown error' },
-      });
-      await db.systemEvent.create({
-        data: {
-          eventType: 'auto_post',
-          entityType: 'facebook_post',
-          entityId: fbPost.id,
-          facebookPostId: fbPost.id,
-          description: `Auto-post failed for ${marketData.tradingDate}: ${result.error}`,
+          entityType: 'image',
+          marketDataId: marketData.id,
+          description: `Image generation failed: ${errMsg}`,
           severity: 'error',
         },
       });
-
-      return NextResponse.json({ success: false, error: result.error, attempts }, { status: 500 });
+      return NextResponse.json({
+        success: false,
+        error: `Image generation failed: ${errMsg}`,
+      }, { status: 500 });
     }
+
+    await db.systemEvent.create({
+      data: {
+        eventType: 'auto_post',
+        entityType: 'image',
+        marketDataId: marketData.id,
+        description: `Images generated successfully (summary: ${Math.round(images.marketSummary.length / 1024)}KB, gainers: ${Math.round(images.topGainers.length / 1024)}KB, losers: ${Math.round(images.topLosers.length / 1024)}KB)`,
+        severity: 'info',
+      },
+    });
+
+    // =============================================
+    // PHASE 5: Post images to Facebook
+    // =============================================
+    await db.systemEvent.create({
+      data: {
+        eventType: 'auto_post',
+        entityType: 'facebook_post',
+        marketDataId: marketData.id,
+        description: `Phase 5: Posting 3 images to Facebook...`,
+        severity: 'info',
+      },
+    });
+
+    // =============================================
+    // PHASE 5: Post images to Facebook
+    // =============================================
+    await db.systemEvent.create({
+      data: {
+        eventType: 'auto_post',
+        entityType: 'facebook_post',
+        marketDataId: marketData.id,
+        description: `Phase 5: Posting 3 images to Facebook...`,
+        severity: 'info',
+      },
+    });
+
+    const postsToMake: Array<{ buffer: Buffer; caption: string; label: string }> = [
+      {
+        buffer: images.marketSummary,
+        caption: formatImageCaption(nepseData),
+        label: 'Market Summary',
+      },
+      {
+        buffer: images.topGainers,
+        caption: formatGainersCaption(marketData.tradingDate, gainers.slice(0, 10).map(g => ({
+          symbol: g.symbol,
+          change: g.change,
+          changePercent: g.changePercent,
+        }))),
+        label: 'Top Gainers',
+      },
+      {
+        buffer: images.topLosers,
+        caption: formatLosersCaption(marketData.tradingDate, losers.slice(0, 10).map(l => ({
+          symbol: l.symbol,
+          change: l.change,
+          changePercent: l.changePercent,
+        }))),
+        label: 'Top Losers',
+      },
+    ];
+
+    const results: Array<{ label: string; success: boolean; postId?: string; error?: string }> = [];
+
+    for (const post of postsToMake) {
+      const fbPost = await db.facebookPost.create({
+        data: {
+          marketDataId: marketData.id,
+          message: `[AUTO-IMAGE] ${post.label}: ${post.caption.substring(0, 100)}...`,
+          status: 'posting',
+          attemptCount: 1,
+        },
+      });
+
+      await db.systemEvent.create({
+        data: {
+          eventType: 'auto_post',
+          entityType: 'facebook_post',
+          entityId: fbPost.id,
+          facebookPostId: fbPost.id,
+          marketDataId: marketData.id,
+          description: `Posting ${post.label} (${Math.round(post.buffer.length / 1024)}KB)...`,
+          severity: 'info',
+        },
+      });
+
+      // 3-second delay between posts to avoid rate limiting
+      if (results.length > 0) await delay(3000);
+
+      const result = await postPhotoToFacebook(post.buffer, post.caption, pageAccessToken, pageId);
+
+      if (result.success) {
+        await db.facebookPost.update({
+          where: { id: fbPost.id },
+          data: { status: 'success', facebookPostId: result.postId || null, postedTime: new Date() },
+        });
+        await db.systemEvent.create({
+          data: {
+            eventType: 'auto_post',
+            entityType: 'facebook_post',
+            entityId: fbPost.id,
+            facebookPostId: fbPost.id,
+            description: `Successfully posted ${post.label}. FB ID: ${result.postId}`,
+            severity: 'success',
+          },
+        });
+        results.push({ label: post.label, success: true, postId: result.postId });
+      } else {
+        await db.facebookPost.update({
+          where: { id: fbPost.id },
+          data: { status: 'failed', attemptCount: 1, errorMessage: result.error || 'Unknown error' },
+        });
+        await db.systemEvent.create({
+          data: {
+            eventType: 'auto_post',
+            entityType: 'facebook_post',
+            entityId: fbPost.id,
+            facebookPostId: fbPost.id,
+            description: `Failed to post ${post.label}: ${result.error}`,
+            severity: 'error',
+          },
+        });
+        results.push({ label: post.label, success: false, error: result.error });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failedCount = results.filter(r => !r.success).length;
+
+    await db.systemEvent.create({
+      data: {
+        eventType: 'auto_post',
+        entityType: 'system',
+        marketDataId: marketData.id,
+        description: `Auto-post pipeline completed for ${marketData.tradingDate}. Posted ${successCount}/3 images. Fetch attempts: ${fetchAttempts}, Verify attempts: ${verifyAttempts}.`,
+        severity: successCount === 3 ? 'success' : 'warning',
+      },
+    });
+
+    return NextResponse.json({
+      success: successCount > 0,
+      message: `Auto-posted ${successCount}/3 images for ${marketData.tradingDate} (fetch: ${fetchAttempts} attempts, verify: ${verifyAttempts} attempts)`,
+      results,
+      fetchAttempts,
+      verifyAttempts,
+      verified: verification.verified,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Auto-post failed';
     await db.systemEvent.create({
@@ -258,8 +447,10 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     cron: 'active',
-    purpose: 'NEPSE auto-post with today-data validation',
+    purpose: 'NEPSE auto-post: fetch at 3:15 PM NPT, verify against official sources, generate images, post to Facebook',
     timezone: 'Asia/Kathmandu',
-    retryPolicy: '6 attempts, 5-minute intervals',
+    schedule: '3:15 PM NPT (Sun-Thu)',
+    retryPolicy: 'Fetch: 6 attempts x 10 min | Verify: 6 attempts x 10 min',
+    pipeline: 'YONEPSE → Verify (NEPSE + MeroLagani) → Generate 3 images → Post to Facebook',
   });
 }
