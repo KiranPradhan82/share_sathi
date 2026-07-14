@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { fetchNepseData, parseStockDataFromRawData } from '@/lib/nepse';
-import { formatImageCaption, formatGainersCaption, formatLosersCaption } from '@/lib/content-formatter';
+import { formatImageCaption, formatGainersCaption, formatLosersCaption, formatStockCardCaption } from '@/lib/content-formatter';
 import { postPhotoToFacebook } from '@/lib/facebook-photo';
 import { requireAuth } from '@/lib/require-auth';
 import { verifyMarketData } from '@/lib/market-verifier';
-import { generateAllImages } from '@/lib/image-generator';
+import { generateAllImages, renderStockCard } from '@/lib/image-generator';
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -286,8 +286,83 @@ export async function POST(request: NextRequest) {
         eventType: 'auto_post',
         entityType: 'image',
         marketDataId: marketData.id,
-        description: `Images generated successfully (summary: ${Math.round(images.marketSummary.length / 1024)}KB, gainers: ${Math.round(images.topGainers.length / 1024)}KB, losers: ${Math.round(images.topLosers.length / 1024)}KB)`,
+        description: `Summary images generated (summary: ${Math.round(images.marketSummary.length / 1024)}KB, gainers: ${Math.round(images.topGainers.length / 1024)}KB, losers: ${Math.round(images.topLosers.length / 1024)}KB)`,
         severity: 'info',
+      },
+    });
+
+    // Generate individual stock cards (top 10 gainers + top 10 losers = 20 cards)
+    const topGainers = gainers.slice(0, 10);
+    const topLosers = losers.slice(0, 10);
+    const stockCards: Array<{ buffer: Buffer; caption: string; label: string; type: 'gainer' | 'loser'; symbol: string }> = [];
+
+    await db.systemEvent.create({
+      data: {
+        eventType: 'auto_post',
+        entityType: 'image',
+        marketDataId: marketData.id,
+        description: `Generating ${topGainers.length} gainer cards + ${topLosers.length} loser cards...`,
+        severity: 'info',
+      },
+    });
+
+    for (let i = 0; i < topGainers.length; i++) {
+      const g = topGainers[i];
+      try {
+        const buffer = await renderStockCard(g, nepseData.tradingDate, 'gainer', i + 1);
+        const caption = formatStockCardCaption({
+          symbol: g.symbol,
+          change: g.change,
+          changePercent: g.changePercent,
+          closePrice: g.closePrice,
+        }, 'gainer');
+        stockCards.push({ buffer, caption, label: `Gainer #${i + 1}: ${g.symbol}`, type: 'gainer', symbol: g.symbol });
+      } catch (cardErr) {
+        const errMsg = cardErr instanceof Error ? cardErr.message : 'Unknown error';
+        await db.systemEvent.create({
+          data: {
+            eventType: 'auto_post',
+            entityType: 'image',
+            marketDataId: marketData.id,
+            description: `Failed to generate gainer card #${i + 1} (${g.symbol}): ${errMsg}`,
+            severity: 'warning',
+          },
+        });
+      }
+    }
+
+    for (let i = 0; i < topLosers.length; i++) {
+      const l = topLosers[i];
+      try {
+        const buffer = await renderStockCard(l, nepseData.tradingDate, 'loser', i + 1);
+        const caption = formatStockCardCaption({
+          symbol: l.symbol,
+          change: l.change,
+          changePercent: l.changePercent,
+          closePrice: l.closePrice,
+        }, 'loser');
+        stockCards.push({ buffer, caption, label: `Loser #${i + 1}: ${l.symbol}`, type: 'loser', symbol: l.symbol });
+      } catch (cardErr) {
+        const errMsg = cardErr instanceof Error ? cardErr.message : 'Unknown error';
+        await db.systemEvent.create({
+          data: {
+            eventType: 'auto_post',
+            entityType: 'image',
+            marketDataId: marketData.id,
+            description: `Failed to generate loser card #${i + 1} (${l.symbol}): ${errMsg}`,
+            severity: 'warning',
+          },
+        });
+      }
+    }
+
+    await db.systemEvent.create({
+      data: {
+        eventType: 'auto_post',
+        entityType: 'image',
+        marketDataId: marketData.id,
+        description: `Stock cards generated: ${stockCards.length}/${topGainers.length + topLosers.length} successful`,
+        severity: stockCards.length > 0 ? 'success' : 'warning',
       },
     });
 
@@ -352,18 +427,21 @@ export async function POST(request: NextRequest) {
     }
 
     // =============================================
-    // PHASE 5: Post images to Facebook
+    // PHASE 5: Post all images to Facebook one by one
+    // (3 summary images + individual stock cards)
     // =============================================
+    const totalImages = 3 + stockCards.length;
     await db.systemEvent.create({
       data: {
         eventType: 'auto_post',
         entityType: 'facebook_post',
         marketDataId: marketData.id,
-        description: `Phase 5: Posting 3 images to Facebook...`,
+        description: `Phase 5: Posting ${totalImages} images to Facebook (3 summary + ${stockCards.length} stock cards)...`,
         severity: 'info',
       },
     });
 
+    // Build complete posts array: 3 summary images first, then individual stock cards
     const postsToMake: Array<{ buffer: Buffer; caption: string; label: string }> = [
       {
         buffer: images.marketSummary,
@@ -388,6 +466,12 @@ export async function POST(request: NextRequest) {
         }))),
         label: 'Top Losers',
       },
+      // Individual stock cards (10 gainers + 10 losers)
+      ...stockCards.map(card => ({
+        buffer: card.buffer,
+        caption: card.caption,
+        label: card.label,
+      })),
     ];
 
     const results: Array<{ label: string; success: boolean; postId?: string; error?: string }> = [];
@@ -402,6 +486,9 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // 3-second delay between posts to avoid rate limiting
+      if (results.length > 0) await delay(3000);
+
       await db.systemEvent.create({
         data: {
           eventType: 'auto_post',
@@ -409,13 +496,10 @@ export async function POST(request: NextRequest) {
           entityId: fbPost.id,
           facebookPostId: fbPost.id,
           marketDataId: marketData.id,
-          description: `Posting ${post.label} (${Math.round(post.buffer.length / 1024)}KB)...`,
+          description: `Posting ${post.label} (${Math.round(post.buffer.length / 1024)}KB) [${results.length + 1}/${postsToMake.length}]...`,
           severity: 'info',
         },
       });
-
-      // 3-second delay between posts to avoid rate limiting
-      if (results.length > 0) await delay(3000);
 
       const result = await postPhotoToFacebook(post.buffer, post.caption, pageAccessToken, pageId);
 
@@ -455,25 +539,27 @@ export async function POST(request: NextRequest) {
     }
 
     const successCount = results.filter(r => r.success).length;
-    const failedCount = results.filter(r => !r.success).length;
 
     await db.systemEvent.create({
       data: {
         eventType: 'auto_post',
         entityType: 'system',
         marketDataId: marketData.id,
-        description: `Auto-post pipeline completed for ${marketData.tradingDate}. Posted ${successCount}/3 images. Fetch attempts: ${fetchAttempts}, Verify attempts: ${verifyAttempts}.`,
-        severity: successCount === 3 ? 'success' : 'warning',
+        description: `Auto-post pipeline completed for ${marketData.tradingDate}. Posted ${successCount}/${totalImages} images (${successCount > 0 ? '3 summary' : '0 summary'} + ${Math.max(0, successCount - 3)} stock cards). Fetch: ${fetchAttempts} attempts, Verify: ${verifyAttempts} attempts.`,
+        severity: successCount === totalImages ? 'success' : (successCount > 0 ? 'warning' : 'error'),
       },
     });
 
     return NextResponse.json({
       success: successCount > 0,
-      message: `Auto-posted ${successCount}/3 images for ${marketData.tradingDate} (fetch: ${fetchAttempts} attempts, verify: ${verifyAttempts} attempts)`,
+      message: `Auto-posted ${successCount}/${totalImages} images for ${marketData.tradingDate} (3 summary + ${stockCards.length} stock cards, fetch: ${fetchAttempts} attempts, verify: ${verifyAttempts} attempts)`,
       results,
       fetchAttempts,
       verifyAttempts,
       verified: verification.verified,
+      totalImages,
+      summaryImages: 3,
+      stockCardImages: stockCards.length,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Auto-post failed';
@@ -498,6 +584,6 @@ export async function GET() {
     timezone: 'Asia/Kathmandu',
     schedule: '3:15 PM NPT (Sun-Thu)',
     retryPolicy: 'Fetch: 6 attempts x 10 min | Verify: 6 attempts x 10 min',
-    pipeline: 'YONEPSE → Verify → Generate 3 images → Pre-post Re-verify → Post to Facebook',
+    pipeline: 'YONEPSE → Verify → Generate 3 summary + 20 stock card images → Pre-post Re-verify → Post all 23 images to Facebook one-by-one',
   });
 }
