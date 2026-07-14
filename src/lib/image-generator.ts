@@ -832,6 +832,190 @@ export interface GeneratedImagesBase64 {
   };
 }
 
+// ---- Template: Individual Stock Card (1080x1080) ----
+export async function renderStockCard(
+  stock: StockData,
+  dateStr: string,
+  type: 'gainer' | 'loser',
+  rank: number,
+): Promise<Buffer> {
+  const fonts = loadFonts();
+  const isGainer = type === 'gainer';
+  const navBar = '#1E3A5F';
+  const medBlue = '#2B5797';
+  const changeColor = isGainer ? '#16A34A' : '#DC2626';
+  const label = isGainer ? 'TOP GAINER' : 'TOP LOSER';
+  const sign = isGainer ? '+' : '';
+  const changeAbs = Math.abs(stock.change);
+  const changePct = Math.abs(stock.changePercent);
+
+  let d: string;
+  try {
+    const dt = new Date(dateStr + 'T00:00:00');
+    d = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
+  } catch { d = dateStr.toUpperCase(); }
+
+  const jsx = {
+    type: 'div',
+    props: {
+      style: {
+        width: WIDTH, height: HEIGHT,
+        background: 'linear-gradient(180deg, #F0F4F8 0%, #E2E8F0 100%)',
+        position: 'relative', overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+      },
+      children: [
+        // Blue header bar
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, backgroundColor: navBar, padding: '28px 30px' },
+            children: [
+              { type: 'div', props: { style: { fontSize: 32, fontWeight: 800, color: '#ffffff', display: 'flex' }, children: '\uD83D\uDCC8' } },
+              { type: 'div', props: { style: { fontSize: 22, fontWeight: 900, color: '#ffffff', letterSpacing: '0.12em', display: 'flex' }, children: `AS OF ${d}` } },
+              { type: 'div', props: { style: { width: 2, height: 28, backgroundColor: '#ffffff55', display: 'flex' } } },
+              { type: 'div', props: { style: { fontSize: 22, fontWeight: 900, color: '#ffffff', letterSpacing: '0.12em', display: 'flex' }, children: 'SHARE PRICE' } },
+            ],
+          },
+        },
+        // Rank badge
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 28 },
+            children: {
+              type: 'div',
+              props: {
+                style: { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: medBlue, padding: '10px 32px', borderRadius: 30 },
+                children: [
+                  { type: 'div', props: { style: { fontSize: 22, fontWeight: 900, color: '#ffffff', letterSpacing: '0.1em', display: 'flex' }, children: `${label}  #${rank}` } },
+                ],
+              },
+            },
+          },
+        },
+        // Company name
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 28, marginHorizontal: 50 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 30, fontWeight: 900, color: navBar, letterSpacing: '0.04em', textTransform: 'uppercase', textAlign: 'center', lineHeight: 1.3, display: 'flex' }, children: stock.name } },
+              { type: 'div', props: { style: { fontSize: 26, fontWeight: 800, color: medBlue, marginTop: 6, display: 'flex' }, children: `(${stock.symbol})` } },
+            ],
+          },
+        },
+        // LTP
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 32 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 18, fontWeight: 700, color: '#64748B', letterSpacing: '0.12em', display: 'flex' }, children: 'LAST TRADED PRICE' } },
+              {
+                type: 'div',
+                props: {
+                  style: { display: 'flex', flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 8 },
+                  children: [
+                    { type: 'div', props: { style: { fontSize: 30, fontWeight: 600, color: '#64748B', display: 'flex' }, children: 'Rs.' } },
+                    { type: 'div', props: { style: { fontSize: 72, fontWeight: 900, color: navBar, lineHeight: 1, display: 'flex' }, children: stock.closePrice.toFixed(2) } },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        // 2x2 metrics grid
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flexDirection: 'column', width: WIDTH, padding: '0px 50px', gap: 16, marginTop: 36 },
+            children: [
+              // Row 1: % Change + Point Change
+              {
+                type: 'div',
+                props: {
+                  style: { display: 'flex', flexDirection: 'row', width: '100%', gap: 16 },
+                  children: [
+                    {
+                      type: 'div',
+                      props: {
+                        style: { flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 16, overflow: 'hidden' },
+                        children: [
+                          { type: 'div', props: { style: { fontSize: 16, fontWeight: 800, color: '#ffffff', backgroundColor: changeColor, padding: '12px 18px', letterSpacing: '0.1em', display: 'flex' }, children: '% CHANGE' } },
+                          { type: 'div', props: { style: { fontSize: 36, fontWeight: 900, color: changeColor, backgroundColor: '#ffffff', padding: '18px 18px', display: 'flex' }, children: `${sign}${changePct.toFixed(2)}%` } },
+                        ],
+                      },
+                    },
+                    {
+                      type: 'div',
+                      props: {
+                        style: { flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 16, overflow: 'hidden' },
+                        children: [
+                          { type: 'div', props: { style: { fontSize: 16, fontWeight: 800, color: '#ffffff', backgroundColor: medBlue, padding: '12px 18px', letterSpacing: '0.1em', display: 'flex' }, children: 'POINT CHANGE' } },
+                          { type: 'div', props: { style: { fontSize: 36, fontWeight: 900, color: navBar, backgroundColor: '#ffffff', padding: '18px 18px', display: 'flex' }, children: `Rs. ${sign}${changeAbs.toFixed(2)}` } },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+              // Row 2: Prev Close + Rank
+              {
+                type: 'div',
+                props: {
+                  style: { display: 'flex', flexDirection: 'row', width: '100%', gap: 16 },
+                  children: [
+                    {
+                      type: 'div',
+                      props: {
+                        style: { flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 16, overflow: 'hidden' },
+                        children: [
+                          { type: 'div', props: { style: { fontSize: 16, fontWeight: 800, color: '#ffffff', backgroundColor: '#D97706', padding: '12px 18px', letterSpacing: '0.1em', display: 'flex' }, children: 'PREV. DAY CLOSE' } },
+                          { type: 'div', props: { style: { fontSize: 36, fontWeight: 900, color: '#92400E', backgroundColor: '#ffffff', padding: '18px 18px', display: 'flex' }, children: `Rs. ${stock.previousClose.toFixed(2)}` } },
+                        ],
+                      },
+                    },
+                    {
+                      type: 'div',
+                      props: {
+                        style: { flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 16, overflow: 'hidden' },
+                        children: [
+                          { type: 'div', props: { style: { fontSize: 16, fontWeight: 800, color: '#ffffff', backgroundColor: '#64748B', padding: '12px 18px', letterSpacing: '0.1em', display: 'flex' }, children: `${label} RANK` } },
+                          { type: 'div', props: { style: { fontSize: 40, fontWeight: 900, color: navBar, backgroundColor: '#ffffff', padding: '18px 18px', display: 'flex' }, children: `#${rank}` } },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        // Footer
+        {
+          type: 'div',
+          props: {
+            style: {
+              position: 'absolute', bottom: 0, left: 0, right: 0, height: 80,
+              backgroundColor: navBar, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 4,
+            },
+            children: [
+              { type: 'div', props: { style: { fontSize: 24, fontWeight: 900, color: '#ffffff', letterSpacing: '0.1em', display: 'flex' }, children: 'SHARE SATHI' } },
+              { type: 'div', props: { style: { fontSize: 14, color: '#ffffff88', letterSpacing: '0.05em', display: 'flex' }, children: '#NEPSE #ShareSathi #StockMarket #NepalStockExchange' } },
+            ],
+          },
+        },
+      ],
+    },
+  };
+
+  // @ts-expect-error Satori accepts this JSX-like object format at runtime
+  const svg = await satori(jsx, { width: WIDTH, height: HEIGHT, fonts });
+  return svgToPng(svg);
+}
+
 export async function generateAllImages(
   nepseData: NepseData,
   gainers: StockData[],
