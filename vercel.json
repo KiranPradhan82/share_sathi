@@ -3,10 +3,6 @@
     {
       "path": "/api/auto-post",
       "schedule": "30 9 * * 0-4"
-    },
-    {
-      "path": "/api/auto-news-post",
-      "schedule": "45 9 * * 0-4"
     }
   ]
 }

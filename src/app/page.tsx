@@ -269,7 +269,6 @@ export default function HomePage() {
   const [previewData, setPreviewData] = useState<{ marketData: MarketData; message: string; source: string } | null>(null);
   const [isFetchingPreview, setIsFetchingPreview] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
-  const [isPostingNews, setIsPostingNews] = useState(false);
 
   // Market data state
   const [marketDataList, setMarketDataList] = useState<MarketData[]>([]);
@@ -305,7 +304,6 @@ export default function HomePage() {
     facebook_page_id: '',
     facebook_page_access_token: '',
     auto_post_enabled: 'false',
-    auto_news_post_enabled: 'false',
     post_time: '15:00',
     notification_email: '',
     language: 'en',
@@ -1305,30 +1303,6 @@ export default function HomePage() {
       toast.error(err instanceof Error ? err.message : 'Auto-post failed');
     } finally {
       setIsPosting(false);
-    }
-  };
-
-  const handleAutoNewsPost = async () => {
-    setIsPostingNews(true);
-    try {
-      const res = await fetch('/api/auto-news-post', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manual: true }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        toast.success(json.message || `Posted ${json.posted} news cards`);
-      } else {
-        toast.error(json.message || json.error || 'Auto news post failed');
-      }
-      fetchRecentEvents();
-      // Refresh news list if on news tab
-      fetchNews();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Auto news post failed');
-    } finally {
-      setIsPostingNews(false);
     }
   };
 
@@ -2561,18 +2535,6 @@ export default function HomePage() {
                 }
               />
             </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Auto-News Post Enabled</Label>
-                <p className="text-xs text-muted-foreground">Automatically fetch news, generate card images, and post to Facebook at 3:30 PM NPT.</p>
-              </div>
-              <Switch
-                checked={settings.auto_news_post_enabled === 'true'}
-                onCheckedChange={(checked) =>
-                  setSettings((s) => ({ ...s, auto_news_post_enabled: String(checked) }))
-                }
-              />
-            </div>
             <div className="space-y-2">
               <Label htmlFor="postTime">Post Time</Label>
               <Input
@@ -2610,23 +2572,8 @@ export default function HomePage() {
             <p className="text-[10px] text-muted-foreground text-center">Manually trigger. Checks for today&apos;s data with 5-min retries.</p>
             <Separator />
             <Button
-              onClick={handleAutoNewsPost}
-              disabled={isPostingNews}
-              size="sm"
-              variant="outline"
-              className="w-full gap-1"
-            >
-              {isPostingNews ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Running Auto-News-Post...</>
-              ) : (
-                <><Send className="h-3.5 w-3.5" /> Trigger Auto-News-Post Now</>
-              )}
-            </Button>
-            <p className="text-[10px] text-muted-foreground text-center">Fetch news, generate card images, and post to Facebook.</p>
-            <Separator />
-            <Button
               onClick={() => handleSaveSection(
-                ['auto_post_enabled', 'auto_news_post_enabled', 'post_time', 'notification_email'],
+                ['auto_post_enabled', 'post_time', 'notification_email'],
                 'Automation'
               )}
               disabled={savingSection === 'Automation'}
