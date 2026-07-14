@@ -292,6 +292,66 @@ export async function POST(request: NextRequest) {
     });
 
     // =============================================
+    // PHASE 4.5: Pre-post verification
+    // Re-verify data is still the latest right before posting
+    // (data could have changed during image generation)
+    // =============================================
+    await db.systemEvent.create({
+      data: {
+        eventType: 'auto_post',
+        entityType: 'market_data',
+        marketDataId: marketData.id,
+        description: `Phase 4.5: Pre-post verification — re-checking against NEPSE official and MeroLagani before posting...`,
+        severity: 'info',
+      },
+    });
+
+    const prePostVerification = await verifyMarketData({
+      nepseIndex: nepseData.nepseIndex,
+      change: nepseData.change,
+      changePercentage: nepseData.changePercentage,
+      turnover: nepseData.turnover,
+    });
+
+    if (prePostVerification.verified) {
+      await db.systemEvent.create({
+        data: {
+          eventType: 'auto_post',
+          entityType: 'market_data',
+          marketDataId: marketData.id,
+          description: `Pre-post verification PASSED. Data is still current.\n${prePostVerification.matchDetails}`,
+          severity: 'success',
+        },
+      });
+    } else if (prePostVerification.nepseOfficial === null && prePostVerification.meroLagani === null) {
+      // Both sources unreachable — proceed (same logic as Phase 2)
+      await db.systemEvent.create({
+        data: {
+          eventType: 'auto_post',
+          entityType: 'market_data',
+          marketDataId: marketData.id,
+          description: `Pre-post verification: both official sources unreachable. Proceeding with YONEPSE data (same as Phase 2 fallback).`,
+          severity: 'warning',
+        },
+      });
+    } else {
+      // Data mismatch detected — abort posting
+      await db.systemEvent.create({
+        data: {
+          eventType: 'auto_post',
+          entityType: 'market_data',
+          marketDataId: marketData.id,
+          description: `Pre-post verification FAILED. Data may have changed since Phase 2. Aborting post to avoid stale data.\n${prePostVerification.matchDetails}`,
+          severity: 'error',
+        },
+      });
+      return NextResponse.json({
+        success: false,
+        message: `Pre-post verification failed — data may have changed since initial verification. Aborting post.\n${prePostVerification.matchDetails}`,
+      });
+    }
+
+    // =============================================
     // PHASE 5: Post images to Facebook
     // =============================================
     await db.systemEvent.create({
@@ -438,6 +498,6 @@ export async function GET() {
     timezone: 'Asia/Kathmandu',
     schedule: '3:15 PM NPT (Sun-Thu)',
     retryPolicy: 'Fetch: 6 attempts x 10 min | Verify: 6 attempts x 10 min',
-    pipeline: 'YONEPSE → Verify (NEPSE + MeroLagani) → Generate 3 images → Post to Facebook',
+    pipeline: 'YONEPSE → Verify → Generate 3 images → Pre-post Re-verify → Post to Facebook',
   });
 }
