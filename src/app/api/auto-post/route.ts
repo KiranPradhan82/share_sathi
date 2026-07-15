@@ -26,9 +26,21 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Vercel cron requests send Authorization: Bearer <CRON_SECRET>
+// Session cookies are not available for cron, so we validate via this header instead.
+function isCronRequest(request: NextRequest): boolean {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+  const authHeader = request.headers.get('authorization');
+  return authHeader === `Bearer ${cronSecret}`;
+}
+
 export async function POST(request: NextRequest) {
-  const auth = await requireAuth(request);
-  if (!auth.authorized) return auth.response;
+  // Allow Vercel cron requests via CRON_SECRET; otherwise require session auth
+  if (!isCronRequest(request)) {
+    const auth = await requireAuth(request);
+    if (!auth.authorized) return auth.response;
+  }
 
   try {
     const body = await request.json().catch(() => ({}));
