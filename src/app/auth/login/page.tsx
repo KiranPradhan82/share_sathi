@@ -123,6 +123,15 @@ export default function LoginPage() {
               {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Sign In
             </Button>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => router.push('/auth/forgot-password')}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Forgot password?
+              </button>
+            </div>
           </form>
         </CardContent>
       </Card>
