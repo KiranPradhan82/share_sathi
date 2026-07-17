@@ -305,6 +305,8 @@ export default function HomePage() {
     facebook_page_access_token: '',
     auto_post_enabled: 'false',
     post_time: '15:00',
+    fetch_time: '15:00',
+    refetch_interval_minutes: '5',
     notification_email: '',
     language: 'en',
   });
@@ -2520,13 +2522,13 @@ export default function HomePage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold">Automation</CardTitle>
-            <CardDescription>Configure auto-posting behavior</CardDescription>
+            <CardDescription>Configure auto-posting schedule and data verification</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Auto-Post Enabled</Label>
-                <p className="text-xs text-muted-foreground">Automatically post market images after close. Fetches at 3:15 PM NPT, verifies against official sources, retries every 10 min.</p>
+                <p className="text-xs text-muted-foreground">Fetches NEPSE data at the configured time, verifies against real-time NEPSE/MeroLagani, and posts to Facebook.</p>
               </div>
               <Switch
                 checked={settings.auto_post_enabled === 'true'}
@@ -2536,13 +2538,37 @@ export default function HomePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="postTime">Post Time</Label>
+              <Label htmlFor="fetchTime">Fetch Time (NPT)</Label>
+              <Input
+                id="fetchTime"
+                type="time"
+                value={settings.fetch_time || '15:00'}
+                onChange={(e) => setSettings((s) => ({ ...s, fetch_time: e.target.value }))}
+              />
+              <p className="text-[10px] text-muted-foreground">Cron checks every 5 min. Data is fetched when current time reaches this setting (e.g., 3:00 PM NPT).</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="refetchInterval">Re-fetch Interval (minutes)</Label>
+              <Input
+                id="refetchInterval"
+                type="number"
+                min="1"
+                max="30"
+                value={settings.refetch_interval_minutes || '5'}
+                onChange={(e) => setSettings((s) => ({ ...s, refetch_interval_minutes: e.target.value }))}
+              />
+              <p className="text-[10px] text-muted-foreground">If YONEPSE data doesn&apos;t match real-time NEPSE/MeroLagani, waits this many minutes then re-fetches YONEPSE. Max 6 cycles.</p>
+            </div>
+            <Separator />
+            <div className="space-y-2">
+              <Label htmlFor="postTime">Post Time (NPT)</Label>
               <Input
                 id="postTime"
                 type="time"
                 value={settings.post_time}
                 onChange={(e) => setSettings((s) => ({ ...s, post_time: e.target.value }))}
               />
+              <p className="text-[10px] text-muted-foreground">Reference time shown in post captions.</p>
             </div>
             <Separator />
             <div className="space-y-2">
@@ -2569,11 +2595,11 @@ export default function HomePage() {
                 <><Send className="h-3.5 w-3.5" /> Trigger Auto-Post Now</>
               )}
             </Button>
-            <p className="text-[10px] text-muted-foreground text-center">Manually trigger. Checks for today&apos;s data with 5-min retries.</p>
+            <p className="text-[10px] text-muted-foreground text-center">Manually trigger. Bypasses fetch time check and re-fetch logic.</p>
             <Separator />
             <Button
               onClick={() => handleSaveSection(
-                ['auto_post_enabled', 'post_time', 'notification_email'],
+                ['auto_post_enabled', 'post_time', 'fetch_time', 'refetch_interval_minutes', 'notification_email'],
                 'Automation'
               )}
               disabled={savingSection === 'Automation'}
