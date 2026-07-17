@@ -3455,7 +3455,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t mt-auto">
         <div className="container mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-1">
-          <p className="text-xs text-muted-foreground">© 2026 Share Sathi — Built for Kiran Pradhan</p>
+          <p className="text-[11px] text-muted-foreground">© 2026 Share Sathi — Built for Kiran Pradhan</p>
           <p className="text-xs text-muted-foreground">NEPSE Market Automation • 100% Free</p>
         </div>
       </footer>
