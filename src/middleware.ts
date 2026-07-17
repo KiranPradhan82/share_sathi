@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Paths that don't require authentication
-const PUBLIC_PATHS = ['/auth/setup', '/auth/login', '/api/auth/setup', '/api/auth/login', '/api/auth/check', '/api/db-health'];
+const PUBLIC_PATHS = ['/auth/setup', '/auth/login', '/auth/forgot-password', '/api/auth/setup', '/api/auth/login', '/api/auth/forgot-password', '/api/auth/verify-reset', '/api/auth/check', '/api/db-health'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
