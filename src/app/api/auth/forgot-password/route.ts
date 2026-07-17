@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     // Always return success to prevent email enumeration
     // But only send the email if the user exists
     if (user) {
-      const otp = String(Number(randomBytes(3).toString('hex', 0, 6))).padStart(6, '0');
+      const otp = String(randomBytes(4).readUInt32BE(0) % 1000000).padStart(6, '0');
 
       // Store OTP in systemConfig (expires in 10 minutes)
       await db.systemConfig.upsert({
