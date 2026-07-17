@@ -2,11 +2,7 @@
   "crons": [
     {
       "path": "/api/auto-post",
-      "schedule": "30 9 * * 0-4"
-    },
-    {
-      "path": "/api/auto-post",
-      "schedule": "45 9 * * 0-4"
+      "schedule": "*/5 5-10 * * 0-4"
     }
   ]
 }

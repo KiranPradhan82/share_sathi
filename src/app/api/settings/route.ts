@@ -18,6 +18,8 @@ export async function GET(request: NextRequest) {
       facebook_page_access_token: '',
       auto_post_enabled: 'false',
       post_time: '15:00',
+      fetch_time: '15:00',
+      refetch_interval_minutes: '5',
       notification_email: '',
       language: 'en',
     };
@@ -59,6 +61,8 @@ export async function PUT(request: NextRequest) {
       'facebook_page_access_token',
       'auto_post_enabled',
       'post_time',
+      'fetch_time',
+      'refetch_interval_minutes',
       'notification_email',
       'language',
     ];

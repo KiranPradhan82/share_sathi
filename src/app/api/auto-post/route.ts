@@ -22,6 +22,31 @@ function getNepalToday(): string {
   return nepalDate.toISOString().split('T')[0];
 }
 
+function getNepalCurrentTime(): string {
+  const now = new Date();
+  const nepalStr = now.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu', hour12: false });
+  // Extract HH:MM from the formatted string
+  const timeMatch = nepalStr.match(/(\d{1,2}):(\d{2})/);
+  if (timeMatch) {
+    return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+  }
+  return '';
+}
+
+function isWithinWindow(configuredTime: string, windowMinutes: number): boolean {
+  const current = getNepalCurrentTime();
+  if (!current || !configuredTime) return false;
+  
+  const [nowH, nowM] = current.split(':').map(Number);
+  const [cfgH, cfgM] = configuredTime.split(':').map(Number);
+  
+  const nowTotal = nowH * 60 + nowM;
+  const cfgTotal = cfgH * 60 + cfgM;
+  
+  // Within windowMinutes after the configured time
+  return nowTotal >= cfgTotal && nowTotal <= cfgTotal + windowMinutes;
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -51,6 +76,19 @@ export async function POST(request: NextRequest) {
       const autoPostEnabled = await getConfigValue('auto_post_enabled');
       if (autoPostEnabled !== 'true') {
         return NextResponse.json({ success: false, message: 'Auto-post is disabled in settings' });
+      }
+
+      // Check if current Nepal time is within the configured fetch window
+      const fetchTime = await getConfigValue('fetch_time') || '15:00';
+      const refetchInterval = parseInt(await getConfigValue('refetch_interval_minutes') || '5', 10);
+      const fetchWindowMinutes = Math.max(refetchInterval * 6, 30); // Allow up to 6 re-fetch cycles or 30 min
+
+      if (!isWithinWindow(fetchTime, fetchWindowMinutes)) {
+        return NextResponse.json({ 
+          success: false, 
+          message: `Not within fetch window. Configured fetch time: ${fetchTime} NPT, current: ${getNepalCurrentTime()} NPT. Skipping.`,
+          skip: true,
+        });
       }
     }
 
@@ -142,13 +180,19 @@ export async function POST(request: NextRequest) {
 
     // =============================================
     // PHASE 2: Verify against NEPSE official + Mero Lagani
+    // If data doesn't match, re-fetch YONEPSE and re-verify
+    // up to (refetch_interval_minutes * 6) cycles
     // =============================================
+    const refetchInterval = parseInt(await getConfigValue('refetch_interval_minutes') || '5', 10);
+    const MAX_REFETCH_CYCLES = Math.min(Math.floor(240 / refetchInterval), 6); // Stay within ~240s of Vercel's 300s limit
+    const refetchDelayMs = refetchInterval * 60 * 1000;
+
     await db.systemEvent.create({
       data: {
         eventType: 'auto_post',
         entityType: 'market_data',
         entityId: todayData?.id,
-        description: `Phase 2: Verifying YONEPSE data (Index: ${nepseData.nepseIndex}) against official sources...`,
+        description: `Phase 2: Verifying YONEPSE data (Index: ${nepseData.nepseIndex}) against official sources. Re-fetch interval: ${refetchInterval} min, max cycles: ${MAX_REFETCH_CYCLES}...`,
         severity: 'info',
       },
     });
@@ -160,23 +204,78 @@ export async function POST(request: NextRequest) {
       turnover: nepseData.turnover,
     });
 
-    // If not verified, retry a couple times quickly (no long delays — see Phase 1 note)
-    const MAX_VERIFY_ATTEMPTS = 3;
     let verifyAttempts = 1;
+    let refetchCycles = 0;
 
-    while (!verification.verified && verifyAttempts < MAX_VERIFY_ATTEMPTS) {
+    // If not verified and at least one source responded but data doesn't match,
+    // re-fetch from YONEPSE and re-verify
+    while (!verification.verified && refetchCycles < MAX_REFETCH_CYCLES) {
+      // If both sources unreachable, don't re-fetch — just proceed with YONEPSE
+      if (verification.nepseOfficial === null && verification.meroLagani === null) {
+        await db.systemEvent.create({
+          data: {
+            eventType: 'auto_post',
+            entityType: 'market_data',
+            description: 'Both official sources unreachable. Cannot compare. Proceeding with YONEPSE data as it is generally reliable.',
+            severity: 'warning',
+          },
+        });
+        break;
+      }
+
+      // At least one source responded but data doesn't match — re-fetch from YONEPSE
+      refetchCycles++;
       verifyAttempts++;
+
       await db.systemEvent.create({
         data: {
           eventType: 'auto_post',
           entityType: 'market_data',
-          description: `Verification attempt ${verifyAttempts}/${MAX_VERIFY_ATTEMPTS}: Data not yet matching. Retrying...\n${verification.matchDetails}`,
+          description: `Re-fetch cycle ${refetchCycles}/${MAX_REFETCH_CYCLES}: YONEPSE data doesn't match real-time NEPSE/MeroLagani. Waiting ${refetchInterval} min before re-fetching...\n${verification.matchDetails}`,
           severity: 'warning',
         },
       });
 
-      await delay(5000); // 5s between retries (not 10 min!)
+      await delay(refetchDelayMs);
 
+      // Re-fetch from YONEPSE
+      try {
+        const freshData = await fetchNepseData();
+        if (freshData.tradingDate === todayNepal) {
+          nepseData = freshData;
+          await db.systemEvent.create({
+            data: {
+              eventType: 'auto_post',
+              entityType: 'market_data',
+              description: `Re-fetch cycle ${refetchCycles}: Got fresh YONEPSE data (Index: ${freshData.nepseIndex}, was ${verification.nepseOfficial?.nepseIndex || verification.meroLagani?.nepseIndex || '?'})`,
+              severity: 'info',
+            },
+          });
+        } else {
+          await db.systemEvent.create({
+            data: {
+              eventType: 'auto_post',
+              entityType: 'market_data',
+              description: `Re-fetch cycle ${refetchCycles}: YONEPSE still has data for ${freshData.tradingDate}, not today. Skipping re-verify.`,
+              severity: 'warning',
+            },
+          });
+          continue;
+        }
+      } catch (fetchErr) {
+        const errMsg = fetchErr instanceof Error ? fetchErr.message : 'Unknown error';
+        await db.systemEvent.create({
+          data: {
+            eventType: 'auto_post',
+            entityType: 'market_data',
+            description: `Re-fetch cycle ${refetchCycles}: Re-fetch from YONEPSE failed — ${errMsg}`,
+            severity: 'warning',
+          },
+        });
+        continue;
+      }
+
+      // Re-verify fresh data against official sources
       verification = await verifyMarketData({
         nepseIndex: nepseData.nepseIndex,
         change: nepseData.change,
@@ -190,27 +289,20 @@ export async function POST(request: NextRequest) {
       data: {
         eventType: 'auto_post',
         entityType: 'market_data',
-        description: `Verification result (after ${verifyAttempts} attempt(s)): verified=${verification.verified}\n${verification.matchDetails}`,
+        description: `Verification result (after ${verifyAttempts} attempt(s), ${refetchCycles} re-fetch cycle(s)): verified=${verification.verified}\n${verification.matchDetails}`,
         severity: verification.verified ? 'success' : 'warning',
       },
     });
 
-    // If still not verified after all retries, but both sources were unreachable,
-    // proceed anyway (YONEPSE is generally reliable)
+    // If still not verified after all re-fetch cycles
     if (!verification.verified) {
       if (verification.nepseOfficial === null && verification.meroLagani === null) {
-        await db.systemEvent.create({
-          data: {
-            eventType: 'auto_post',
-            entityType: 'market_data',
-            description: 'Could not verify against any official source (both unreachable). Proceeding with YONEPSE data as it is generally reliable.',
-            severity: 'warning',
-          },
-        });
+        // Both unreachable — already handled in the loop, proceed
       } else {
         return NextResponse.json({
           success: false,
-          message: `YONEPSE data does not match official sources after ${verifyAttempts} verification attempts. Aborting auto-post.\n${verification.matchDetails}`,
+          message: `YONEPSE data does not match official sources after ${verifyAttempts} verification attempts (${refetchCycles} re-fetch cycles). Will retry on next cron.\n${verification.matchDetails}`,
+          retryLater: true,
         });
       }
     }
@@ -548,17 +640,18 @@ export async function POST(request: NextRequest) {
         eventType: 'auto_post',
         entityType: 'system',
         marketDataId: marketData.id,
-        description: `Auto-post pipeline completed for ${marketData.tradingDate}. Posted ${successCount}/${totalImages} images (${successCount > 0 ? '3 summary' : '0 summary'} + ${Math.max(0, successCount - 3)} stock cards). Fetch: ${fetchAttempts} attempts, Verify: ${verifyAttempts} attempts.`,
+        description: `Auto-post pipeline completed for ${marketData.tradingDate}. Posted ${successCount}/${totalImages} images (${successCount > 0 ? '3 summary' : '0 summary'} + ${Math.max(0, successCount - 3)} stock cards). Fetch: ${fetchAttempts} attempts, Verify: ${verifyAttempts} attempts, Re-fetch cycles: ${refetchCycles}.`,
         severity: successCount === totalImages ? 'success' : (successCount > 0 ? 'warning' : 'error'),
       },
     });
 
     return NextResponse.json({
       success: successCount > 0,
-      message: `Auto-posted ${successCount}/${totalImages} images for ${marketData.tradingDate} (3 summary + ${stockCards.length} stock cards, fetch: ${fetchAttempts} attempts, verify: ${verifyAttempts} attempts)`,
+      message: `Auto-posted ${successCount}/${totalImages} images for ${marketData.tradingDate} (3 summary + ${stockCards.length} stock cards, fetch: ${fetchAttempts} attempts, verify: ${verifyAttempts} attempts, re-fetch cycles: ${refetchCycles})`,
       results,
       fetchAttempts,
       verifyAttempts,
+      refetchCycles,
       verified: verification.verified,
       totalImages,
       summaryImages: 3,
@@ -583,10 +676,12 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     cron: 'active',
-    purpose: 'NEPSE auto-post: fetch at 3:15 PM NPT, verify against official sources, generate images, post to Facebook',
+    purpose: 'NEPSE auto-post: fetch at admin-configured time, verify against official sources, re-fetch if stale, generate images, post to Facebook',
     timezone: 'Asia/Kathmandu',
-    schedule: '3:15 PM NPT (Sun-Thu)',
-    retryPolicy: 'Fetch: 3 attempts (fail fast, cron retries) | Verify: 3 attempts x 5s',
-    pipeline: 'YONEPSE → Verify → Generate 3 summary + 20 stock card images → Pre-post Re-verify → Post all 23 images to Facebook one-by-one',
+    schedule: 'Every 5 min during market hours (Sun-Thu) — route checks admin fetch_time setting',
+    fetch_time: 'Admin-configured (default 3:00 PM NPT)',
+    refetch_interval: 'Admin-configured (default 5 min) — re-fetches YONEPSE if data doesn\'t match NEPSE/MeroLagani',
+    retryPolicy: 'Fetch: 3 attempts (fail fast) | Verify: re-fetch loop (up to 6 cycles at configured interval)',
+    pipeline: 'YONEPSE → Verify vs NEPSE/MeroLagani → Re-fetch if stale → Generate 3 summary + 20 stock card images → Pre-post Re-verify → Post all 23 images to Facebook one-by-one',
   });
 }
