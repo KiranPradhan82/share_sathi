@@ -83,9 +83,11 @@ export async function POST(request: NextRequest) {
 
     // =============================================
     // PHASE 1: Fetch YONEPSE data with date verification
+    // NOTE: No long delays — Vercel cron has 300s timeout.
+    // If data isn't ready, we fail fast and the 1-minute Vercel
+    // cron retry will re-invoke us automatically.
     // =============================================
-    const MAX_FETCH_ATTEMPTS = 6;
-    const FETCH_RETRY_DELAY = 10 * 60 * 1000; // 10 minutes
+    const MAX_FETCH_ATTEMPTS = 3;
     let nepseData: Awaited<ReturnType<typeof fetchNepseData>> | null = null;
     let fetchAttempts = 0;
 
@@ -108,11 +110,10 @@ export async function POST(request: NextRequest) {
             data: {
               eventType: 'auto_post',
               entityType: 'market_data',
-              description: `Attempt ${attempt}/${MAX_FETCH_ATTEMPTS}: YONEPSE has data for ${data.tradingDate}, not today (${todayNepal}). Retrying in 10 min...`,
+              description: `Attempt ${attempt}/${MAX_FETCH_ATTEMPTS}: YONEPSE has data for ${data.tradingDate}, not today (${todayNepal}).`,
               severity: 'warning',
             },
           });
-          if (attempt < MAX_FETCH_ATTEMPTS) await delay(FETCH_RETRY_DELAY);
           continue;
         }
 
@@ -124,18 +125,18 @@ export async function POST(request: NextRequest) {
           data: {
             eventType: 'auto_post',
             entityType: 'market_data',
-            description: `Attempt ${attempt}/${MAX_FETCH_ATTEMPTS}: Fetch failed — ${errMsg}. Retrying in 10 min...`,
+            description: `Attempt ${attempt}/${MAX_FETCH_ATTEMPTS}: Fetch failed — ${errMsg}.`,
             severity: 'warning',
           },
         });
-        if (attempt < MAX_FETCH_ATTEMPTS) await delay(FETCH_RETRY_DELAY);
       }
     }
 
     if (!nepseData) {
       return NextResponse.json({
         success: false,
-        message: `Failed to fetch today's (${todayNepal}) data after ${MAX_FETCH_ATTEMPTS} attempts.`,
+        message: `YONEPSE data not yet available for ${todayNepal}. Will retry on next cron invocation.`,
+        retryLater: true,
       });
     }
 
@@ -159,8 +160,8 @@ export async function POST(request: NextRequest) {
       turnover: nepseData.turnover,
     });
 
-    // If not verified, retry verification every 10 minutes up to 6 times
-    const MAX_VERIFY_ATTEMPTS = 6;
+    // If not verified, retry a couple times quickly (no long delays — see Phase 1 note)
+    const MAX_VERIFY_ATTEMPTS = 3;
     let verifyAttempts = 1;
 
     while (!verification.verified && verifyAttempts < MAX_VERIFY_ATTEMPTS) {
@@ -169,22 +170,12 @@ export async function POST(request: NextRequest) {
         data: {
           eventType: 'auto_post',
           entityType: 'market_data',
-          description: `Verification attempt ${verifyAttempts}/${MAX_VERIFY_ATTEMPTS}: Data not yet matching official sources. Re-fetching YONEPSE and re-verifying in 10 min...\n${verification.matchDetails}`,
+          description: `Verification attempt ${verifyAttempts}/${MAX_VERIFY_ATTEMPTS}: Data not yet matching. Retrying...\n${verification.matchDetails}`,
           severity: 'warning',
         },
       });
 
-      await delay(FETCH_RETRY_DELAY);
-
-      // Re-fetch from YONEPSE
-      try {
-        const freshData = await fetchNepseData();
-        if (freshData.tradingDate === todayNepal) {
-          nepseData = freshData;
-        }
-      } catch {
-        // Keep existing data, just re-verify
-      }
+      await delay(5000); // 5s between retries (not 10 min!)
 
       verification = await verifyMarketData({
         nepseIndex: nepseData.nepseIndex,
@@ -595,7 +586,7 @@ export async function GET() {
     purpose: 'NEPSE auto-post: fetch at 3:15 PM NPT, verify against official sources, generate images, post to Facebook',
     timezone: 'Asia/Kathmandu',
     schedule: '3:15 PM NPT (Sun-Thu)',
-    retryPolicy: 'Fetch: 6 attempts x 10 min | Verify: 6 attempts x 10 min',
+    retryPolicy: 'Fetch: 3 attempts (fail fast, cron retries) | Verify: 3 attempts x 5s',
     pipeline: 'YONEPSE → Verify → Generate 3 summary + 20 stock card images → Pre-post Re-verify → Post all 23 images to Facebook one-by-one',
   });
 }
