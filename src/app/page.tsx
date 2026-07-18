@@ -2545,7 +2545,7 @@ export default function HomePage() {
                 value={settings.fetch_time || '15:00'}
                 onChange={(e) => setSettings((s) => ({ ...s, fetch_time: e.target.value }))}
               />
-              <p className="text-[10px] text-muted-foreground">Cron checks every 5 min. Data is fetched when current time reaches this setting (e.g., 3:00 PM NPT).</p>
+              <p className="text-[10px] text-muted-foreground">Target time for the daily cron (approx 4:15 PM NPT, Hobby plan precision: ±59 min). Actual run time may vary.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="refetchInterval">Re-fetch Interval (minutes)</Label>
@@ -2557,7 +2557,7 @@ export default function HomePage() {
                 value={settings.refetch_interval_minutes || '5'}
                 onChange={(e) => setSettings((s) => ({ ...s, refetch_interval_minutes: e.target.value }))}
               />
-              <p className="text-[10px] text-muted-foreground">If YONEPSE data doesn&apos;t match real-time NEPSE/MeroLagani, waits this many minutes then re-fetches YONEPSE. Max 6 cycles.</p>
+              <p className="text-[10px] text-muted-foreground">Cron fires once daily (Hobby plan). If YONEPSE data doesn&apos;t match real-time NEPSE/MeroLagani, re-fetches after this interval. Max 6 cycles.</p>
             </div>
             <Separator />
             <div className="space-y-2">

@@ -22,31 +22,6 @@ function getNepalToday(): string {
   return nepalDate.toISOString().split('T')[0];
 }
 
-function getNepalCurrentTime(): string {
-  const now = new Date();
-  const nepalStr = now.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu', hour12: false });
-  // Extract HH:MM from the formatted string
-  const timeMatch = nepalStr.match(/(\d{1,2}):(\d{2})/);
-  if (timeMatch) {
-    return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
-  }
-  return '';
-}
-
-function isWithinWindow(configuredTime: string, windowMinutes: number): boolean {
-  const current = getNepalCurrentTime();
-  if (!current || !configuredTime) return false;
-  
-  const [nowH, nowM] = current.split(':').map(Number);
-  const [cfgH, cfgM] = configuredTime.split(':').map(Number);
-  
-  const nowTotal = nowH * 60 + nowM;
-  const cfgTotal = cfgH * 60 + cfgM;
-  
-  // Within windowMinutes after the configured time
-  return nowTotal >= cfgTotal && nowTotal <= cfgTotal + windowMinutes;
-}
-
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -76,19 +51,6 @@ export async function POST(request: NextRequest) {
       const autoPostEnabled = await getConfigValue('auto_post_enabled');
       if (autoPostEnabled !== 'true') {
         return NextResponse.json({ success: false, message: 'Auto-post is disabled in settings' });
-      }
-
-      // Check if current Nepal time is within the configured fetch window
-      const fetchTime = await getConfigValue('fetch_time') || '15:00';
-      const refetchInterval = parseInt(await getConfigValue('refetch_interval_minutes') || '5', 10);
-      const fetchWindowMinutes = Math.max(refetchInterval * 6, 30); // Allow up to 6 re-fetch cycles or 30 min
-
-      if (!isWithinWindow(fetchTime, fetchWindowMinutes)) {
-        return NextResponse.json({ 
-          success: false, 
-          message: `Not within fetch window. Configured fetch time: ${fetchTime} NPT, current: ${getNepalCurrentTime()} NPT. Skipping.`,
-          skip: true,
-        });
       }
     }
 
@@ -676,11 +638,10 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     cron: 'active',
-    purpose: 'NEPSE auto-post: fetch at admin-configured time, verify against official sources, re-fetch if stale, generate images, post to Facebook',
+    purpose: 'NEPSE auto-post: fetch market data, verify against official sources, re-fetch if stale, generate images, post to Facebook',
     timezone: 'Asia/Kathmandu',
-    schedule: 'Every 5 min during market hours (Sun-Thu) — route checks admin fetch_time setting',
-    fetch_time: 'Admin-configured (default 3:00 PM NPT)',
-    refetch_interval: 'Admin-configured (default 5 min) — re-fetches YONEPSE if data doesn\'t match NEPSE/MeroLagani',
+    schedule: 'Once daily ~4:15 PM NPT (Hobby plan, precision ±59 min, Sun-Thu)',
+    refetch_interval: 'Admin-configured (default 5 min) — re-fetches YONEPSE if data doesn\'t match NEPSE/MeroLagani, up to 6 cycles within single invocation',
     retryPolicy: 'Fetch: 3 attempts (fail fast) | Verify: re-fetch loop (up to 6 cycles at configured interval)',
     pipeline: 'YONEPSE → Verify vs NEPSE/MeroLagani → Re-fetch if stale → Generate 3 summary + 20 stock card images → Pre-post Re-verify → Post all 23 images to Facebook one-by-one',
   });
