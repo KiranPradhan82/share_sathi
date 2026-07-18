@@ -305,8 +305,8 @@ export default function HomePage() {
     facebook_page_access_token: '',
     auto_post_enabled: 'false',
     post_time: '15:00',
-    fetch_time: '15:00',
     refetch_interval_minutes: '5',
+    off_days: '0,6',
     notification_email: '',
     language: 'en',
   });
@@ -2528,7 +2528,7 @@ export default function HomePage() {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Auto-Post Enabled</Label>
-                <p className="text-xs text-muted-foreground">Fetches NEPSE data at the configured time, verifies against real-time NEPSE/MeroLagani, and posts to Facebook.</p>
+                <p className="text-xs text-muted-foreground">Fetch NEPSE data daily, verify against real-time sources, and post to Facebook.</p>
               </div>
               <Switch
                 checked={settings.auto_post_enabled === 'true'}
@@ -2537,16 +2537,37 @@ export default function HomePage() {
                 }
               />
             </div>
+            <Separator />
             <div className="space-y-2">
-              <Label htmlFor="fetchTime">Fetch Time (NPT)</Label>
-              <Input
-                id="fetchTime"
-                type="time"
-                value={settings.fetch_time || '15:00'}
-                onChange={(e) => setSettings((s) => ({ ...s, fetch_time: e.target.value }))}
-              />
-              <p className="text-[10px] text-muted-foreground">Target time for the daily cron (approx 4:15 PM NPT, Hobby plan precision: ±59 min). Actual run time may vary.</p>
+              <Label>Off Days</Label>
+              <p className="text-[10px] text-muted-foreground mb-1.5">Market closed days. No fetching or posting on these days.</p>
+              <div className="grid grid-cols-7 gap-1">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => {
+                  const offDaysArr = (settings.off_days || '0,6').split(',').map(d => parseInt(d.trim(), 10));
+                  const isOff = offDaysArr.includes(i);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => {
+                        const arr = (settings.off_days || '0,6').split(',').map(d => parseInt(d.trim(), 10));
+                        const next = isOff ? arr.filter(d => d !== i) : [...arr, i];
+                        setSettings((s) => ({ ...s, off_days: next.sort((a, b) => a - b).join(',') }));
+                      }}
+                      className={`text-xs py-1.5 rounded-md font-medium transition-colors ${
+                        isOff
+                          ? 'bg-destructive text-destructive-foreground'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-muted-foreground">Red = off day (no auto-post). Default: Sunday &amp; Saturday.</p>
             </div>
+            <Separator />
             <div className="space-y-2">
               <Label htmlFor="refetchInterval">Re-fetch Interval (minutes)</Label>
               <Input
@@ -2557,18 +2578,18 @@ export default function HomePage() {
                 value={settings.refetch_interval_minutes || '5'}
                 onChange={(e) => setSettings((s) => ({ ...s, refetch_interval_minutes: e.target.value }))}
               />
-              <p className="text-[10px] text-muted-foreground">Cron fires once daily (Hobby plan). If YONEPSE data doesn&apos;t match real-time NEPSE/MeroLagani, re-fetches after this interval. Max 6 cycles.</p>
+              <p className="text-[10px] text-muted-foreground">If YONEPSE data doesn&apos;t match live NEPSE/MeroLagani, waits this long before re-fetching. Max 6 cycles.</p>
             </div>
             <Separator />
             <div className="space-y-2">
-              <Label htmlFor="postTime">Post Time (NPT)</Label>
+              <Label htmlFor="postTime">Caption Time (NPT)</Label>
               <Input
                 id="postTime"
                 type="time"
                 value={settings.post_time}
                 onChange={(e) => setSettings((s) => ({ ...s, post_time: e.target.value }))}
               />
-              <p className="text-[10px] text-muted-foreground">Reference time shown in post captions.</p>
+              <p className="text-[10px] text-muted-foreground">Time shown in Facebook post captions.</p>
             </div>
             <Separator />
             <div className="space-y-2">
@@ -2595,11 +2616,11 @@ export default function HomePage() {
                 <><Send className="h-3.5 w-3.5" /> Trigger Auto-Post Now</>
               )}
             </Button>
-            <p className="text-[10px] text-muted-foreground text-center">Manually trigger. Bypasses fetch time check and re-fetch logic.</p>
+            <p className="text-[10px] text-muted-foreground text-center">Manually trigger. Bypasses off-day check.</p>
             <Separator />
             <Button
               onClick={() => handleSaveSection(
-                ['auto_post_enabled', 'post_time', 'fetch_time', 'refetch_interval_minutes', 'notification_email'],
+                ['auto_post_enabled', 'post_time', 'refetch_interval_minutes', 'off_days', 'notification_email'],
                 'Automation'
               )}
               disabled={savingSection === 'Automation'}

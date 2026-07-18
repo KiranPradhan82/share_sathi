@@ -22,6 +22,16 @@ function getNepalToday(): string {
   return nepalDate.toISOString().split('T')[0];
 }
 
+function getNepalDayOfWeek(): number {
+  // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const now = new Date();
+  const nepalStr = now.toLocaleString('en-US', { timeZone: 'Asia/Kathmandu', weekday: 'long' });
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days.indexOf(nepalStr);
+}
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -51,6 +61,19 @@ export async function POST(request: NextRequest) {
       const autoPostEnabled = await getConfigValue('auto_post_enabled');
       if (autoPostEnabled !== 'true') {
         return NextResponse.json({ success: false, message: 'Auto-post is disabled in settings' });
+      }
+
+      // Check if today is an off day (market closed)
+      const offDaysStr = await getConfigValue('off_days') || '0,6';
+      const offDays = offDaysStr.split(',').map(d => parseInt(d.trim(), 10)).filter(d => !isNaN(d));
+      const todayDay = getNepalDayOfWeek();
+      if (offDays.includes(todayDay)) {
+        const dayName = DAY_NAMES[todayDay] || `day ${todayDay}`;
+        return NextResponse.json({ 
+          success: false, 
+          message: `Today is ${dayName} (off day). Skipping auto-post.`,
+          skip: true,
+        });
       }
     }
 
