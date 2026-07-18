@@ -1,5 +1,11 @@
 import type { NepseData } from './nepse';
 
+// Default hashtags used when no custom hashtags are configured
+export const DEFAULT_HASHTAGS = '#NEPSE #ShareSathi #NepalStockExchange #ShareMarket #StockMarketNepal #StockMarket';
+const DEFAULT_GAINERS_HASHTAGS = '#NEPSE #ShareSathi #TopGainers #NepalStockMarket #StockMarket #NepalStockExchange #ShareMarket';
+const DEFAULT_LOSERS_HASHTAGS = '#NEPSE #ShareSathi #TopLosers #NepalStockMarket #StockMarket #NepalStockExchange #ShareMarket';
+const DEFAULT_STOCK_HASHTAGS = '#NEPSE #ShareSathi #StockMarket #NepalStockExchange #ShareMarket #NepalStockMarket #StockMarketNepal';
+
 function formatNumber(num: number): string {
   if (num >= 100000000000) {
     return `${(num / 100000000000).toFixed(2)} Kharab`;
@@ -64,7 +70,7 @@ ${subIndicesLine}
   return message;
 }
 
-export function formatImageCaption(data: NepseData): string {
+export function formatImageCaption(data: NepseData, hashtags?: string): string {
   const arrow = getChangeEmoji(data.change);
   const sign = getSign(data.change);
 
@@ -77,24 +83,24 @@ export function formatImageCaption(data: NepseData): string {
     caption += `\nMarket Cap: Rs. ${formatNumber(data.marketCap)}`;
   }
 
-  caption += `\n\n#NEPSE #ShareSathi #NepalStockExchange #ShareMarket #StockMarketNepal #StockMarket`;
+  caption += `\n\n${hashtags || DEFAULT_HASHTAGS}`;
   return caption;
 }
 
-export function formatGainersCaption(date: string, gainers: Array<{ symbol: string; change: number; changePercent: number }>): string {
+export function formatGainersCaption(date: string, gainers: Array<{ symbol: string; change: number; changePercent: number }>, hashtags?: string): string {
   const rows = gainers.slice(0, 5).map((g, i) => `${i + 1}. ${g.symbol}: +${g.change.toFixed(2)} (+${g.changePercent.toFixed(2)}%)`).join('\n');
-  return `Today's Top Gainers - ${date}\n\n${rows}\n\n#NEPSE #ShareSathi #TopGainers #NepalStockMarket #StockMarket #NepalStockExchange #ShareMarket`;
+  return `Today's Top Gainers - ${date}\n\n${rows}\n\n${hashtags || DEFAULT_GAINERS_HASHTAGS}`;
 }
 
-export function formatLosersCaption(date: string, losers: Array<{ symbol: string; change: number; changePercent: number }>): string {
+export function formatLosersCaption(date: string, losers: Array<{ symbol: string; change: number; changePercent: number }>, hashtags?: string): string {
   const rows = losers.slice(0, 5).map((l, i) => `${i + 1}. ${l.symbol}: ${l.change.toFixed(2)} (${l.changePercent.toFixed(2)}%)`).join('\n');
-  return `Today's Top Losers - ${date}\n\n${rows}\n\n#NEPSE #ShareSathi #TopLosers #NepalStockMarket #StockMarket #NepalStockExchange #ShareMarket`;
+  return `Today's Top Losers - ${date}\n\n${rows}\n\n${hashtags || DEFAULT_LOSERS_HASHTAGS}`;
 }
 
-export function formatStockCardCaption(stock: { symbol: string; change: number; changePercent: number; closePrice: number }, type: 'gainer' | 'loser'): string {
+export function formatStockCardCaption(stock: { symbol: string; change: number; changePercent: number; closePrice: number }, type: 'gainer' | 'loser', hashtags?: string): string {
   const heart = type === 'gainer' ? '\uD83D\uDC9A' : '\uD83D\uDC94';
   const sign = type === 'gainer' ? '+' : '';
-  return `${stock.symbol} today ${heart}\n\nLTP: Rs. ${stock.closePrice.toFixed(2)}\nChange: ${sign}${stock.change.toFixed(2)} (${sign}${stock.changePercent.toFixed(2)}%)\n\n#NEPSE #ShareSathi #StockMarket #NepalStockExchange #ShareMarket #NepalStockMarket #StockMarketNepal`;
+  return `${stock.symbol} today ${heart}\n\nLTP: Rs. ${stock.closePrice.toFixed(2)}\nChange: ${sign}${stock.change.toFixed(2)} (${sign}${stock.changePercent.toFixed(2)}%)\n\n${hashtags || DEFAULT_STOCK_HASHTAGS}`;
 }
 
 function formatDateForCaption(dateStr: string): string {

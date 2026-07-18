@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
       post_time: '15:00',
       refetch_interval_minutes: '5',
       off_days: '0,6',
+      hashtags: '',
       notification_email: '',
       language: 'en',
     };
@@ -63,6 +64,7 @@ export async function PUT(request: NextRequest) {
       'post_time',
       'refetch_interval_minutes',
       'off_days',
+      'hashtags',
       'notification_email',
       'language',
     ];

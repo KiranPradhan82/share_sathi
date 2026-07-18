@@ -376,6 +376,10 @@ export async function POST(request: NextRequest) {
     const topLosers = losers.slice(0, 10);
     const stockCards: Array<{ buffer: Buffer; caption: string; label: string; type: 'gainer' | 'loser'; symbol: string }> = [];
 
+    // Read custom hashtags from settings (admin can edit these)
+    const customHashtags = await getConfigValue('hashtags');
+    const hashtags = customHashtags || undefined; // undefined = use defaults
+
     await db.systemEvent.create({
       data: {
         eventType: 'auto_post',
@@ -395,7 +399,7 @@ export async function POST(request: NextRequest) {
           change: g.change,
           changePercent: g.changePercent,
           closePrice: g.closePrice,
-        }, 'gainer');
+        }, 'gainer', hashtags);
         stockCards.push({ buffer, caption, label: `Gainer #${i + 1}: ${g.symbol}`, type: 'gainer', symbol: g.symbol });
       } catch (cardErr) {
         const errMsg = cardErr instanceof Error ? cardErr.message : 'Unknown error';
@@ -420,7 +424,7 @@ export async function POST(request: NextRequest) {
           change: l.change,
           changePercent: l.changePercent,
           closePrice: l.closePrice,
-        }, 'loser');
+        }, 'loser', hashtags);
         stockCards.push({ buffer, caption, label: `Loser #${i + 1}: ${l.symbol}`, type: 'loser', symbol: l.symbol });
       } catch (cardErr) {
         const errMsg = cardErr instanceof Error ? cardErr.message : 'Unknown error';
@@ -525,7 +529,7 @@ export async function POST(request: NextRequest) {
     const postsToMake: Array<{ buffer: Buffer; caption: string; label: string }> = [
       {
         buffer: images.marketSummary,
-        caption: formatImageCaption(nepseData),
+        caption: formatImageCaption(nepseData, hashtags),
         label: 'Market Summary',
       },
       {
@@ -534,7 +538,7 @@ export async function POST(request: NextRequest) {
           symbol: g.symbol,
           change: g.change,
           changePercent: g.changePercent,
-        }))),
+        })), hashtags),
         label: 'Top Gainers',
       },
       {
@@ -543,7 +547,7 @@ export async function POST(request: NextRequest) {
           symbol: l.symbol,
           change: l.change,
           changePercent: l.changePercent,
-        }))),
+        })), hashtags),
         label: 'Top Losers',
       },
       // Individual stock cards (10 gainers + 10 losers)

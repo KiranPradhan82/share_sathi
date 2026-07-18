@@ -307,6 +307,7 @@ export default function HomePage() {
     post_time: '15:00',
     refetch_interval_minutes: '5',
     off_days: '0,6',
+    hashtags: '',
     notification_email: '',
     language: 'en',
   });
@@ -2593,6 +2594,19 @@ export default function HomePage() {
             </div>
             <Separator />
             <div className="space-y-2">
+              <Label htmlFor="hashtags">Hashtags</Label>
+              <Textarea
+                id="hashtags"
+                placeholder="#NEPSE #ShareSathi #NepalStockExchange #ShareMarket #StockMarketNepal #StockMarket"
+                value={settings.hashtags || ''}
+                onChange={(e) => setSettings((s) => ({ ...s, hashtags: e.target.value }))}
+                rows={2}
+                className="text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground">Custom hashtags for all auto-posts. Leave empty to use defaults.</p>
+            </div>
+            <Separator />
+            <div className="space-y-2">
               <Label htmlFor="notifEmail">Notification Email</Label>
               <Input
                 id="notifEmail"
@@ -2620,7 +2634,7 @@ export default function HomePage() {
             <Separator />
             <Button
               onClick={() => handleSaveSection(
-                ['auto_post_enabled', 'post_time', 'refetch_interval_minutes', 'off_days', 'notification_email'],
+                ['auto_post_enabled', 'post_time', 'refetch_interval_minutes', 'off_days', 'hashtags', 'notification_email'],
                 'Automation'
               )}
               disabled={savingSection === 'Automation'}
