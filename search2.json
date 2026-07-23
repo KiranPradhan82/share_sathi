@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://www.facebook.com/mystocknepal",
+    "name": "Stock Nepal (@mystocknepal) - Facebook",
+    "snippet": "We post news and updates about stock market in Nepal . 92 companies are currently on the SEBON application list. Manufacturing & Processing: 23 Companies Missing: data API scraper",
+    "host_name": "www.facebook.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itsnporg/posts/1799755674139188",
+    "name": "Where can I get nepse stocks data? Do I need to buy api? I'm not doing",
+    "snippet": "To obtain Nepse data officially, you must acquire an API from the Nepal Stock Exchange. Someone might suggest web scraping, but sites like NepseAlpha strictly ... Missing: @mystocknepal",
+    "host_name": "www.facebook.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/109070762572263/posts/1298310656981595",
+    "name": "How to use Nepal Stock Exchange API - Facebook",
+    "snippet": "I've written a web scraper, To serve nepal stock data via rest API. Along with upcoming ipo,fpo, right share from other sources too, ... Missing: @mystocknepal",
+    "host_name": "www.facebook.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itsnporg/posts/1081645632616866",
+    "name": "Nepse real-time data API or JavaScript scraping technique?",
+    "snippet": "Nepse API is available for non-commercial use, scraping is discouraged, and tools like Puppeteer, Cheerio, and Beautiful Soup can be used for ... Missing: @mystocknepal",
+    "host_name": "www.facebook.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itentrepreneurscommunity/posts/3716317985139682",
+    "name": "Does Nepse provide API or is scraping the only solution?",
+    "snippet": "Does nepse provide API? Or is there any law against scraping nepse data? I see numerous apps on play store which scrape their data. I am in need ... Missing: @mystocknepal",
+    "host_name": "www.facebook.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itsnporg/posts/1503443373770421",
+    "name": "Is it legal to scrape NEPSE data (not for commercial purposes)?",
+    "snippet": "The idea is, scraping the publicly available information from websites and displaying the statistics on self- hosted websites. Missing: @mystocknepal",
+    "host_name": "www.facebook.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itsnporg/posts/920859555362142",
+    "name": "Creating a Python Module for Nepal Stock Exchange API - Facebook",
+    "snippet": "Creating a Python Module for Nepal Stock Exchange API. It fetches data from API rather than scraping, It's properly type-hinted. to scrape the ... Missing: @mystocknepal",
+    "host_name": "www.facebook.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/1853351081533103/posts/3327718014096395",
+    "name": "Historical OHLC data for Nepse listed companies? - Facebook",
+    "snippet": "Does anyone have access to—or know where I can download—historical OHLC (Open, High, Low, Close) data for NEPSE and its listed companies? Missing: page @mystocknepal",
+    "host_name": "www.facebook.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itsnporg/posts/1471857163595709",
+    "name": "How to obtain data from Nepse? - Facebook",
+    "snippet": "Long time ago, they had published a data where it was written, You cannot “scrape any data from the Nepse site or they will charge you ... Missing: @mystocknepal",
+    "host_name": "www.facebook.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itsnporg/posts/2019604178821002",
+    "name": "anyone know where I can find or access an API to fetch IPO results?",
+    "snippet": "Hello, Cristina and Kathleen, I am trying to find a dataset on publicly traded companies by state and year they filed their IPO (or just a ... Missing: @mystocknepal",
+    "host_name": "www.facebook.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]
