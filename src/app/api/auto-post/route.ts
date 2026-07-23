@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       data: {
         eventType: 'auto_post',
         entityType: 'market_data',
-        description: `Auto-post pipeline started for ${todayNepal}. Phase 1: Fetching YONEPSE data...`,
+        description: `Auto-post pipeline started for ${todayNepal}. Phase 1: Fetching market data (NEPSE Official → YONEPSE fallback)...`,
         severity: 'info',
       },
     });
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
             data: {
               eventType: 'auto_post',
               entityType: 'market_data',
-              description: `Attempt ${attempt}/${MAX_FETCH_ATTEMPTS}: YONEPSE has data for ${data.tradingDate}, not today (${todayNepal}).`,
+              description: `Attempt ${attempt}/${MAX_FETCH_ATTEMPTS}: Data source has data for ${data.tradingDate} (source: ${data.source}), not today (${todayNepal}).`,
               severity: 'warning',
             },
           });
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
     if (!nepseData) {
       return NextResponse.json({
         success: false,
-        message: `YONEPSE data not yet available for ${todayNepal}. Will retry on next cron invocation.`,
+        message: `Market data not yet available for ${todayNepal} from any source. Will retry on next cron invocation.`,
         retryLater: true,
       });
     }
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
         eventType: 'auto_post',
         entityType: 'market_data',
         entityId: todayData?.id,
-        description: `Phase 2: Verifying YONEPSE data (Index: ${nepseData.nepseIndex}) against official sources. Re-fetch interval: ${refetchInterval} min, max cycles: ${MAX_REFETCH_CYCLES}...`,
+        description: `Phase 2: Verifying data from ${nepseData.source || 'unknown'} (Index: ${nepseData.nepseIndex}) against MeroLagani. Re-fetch interval: ${refetchInterval} min, max cycles: ${MAX_REFETCH_CYCLES}...`,
         severity: 'info',
       },
     });
@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
           data: {
             eventType: 'auto_post',
             entityType: 'market_data',
-            description: 'Both official sources unreachable. Cannot compare. Proceeding with YONEPSE data as it is generally reliable.',
+            description: `MeroLagani unreachable. Cannot cross-verify. Proceeding with ${nepseData.source || 'fetched'} data.`,
             severity: 'warning',
           },
         });
@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
         data: {
           eventType: 'auto_post',
           entityType: 'market_data',
-          description: `Re-fetch cycle ${refetchCycles}/${MAX_REFETCH_CYCLES}: YONEPSE data doesn't match real-time NEPSE/MeroLagani. Waiting ${refetchInterval} min before re-fetching...\n${verification.matchDetails}`,
+          description: `Re-fetch cycle ${refetchCycles}/${MAX_REFETCH_CYCLES}: Data from ${nepseData.source} doesn't match real-time MeroLagani. Waiting ${refetchInterval} min before re-fetching...\n${verification.matchDetails}`,
           severity: 'warning',
         },
       });
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
             data: {
               eventType: 'auto_post',
               entityType: 'market_data',
-              description: `Re-fetch cycle ${refetchCycles}: Got fresh YONEPSE data (Index: ${freshData.nepseIndex}, was ${verification.nepseOfficial?.nepseIndex || verification.meroLagani?.nepseIndex || '?'})`,
+              description: `Re-fetch cycle ${refetchCycles}: Got fresh data from ${freshData.source || 'unknown'} (Index: ${freshData.nepseIndex}, was ${verification.nepseOfficial?.nepseIndex || verification.meroLagani?.nepseIndex || '?'})`,
               severity: 'info',
             },
           });
@@ -241,7 +241,7 @@ export async function POST(request: NextRequest) {
             data: {
               eventType: 'auto_post',
               entityType: 'market_data',
-              description: `Re-fetch cycle ${refetchCycles}: YONEPSE still has data for ${freshData.tradingDate}, not today. Skipping re-verify.`,
+              description: `Re-fetch cycle ${refetchCycles}: Source still has data for ${freshData.tradingDate}, not today. Skipping re-verify.`,
               severity: 'warning',
             },
           });
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
           data: {
             eventType: 'auto_post',
             entityType: 'market_data',
-            description: `Re-fetch cycle ${refetchCycles}: Re-fetch from YONEPSE failed — ${errMsg}`,
+            description: `Re-fetch cycle ${refetchCycles}: Re-fetch failed — ${errMsg}`,
             severity: 'warning',
           },
         });
@@ -286,7 +286,7 @@ export async function POST(request: NextRequest) {
       } else {
         return NextResponse.json({
           success: false,
-          message: `YONEPSE data does not match official sources after ${verifyAttempts} verification attempts (${refetchCycles} re-fetch cycles). Will retry on next cron.\n${verification.matchDetails}`,
+          message: `Data does not match official sources after ${verifyAttempts} verification attempts (${refetchCycles} re-fetch cycles). Will retry on next cron.\n${verification.matchDetails}`,
           retryLater: true,
         });
       }
@@ -379,6 +379,7 @@ export async function POST(request: NextRequest) {
     // Read custom hashtags from settings (admin can edit these)
     const customHashtags = await getConfigValue('hashtags');
     const hashtags = customHashtags || undefined; // undefined = use defaults
+    const dataSource = nepseData.source || 'yonepse'; // Track which source was used
 
     await db.systemEvent.create({
       data: {
@@ -399,7 +400,7 @@ export async function POST(request: NextRequest) {
           change: g.change,
           changePercent: g.changePercent,
           closePrice: g.closePrice,
-        }, 'gainer', hashtags);
+        }, 'gainer', hashtags, dataSource);
         stockCards.push({ buffer, caption, label: `Gainer #${i + 1}: ${g.symbol}`, type: 'gainer', symbol: g.symbol });
       } catch (cardErr) {
         const errMsg = cardErr instanceof Error ? cardErr.message : 'Unknown error';
@@ -424,7 +425,7 @@ export async function POST(request: NextRequest) {
           change: l.change,
           changePercent: l.changePercent,
           closePrice: l.closePrice,
-        }, 'loser', hashtags);
+        }, 'loser', hashtags, dataSource);
         stockCards.push({ buffer, caption, label: `Loser #${i + 1}: ${l.symbol}`, type: 'loser', symbol: l.symbol });
       } catch (cardErr) {
         const errMsg = cardErr instanceof Error ? cardErr.message : 'Unknown error';
@@ -489,7 +490,7 @@ export async function POST(request: NextRequest) {
           eventType: 'auto_post',
           entityType: 'market_data',
           marketDataId: marketData.id,
-          description: `Pre-post verification: both official sources unreachable. Proceeding with YONEPSE data (same as Phase 2 fallback).`,
+          description: `Pre-post verification: MeroLagani unreachable. Proceeding with ${nepseData.source || 'fetched'} data.`,
           severity: 'warning',
         },
       });
@@ -538,7 +539,7 @@ export async function POST(request: NextRequest) {
           symbol: g.symbol,
           change: g.change,
           changePercent: g.changePercent,
-        })), hashtags),
+        })), hashtags, dataSource),
         label: 'Top Gainers',
       },
       {
@@ -547,7 +548,7 @@ export async function POST(request: NextRequest) {
           symbol: l.symbol,
           change: l.change,
           changePercent: l.changePercent,
-        })), hashtags),
+        })), hashtags, dataSource),
         label: 'Top Losers',
       },
       // Individual stock cards (10 gainers + 10 losers)
@@ -629,19 +630,20 @@ export async function POST(request: NextRequest) {
         eventType: 'auto_post',
         entityType: 'system',
         marketDataId: marketData.id,
-        description: `Auto-post pipeline completed for ${marketData.tradingDate}. Posted ${successCount}/${totalImages} images (${successCount > 0 ? '3 summary' : '0 summary'} + ${Math.max(0, successCount - 3)} stock cards). Fetch: ${fetchAttempts} attempts, Verify: ${verifyAttempts} attempts, Re-fetch cycles: ${refetchCycles}.`,
+        description: `Auto-post pipeline completed for ${marketData.tradingDate}. Source: ${nepseData.source || 'unknown'}. Posted ${successCount}/${totalImages} images (${successCount > 0 ? '3 summary' : '0 summary'} + ${Math.max(0, successCount - 3)} stock cards). Fetch: ${fetchAttempts} attempts, Verify: ${verifyAttempts} attempts, Re-fetch cycles: ${refetchCycles}.`,
         severity: successCount === totalImages ? 'success' : (successCount > 0 ? 'warning' : 'error'),
       },
     });
 
     return NextResponse.json({
       success: successCount > 0,
-      message: `Auto-posted ${successCount}/${totalImages} images for ${marketData.tradingDate} (3 summary + ${stockCards.length} stock cards, fetch: ${fetchAttempts} attempts, verify: ${verifyAttempts} attempts, re-fetch cycles: ${refetchCycles})`,
+      message: `Auto-posted ${successCount}/${totalImages} images for ${marketData.tradingDate} (source: ${nepseData.source}, 3 summary + ${stockCards.length} stock cards, fetch: ${fetchAttempts} attempts, verify: ${verifyAttempts} attempts, re-fetch cycles: ${refetchCycles})`,
       results,
       fetchAttempts,
       verifyAttempts,
       refetchCycles,
       verified: verification.verified,
+      dataSource: nepseData.source,
       totalImages,
       summaryImages: 3,
       stockCardImages: stockCards.length,
@@ -670,6 +672,6 @@ export async function GET() {
     schedule: 'Once daily ~4:15 PM NPT (Hobby plan, precision ±59 min, Sun-Thu)',
     refetch_interval: 'Admin-configured (default 5 min) — re-fetches YONEPSE if data doesn\'t match NEPSE/MeroLagani, up to 6 cycles within single invocation',
     retryPolicy: 'Fetch: 3 attempts (fail fast) | Verify: re-fetch loop (up to 6 cycles at configured interval)',
-    pipeline: 'YONEPSE → Verify vs NEPSE/MeroLagani → Re-fetch if stale → Generate 3 summary + 20 stock card images → Pre-post Re-verify → Post all 23 images to Facebook one-by-one',
+    pipeline: 'NEPSE Official (scrape) → YONEPSE (fallback) → Verify vs MeroLagani → Re-fetch if stale → Generate 3 summary + 20 stock card images → Pre-post Re-verify → Post all 23 images to Facebook one-by-one',
   });
 }

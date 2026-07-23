@@ -1,7 +1,10 @@
 // NEPSE Market Data Fetcher
-// Primary source: YONEPSE (GitHub Pages, free, no auth, no WAF)
-// Secondary source: NEPSE direct API (may be blocked by WAF)
+// Primary source: NEPSE Official (nepalstock.com) — scraped directly
+// Secondary source: YONEPSE (GitHub Pages, free, no auth, no WAF)
+// Tertiary source: NEPSE direct API fallback (may be blocked by WAF)
 // NO mock/fallback data — throws clear error if all sources fail
+
+import { scrapeNepseOfficialFull } from './nepse-scraper';
 
 const YONEPSE_BASE = 'https://shubhamnpk.github.io/yonepse';
 
@@ -262,11 +265,23 @@ export async function fetchNepseData(date?: string): Promise<NepseData> {
 
   const errors: string[] = [];
 
-  // Source 1: YONEPSE static JSON API (most reliable, free, no WAF)
+  // Source 1: NEPSE Official website scrape (most authoritative, includes top stocks)
+  try {
+    const nepseOfficialResult = await scrapeNepseOfficialFull(targetDate);
+    if (nepseOfficialResult) {
+      console.log(`NEPSE data fetched via Official Website. Index: ${nepseOfficialResult.nepseIndex}`);
+      return nepseOfficialResult;
+    }
+    errors.push('NEPSE Official: scrape failed or returned invalid data (likely WAF blocked)');
+  } catch (e) {
+    errors.push(`NEPSE Official: ${e instanceof Error ? e.message : 'unknown error'}`);
+  }
+
+  // Source 2: YONEPSE static JSON API (free, no WAF, very reliable)
   try {
     const yonepseResult = await fetchFromYonepse(targetDate);
     if (yonepseResult) {
-      console.log(`NEPSE data fetched via YONEPSE. Index: ${yonepseResult.nepseIndex}`);
+      console.log(`NEPSE data fetched via YONEPSE (fallback). Index: ${yonepseResult.nepseIndex}`);
       return yonepseResult;
     }
     errors.push('YONEPSE: no valid data returned (market may be closed)');
@@ -274,11 +289,11 @@ export async function fetchNepseData(date?: string): Promise<NepseData> {
     errors.push(`YONEPSE: ${e instanceof Error ? e.message : 'unknown error'}`);
   }
 
-  // Source 2: Try the direct NEPSE API
+  // Source 3: Try the direct NEPSE API (redundant with Source 1 but simpler endpoint)
   try {
     const apiResult = await fetchFromNepseApi(targetDate);
     if (apiResult) {
-      console.log('NEPSE data fetched via direct API');
+      console.log('NEPSE data fetched via direct API (fallback)');
       return apiResult;
     }
     errors.push('NEPSE Direct API: no valid data returned');

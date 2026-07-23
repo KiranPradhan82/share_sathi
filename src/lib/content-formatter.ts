@@ -83,24 +83,34 @@ export function formatImageCaption(data: NepseData, hashtags?: string): string {
     caption += `\nMarket Cap: Rs. ${formatNumber(data.marketCap)}`;
   }
 
+  const sourceLabel = data.source === 'nepse-official'
+    ? 'NEPSE Official (nepalstock.com)'
+    : data.source === 'nepse-api'
+      ? 'NEPSE API'
+      : 'YONEPSE';
+
   caption += `\n\n${hashtags || DEFAULT_HASHTAGS}`;
+  caption += `\n\nData Source: ${sourceLabel}`;
   return caption;
 }
 
-export function formatGainersCaption(date: string, gainers: Array<{ symbol: string; change: number; changePercent: number }>, hashtags?: string): string {
+export function formatGainersCaption(date: string, gainers: Array<{ symbol: string; change: number; changePercent: number }>, hashtags?: string, source?: string): string {
   const rows = gainers.slice(0, 5).map((g, i) => `${i + 1}. ${g.symbol}: +${g.change.toFixed(2)} (+${g.changePercent.toFixed(2)}%)`).join('\n');
-  return `Today's Top Gainers - ${date}\n\n${rows}\n\n${hashtags || DEFAULT_GAINERS_HASHTAGS}`;
+  const sourceLabel = source === 'nepse-official' ? 'NEPSE Official (nepalstock.com)' : source === 'nepse-api' ? 'NEPSE API' : 'YONEPSE';
+  return `Today's Top Gainers - ${date}\n\n${rows}\n\n${hashtags || DEFAULT_GAINERS_HASHTAGS}\n\nData Source: ${sourceLabel}`;
 }
 
-export function formatLosersCaption(date: string, losers: Array<{ symbol: string; change: number; changePercent: number }>, hashtags?: string): string {
+export function formatLosersCaption(date: string, losers: Array<{ symbol: string; change: number; changePercent: number }>, hashtags?: string, source?: string): string {
   const rows = losers.slice(0, 5).map((l, i) => `${i + 1}. ${l.symbol}: ${l.change.toFixed(2)} (${l.changePercent.toFixed(2)}%)`).join('\n');
-  return `Today's Top Losers - ${date}\n\n${rows}\n\n${hashtags || DEFAULT_LOSERS_HASHTAGS}`;
+  const sourceLabel = source === 'nepse-official' ? 'NEPSE Official (nepalstock.com)' : source === 'nepse-api' ? 'NEPSE API' : 'YONEPSE';
+  return `Today's Top Losers - ${date}\n\n${rows}\n\n${hashtags || DEFAULT_LOSERS_HASHTAGS}\n\nData Source: ${sourceLabel}`;
 }
 
-export function formatStockCardCaption(stock: { symbol: string; change: number; changePercent: number; closePrice: number }, type: 'gainer' | 'loser', hashtags?: string): string {
+export function formatStockCardCaption(stock: { symbol: string; change: number; changePercent: number; closePrice: number }, type: 'gainer' | 'loser', hashtags?: string, source?: string): string {
   const heart = type === 'gainer' ? '\uD83D\uDC9A' : '\uD83D\uDC94';
   const sign = type === 'gainer' ? '+' : '';
-  return `${stock.symbol} today ${heart}\n\nLTP: Rs. ${stock.closePrice.toFixed(2)}\nChange: ${sign}${stock.change.toFixed(2)} (${sign}${stock.changePercent.toFixed(2)}%)\n\n${hashtags || DEFAULT_STOCK_HASHTAGS}`;
+  const sourceLabel = source === 'nepse-official' ? 'NEPSE Official (nepalstock.com)' : source === 'nepse-api' ? 'NEPSE API' : 'YONEPSE';
+  return `${stock.symbol} today ${heart}\n\nLTP: Rs. ${stock.closePrice.toFixed(2)}\nChange: ${sign}${stock.change.toFixed(2)} (${sign}${stock.changePercent.toFixed(2)}%)\n\n${hashtags || DEFAULT_STOCK_HASHTAGS}\n\nData Source: ${sourceLabel}`;
 }
 
 function formatDateForCaption(dateStr: string): string {
