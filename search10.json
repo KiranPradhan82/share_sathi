@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://nepsealpha.com/nepse-chart",
+    "name": "Nepse Chart - Nepal Stock Exchange | Nepse Alpha | Top Stock Market",
+    "snippet": "Nepse Alpha is a leading stock market portal in Nepal providing free live technical analysis chart of Nepal Stock Exchange (NEPSE CHART) Missing: insightsnepal. | Show results with: insightsnepal.",
+    "host_name": "nepsealpha.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://parse.bot/marketplace/25cf98b0-d85e-484b-8c9b-a3f335e71768/nepalstock-com-np-api",
+    "name": "Nepal Stock Exchange (NEPSE) API - Parse.bot",
+    "snippet": "This API exposes 7 endpoints covering Nepal Stock Exchange (NEPSE) market data, from live index values to per-security OHLC details.",
+    "host_name": "parse.bot",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/ra8in/nepse_data_api",
+    "name": "ra8in/nepse_data_api: python library for accessing market data  - GitHub",
+    "snippet": "nepse-data-api is a Python library for accessing market data from the Nepal Stock Exchange. It handles authentication, token management, and data scrambling ...\nPython library for Nepal Stock Exchange (NEPSE) nepse-data-api is a Python library for accessing market data from the Nepal Stock Exchange. It handles authentication, token management, and data scrambling automatically.",
+    "host_name": "github.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://nepsealpha.com",
+    "name": "Share Market Newsportal | Nepse Chart | Nepal Stock Exchange",
+    "snippet": "Nepal leading online financial newsportal with up-to-date news, updates and information about NEPSE (Nepal Stock Exchange), API 229,342.00. View Chart for ...",
+    "host_name": "nepsealpha.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itsnporg/posts/1799755674139188",
+    "name": "Where can I get nepse stocks data? Do I need to buy api? I'm not doing",
+    "snippet": "To obtain Nepse data officially, you must acquire an API from the Nepal Stock Exchange. Some data may be exported from NepseAlpha as an Excel ...",
+    "host_name": "www.facebook.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://lobehub.com/mcp/surajrimal07-nepseapi-unofficial",
+    "name": "NEPSE API | MCP Servers - LobeHub",
+    "snippet": "An unofficial API service for Nepal Stock Exchange (NEPSE) that provides real-time market data through REST, WebSocket, and Model Context ... Missing: chart | Show results with: chart",
+    "host_name": "lobehub.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/NepalStock/comments/nlagnu/secondary_nepse_data_api_discussion_advice",
+    "name": "Secondary Nepse Data API - discussion / advice. : r/NepalStock",
+    "snippet": "Nepse data API for trading charts Top investment strategies for Nepali stocks Latest trends in the Nepali capital market How is Nepse Alpha getting market depth data and MKT etc? - Reddit NEPSE official API pricing : r/NepalStock - Reddit More results from www.reddit.com",
+    "host_name": "www.reddit.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://nepsealpha.com/live-market",
+    "name": "Nepal Stock Exchange (NEPSE) Live Trading Data, Live  - nepsealpha",
+    "snippet": "Nepal Stock Exchange (NEPSE) Live Trading Data, Live Floorsheet, Live Indices, Top Gainers, Top Losers, Market Watch. API 1.79 339.00",
+    "host_name": "nepsealpha.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://nepsetrading.com",
+    "name": "NEPSE Trading: AI-Powered Nepal Stock Market Analysis & Live",
+    "snippet": "Nepal's leading AI-powered stock market platform. Live NEPSE data, technical & fundamental analysis, screeners, broker insights, ...",
+    "host_name": "nepsetrading.com",
+    "rank": 8,
+    "date": "Jul 23, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/surajrimal07/NepseAPI-Unofficial",
+    "name": "GitHub - surajrimal07/NepseAPI-Unofficial: Unlock Nepal Stock",
+    "snippet": "An unofficial API service for Nepal Stock Exchange (NEPSE) that provides real-time market data through REST, WebSocket, and Model Context Protocol (MCP) endpoints.",
+    "host_name": "github.com",
+    "rank": 9,
+    "date": "Jul 17, 2026",
+    "favicon": ""
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://github.com/polymorphisma/nepse_scraper",
+    "name": "Python Scraper to scrape all the data from nepse. · GitHub",
+    "snippet": "A robust and feature-complete Python client for the Nepal Stock Exchange (NEPSE) API. to access real-time and historical stock market data, Missing: Instagram nepsealpha meroshare",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itsnporg/posts/1799755674139188",
+    "name": "Where can I get nepse stocks data? Do I need to buy api? I'm not doing",
+    "snippet": "To obtain Nepse data officially, you must acquire an API from the Nepal Stock Exchange. Someone might suggest web scraping, but sites like NepseAlpha strictly ... Nepse API availability and alternatives - Facebook Nepse real-time data API or JavaScript scraping technique? More results from www.facebook.com Missing: mystocknepal meroshare",
+    "host_name": "www.facebook.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://parse.bot/marketplace/2a778b14-5d16-4433-b5e6-e99b66da5350/nepsealpha-com-api",
+    "name": "NepseAlpha API – Nepal Stock Exchange Data - Parse.bot",
+    "snippet": "The NepseAlpha API exposes 10 endpoints covering the Nepal Stock Exchange (NEPSE), returning live market prices, historical OHLCV data, sector ... Missing: Instagram | Show results with: Instagram",
+    "host_name": "parse.bot",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/NepalStock/comments/1m2wjma/how_is_nepse_alpha_getting_market_depth_data_and",
+    "name": "How is Nepse Alpha getting market depth data and MKT etc? - Reddit",
+    "snippet": "Nepsealpha has stopped buying api from NEPSE and is probably scraping or using third party data source. Scraping the website is illegal per se ... Secondary Nepse Data API - discussion / advice. : r/NepalStock Free NEPSE API newweb.nepalstock.com ... - Reddit More results from www.reddit.com Missing: Instagram | Show results with: Instagram",
+    "host_name": "www.reddit.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://nepsealpha.com/sastoshare-features",
+    "name": "Best Stock Market Software in Nepal | Advanced Trading & Analysis",
+    "snippet": "Discover the most advanced stock market analysis and trading software in Nepal with SastoShare. NEPSE Data Download Odd Lot Missing: Instagram source scraping",
+    "host_name": "nepsealpha.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://lobehub.com/mcp/surajrimal07-nepseapi-unofficial",
+    "name": "NEPSE API | MCP Servers - LobeHub",
+    "snippet": "An unofficial API service for Nepal Stock Exchange (NEPSE) that provides real-time market data through REST, WebSocket, and Model Context ... Missing: Instagram nepsealpha meroshare scraping",
+    "host_name": "lobehub.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/AashisMhj/nepse-api",
+    "name": "AashisMhj/nepse-api: Scrape Nepal Stock Exchange, Nepsi  - GitHub",
+    "snippet": "Application to scrape data of www.nepalstock.com using puppeteer, saving to db and later proving the data over rest api. Missing: Instagram nepsealpha meroshare",
+    "host_name": "github.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://parse.bot/marketplace/25cf98b0-d85e-484b-8c9b-a3f335e71768/nepalstock-com-np-api",
+    "name": "Nepal Stock Exchange (NEPSE) API - Parse.bot",
+    "snippet": "This API exposes 7 endpoints covering Nepal Stock Exchange (NEPSE) market data, from live index values to per-security OHLC details. Missing: Instagram | Show results with: Instagram",
+    "host_name": "parse.bot",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/ghimiresunil/Nepse-Web-Scraper",
+    "name": "Nepal stock web scraper which will scrape today's share price · GitHub",
+    "snippet": "This is simple python project that serves market information and stock prices from Nepal Stock Exchange's website as CSV. The data is obtained by scraping web ... Missing: Instagram API nepsealpha meroshare",
+    "host_name": "github.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://parse.bot/marketplace/90eb064c-d158-4279-94c3-9a1b89b00f48/sharesansar-com-api",
+    "name": "ShareSansar API – Nepal Stock Market Data - Parse.bot",
+    "snippet": "Fetch Nepal stock prices, listed company symbols, and market news from ShareSansar via 4 API endpoints covering NEPSE data. This API takes ... Missing: Instagram | Show results with: Instagram",
+    "host_name": "parse.bot",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

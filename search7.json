@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://www.reddit.com/r/technepal/comments/1knr8ch/need_help_getting_historical_nepse_data",
+    "name": "Need help getting historical NEPSE data : r/technepal - Reddit",
+    "snippet": "Basically the data should have: Historical LTP for all the stocks (As far back as we can go) Bonus / right share provided to users Secondary Nepse Data API - discussion / advice. : r/NepalStock How is Nepse Alpha getting market depth data and MKT etc? - Reddit More results from www.reddit.com Missing: mystocknepal. source",
+    "host_name": "www.reddit.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@smijahla/decoding-trends-of-nepse-stock-data-8c83e1b8f8bc",
+    "name": "Decoding Trends of NEPSE stock data | by mijahla - Medium",
+    "snippet": "I collected data-wise indices from the NEPSE's website. I used web scraping to get the required data. Web scraping is used to extract data from ... Missing: mystocknepal. source",
+    "host_name": "medium.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itsnporg/posts/1799755674139188",
+    "name": "Where can I get nepse stocks data? Do I need to buy api? I'm not doing",
+    "snippet": "To obtain Nepse data officially, you must acquire an API from the Nepal Stock Exchange. Some data may be exported from NepseAlpha as an Excel ... How to obtain data from Nepse? - Facebook Market opens today after the Tihar holiday. What are your expectations? More results from www.facebook.com Missing: mystocknepal. | Show results with: mystocknepal.",
+    "host_name": "www.facebook.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.kaggle.com/datasets/bibeksapkota22/nepse-dataset",
+    "name": "NEPSE DATASET - Kaggle",
+    "snippet": "This dataset contains historical trading data from the Nepal Stock Exchange (NEPSE). It captures daily stock market activity for multiple companies listed ... Missing: mystocknepal. source",
+    "host_name": "www.kaggle.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://parse.bot/marketplace/25cf98b0-d85e-484b-8c9b-a3f335e71768/nepalstock-com-np-api",
+    "name": "Nepal Stock Exchange (NEPSE) API - Parse.bot",
+    "snippet": "This API exposes 7 endpoints covering Nepal Stock Exchange (NEPSE) market data, from live index values to per-security OHLC details. Use ... Missing: mystocknepal. | Show results with: mystocknepal.",
+    "host_name": "parse.bot",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://lobehub.com/mcp/surajrimal07-nepseapi-unofficial",
+    "name": "NEPSE API | MCP Servers - LobeHub",
+    "snippet": "An unofficial API service for Nepal Stock Exchange (NEPSE) that provides real-time market data through REST, WebSocket, and Model Context ... Missing: mystocknepal. | Show results with: mystocknepal.",
+    "host_name": "lobehub.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://data.smartwealthpro.com/about",
+    "name": "About | NEPSE Market Data API | MDP",
+    "snippet": "Learn about Market Data Provider, a trusted NEPSE market data API provider delivering real-time and historical stock market data for fintech platforms.",
+    "host_name": "data.smartwealthpro.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://nepsetty.kokomo.workers.dev",
+    "name": "ShareBazaar - NEPSE Stock Data API",
+    "snippet": "ShareBazaar provides real-time and historical stock market data from NEPSE through a straightforward API. All data presented is sourced directly from public ... Missing: mystocknepal. | Show results with: mystocknepal.",
+    "host_name": "nepsetty.kokomo.workers.dev",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.researchgate.net/figure/Scraping-NEPSE-data-from-sharesansarcom_fig6_353634645",
+    "name": "Scraping NEPSE data from sharesansar.com - ResearchGate",
+    "snippet": "This report has endeavored to predict the closing price of the stocks that are traded in the Nepal Stock Exchange (NEPSE) using various machine learning ... Missing: mystocknepal. | Show results with: mystocknepal.",
+    "host_name": "www.researchgate.net",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://mystocknepal.com",
+    "name": "MyStockNepal: Home",
+    "snippet": "www.MyStockNepal.com STOCK NEPAL Important Topics IPO Approved IPO Pipeline IPO Result Right Shares C-ASBA Charges Latest News Missing: data",
+    "host_name": "mystocknepal.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

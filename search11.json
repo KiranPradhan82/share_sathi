@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://github.com/ghimiresunil/Nepse-Web-Scraper",
+    "name": "Nepal stock web scraper which will scrape today's share price · GitHub",
+    "snippet": "This is simple python project that serves market information and stock prices from Nepal Stock Exchange's website as CSV. The data is obtained by scraping web ... Missing: mystocknepal charts",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@sujanxchhetri/scraping-nepse-nepal-stock-exchange-todays-price-data-4a20fcd6782e",
+    "name": "Scraping NEPSE Nepal Stock Exchange Todays Price data",
+    "snippet": "In this article, we will be Scraping NEPSE Nepal Stock Exchange Today's Price data with our favorite scraping framework puppeteer. Missing: mystocknepal charts",
+    "host_name": "medium.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://workspace.google.com/marketplace/app/nepaldatascrapper/717839691592",
+    "name": "NepalDataScrapper - Google Workspace Marketplace",
+    "snippet": "Rating 2.7 (3) NepalDataScrapper. This addd on implement custom function to get useful data about Nepal and it's economy. Currently only gets NEPSE share price data. By ... Missing: mystocknepal source nepalstock. scraping",
+    "host_name": "workspace.google.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.researchgate.net/figure/Scraping-NEPSE-data-from-sharesansarcom_fig6_353634645",
+    "name": "Scraping NEPSE data from sharesansar.com - ResearchGate",
+    "snippet": "This report has endeavored to predict the closing price of the stocks that are traded in the Nepal Stock Exchange (NEPSE) using various machine learning ... Missing: mystocknepal charts",
+    "host_name": "www.researchgate.net",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.facebook.com/groups/itsnporg/posts/1799755674139188",
+    "name": "Where can I get nepse stocks data? Do I need to buy api? I'm not doing",
+    "snippet": "To obtain Nepse data officially, you must acquire an API from the Nepal Stock Exchange. Someone might suggest web scraping, but sites like NepseAlpha strictly ... Missing: mystocknepal | Show results with: mystocknepal",
+    "host_name": "www.facebook.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://parse.bot/marketplace/25cf98b0-d85e-484b-8c9b-a3f335e71768/nepalstock-com-np-api",
+    "name": "Nepal Stock Exchange (NEPSE) API - Parse.bot",
+    "snippet": "This API exposes 7 endpoints covering Nepal Stock Exchange (NEPSE) market data, from live index values to per-security OHLC details. Use ... Missing: mystocknepal | Show results with: mystocknepal",
+    "host_name": "parse.bot",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.nepalstock.com/floorsheet",
+    "name": "Live Floor Sheet - Nepal Stock Exchange",
+    "snippet": "Missing: mystocknepal source scraping",
+    "host_name": "www.nepalstock.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/Nepal/comments/n5c7pb/is_it_illegal_to_scrape_nepal_stock_data_from",
+    "name": "Is it illegal to scrape Nepal stock data from https://newweb.nepalstock.com?",
+    "snippet": "I dont think scraping is illegal but they have clearly requested not to scrape because it slows their server. Price ranges from 2k per month to ... Missing: mystocknepal source",
+    "host_name": "www.reddit.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://omitnomis.github.io/ShareSansarScraper",
+    "name": "NEPSE Historical Data — Nepal Stock Exchange Share Price Archive",
+    "snippet": "Every trading day on the Nepal Stock Exchange , archived. Daily price tables scraped from ShareSansar, free to preview and download in CSV & Excel. No login. No ... Missing: mystocknepal source",
+    "host_name": "omitnomis.github.io",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.kaggle.com/datasets/bibeksapkota22/nepse-dataset",
+    "name": "NEPSE DATASET - Kaggle",
+    "snippet": "This dataset contains historical trading data from the Nepal Stock Exchange (NEPSE). It captures daily stock market activity for multiple companies listed ... Missing: mystocknepal charts source scraping",
+    "host_name": "www.kaggle.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]
